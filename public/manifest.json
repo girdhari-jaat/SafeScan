@@ -1,0 +1,56 @@
+{
+  "name": "SafeScan",
+  "short_name": "SafeScan",
+  "description": "Secure High Performance Offline Documents and ID Card Scanner",
+  "id": "index.html?source=pwa",
+  "start_url": "index.html?source=pwa",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "prefer_related_applications": false,
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/icon192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon512.png",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Scan Document",
+      "short_name": "Scan Doc",
+      "description": "Quickly scan a paper document or receipt",
+      "url": "index.html?tab=paper&source=shortcut",
+      "icons": [
+        {
+          "src": "/shortcut_doc.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Scan ID Card",
+      "short_name": "Scan ID",
+      "description": "Quickly scan double-sided ID cards",
+      "url": "index.html?tab=idcard&source=shortcut",
+      "icons": [
+        {
+          "src": "/shortcut_id.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "categories": ["productivity"]
+}

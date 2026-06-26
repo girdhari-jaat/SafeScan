@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SafeScan</string>
+    <string name="library">लाइब्रेरी</string>
+    <string name="camera">स्कैनर</string>
+    <string name="settings">सेटिंग्स</string>
+    <!-- IMPROVEMENT: Localization keys for UI screens in Hindi -->
+    <string name="auto">स्वचालित</string>
+    <string name="export_share_pdf">पीडीएफ निर्यात और साझा करें</string>
+    <string name="close">बंद करें</string>
+    <string name="no_scans_yet">अभी तक कोई स्कैन नहीं है। एक स्लॉट पर टैप करें।</string>
+    <string name="scan">स्कैन</string>
+    <string name="export">निर्यात</string>
+    <string name="about">परिचय</string>
+    <string name="pdf_filename">पीडीएफ फ़ाइल नाम</string>
+    <string name="page_size">पृष्ठ आकार</string>
+    <string name="version_1_0">संस्करण 1.0</string>
+    <string name="offline_desc">100% ऑफ़लाइन।</string>
+    <string name="no_data_desc">कोई डेटा एकत्र नहीं किया गया।</string>
+    <string name="edit_image">छवि संपादित करें</string>
+    <string name="cancel">रद्द करें</string>
+    <string name="save">सहेजें</string>
+    <string name="auto_enhance">ऑटो सुधारें</string>
+    <string name="brightness">चमक</string>
+    <string name="contrast">विपरीतता</string>
+    <string name="sharpness">तीक्ष्णता</string>
+    <string name="crop_document">दस्तावेज़ क्रॉप करें</string>
+    <string name="doc_not_found">दस्तावेज़ नहीं मिला। मैन्युअल रूप से स्थानांतरित करें।</string>
+    <string name="auto_crop_failed">ऑटो क्रॉप विफल रहा</string>
+    <string name="pdf_saved">पीडीएफ सफलतापूर्वक सहेजा गया</string>
+    <string name="no_document_found">कोई दस्तावेज़ नहीं मिला</string>
+</resources>

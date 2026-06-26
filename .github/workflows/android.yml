@@ -1,0 +1,36 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'zulu'
+        cache: gradle
+
+    - name: Make Gradlew Executable
+      run: |
+        if [ -f "android/gradlew" ]; then
+          chmod +x android/gradlew
+        fi
+
+    - name: Build Debug APK
+      run: |
+        if [ -f "android/gradlew" ]; then
+          cd android && ./gradlew assembleDebug --no-daemon
+        else
+          echo "Gradle wrapper not found, skipping build"
+        fi

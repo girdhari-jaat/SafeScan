@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SafeScan</string>
+    <string name="library">Library</string>
+    <string name="camera">Scanner</string>
+    <string name="settings">Settings</string>
+    <!-- IMPROVEMENT: Localization keys for UI screens -->
+    <string name="auto">Auto</string>
+    <string name="export_share_pdf">Export &amp; Share PDF</string>
+    <string name="close">Close</string>
+    <string name="no_scans_yet">No Scans Yet. Tap a slot.</string>
+    <string name="scan">Scan</string>
+    <string name="export">Export</string>
+    <string name="about">About</string>
+    <string name="pdf_filename">PDF Filename</string>
+    <string name="page_size">Page Size</string>
+    <string name="version_1_0">Version 1.0</string>
+    <string name="offline_desc">100% Offline.</string>
+    <string name="no_data_desc">No Data Collected.</string>
+    <string name="edit_image">Edit Image</string>
+    <string name="cancel">Cancel</string>
+    <string name="save">Save</string>
+    <string name="auto_enhance">Auto Enhance</string>
+    <string name="brightness">Brightness</string>
+    <string name="contrast">Contrast</string>
+    <string name="sharpness">Sharpness</string>
+    <string name="crop_document">Crop Document</string>
+    <string name="doc_not_found">Document not found. Move manually.</string>
+    <string name="auto_crop_failed">Auto Crop Failed</string>
+    <string name="pdf_saved">PDF Saved Successfully</string>
+    <string name="no_document_found">No Document Found</string>
+</resources>

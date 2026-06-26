@@ -1,0 +1,118 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@layer base {
+  html {
+    font-size: 16px;
+    line-height: 1.6;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+  }
+}
+
+:root {
+  /* Core layout dimensions - others inherited from theme.css */
+  --header-height: 56px;
+  --footer-height: 52px;
+  --tab-height: 56px;
+  --divider-height: 1px;
+}
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Tailwind 4 theme mapping to CSS variables */
+  --color-primary: var(--primary);
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-card: var(--bg-card);
+  --color-border-primary: var(--border-color);
+  
+  --color-zinc-50: var(--bg-primary);
+  --color-zinc-100: var(--bg-primary);
+  --color-zinc-200: var(--text-secondary);
+  --color-zinc-300: var(--text-secondary);
+  --color-zinc-400: var(--text-secondary);
+  --color-zinc-500: var(--text-secondary);
+  --color-zinc-600: var(--text-primary);
+  --color-zinc-700: var(--border-color);
+  --color-zinc-800: var(--border-color);
+  --color-zinc-850: var(--bg-card);
+  --color-zinc-900: var(--bg-card);
+  --color-zinc-950: var(--bg-primary);
+  
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-500: var(--primary);
+  --color-teal-500: var(--primary);
+  --color-rose-500: #F43F5E;
+}
+
+
+button, [role="button"], input[type="button"], input[type="submit"] {
+  min-height: 44px;
+  -webkit-tap-highlight-color: transparent !important;
+  outline: none !important;
+}
+
+button:focus, [role="button"]:focus {
+  outline: none !important;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none !important;
+}
+.scrollbar-none {
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;  /* Firefox */
+}
+
+/* Elegant thin custom scrollbars matching theme colors for all scroll containers */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-zinc-800);
+  border-radius: 99px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover, ::-webkit-scrollbar-thumb:active {
+  background: var(--color-emerald-500);
+  border-radius: 99px;
+}
+
+/* Apply smooth momentum scrolling to all overflow containers for natural Android touch support */
+.overflow-y-auto, .overflow-x-auto, [id="app-viewport"], .flex-grow, .overflow-auto {
+  -webkit-overflow-scrolling: touch !important;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-zinc-800) transparent;
+}
+
+@media print {
+  body * { visibility: hidden; }
+  #pdf-view-main, #pdf-view-main * { visibility: visible; }
+  #filters-popup, #filters-popup * { visibility: visible; }
+  #pdf-view-main { position: absolute; left: 0; top: 0; width: 100%; }
+  
+  /* Hide non-printable UI elements */
+  .no-print, button, input, [id*="-tabs"], [id*="-btn"], [id*="-bar"] {
+    display: none !important;
+  }
+}
+
+
+

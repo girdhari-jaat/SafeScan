@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SafeScan</string>
+    <string name="library">لائبریری</string>
+    <string name="camera">اسکینر</string>
+    <string name="settings">ترتیبات</string>
+    <!-- IMPROVEMENT: Localization keys for UI screens in Urdu -->
+    <string name="auto">خودکار</string>
+    <string name="export_share_pdf">پی ڈی ایف ایکسپورٹ اور شیئر کریں</string>
+    <string name="close">بند کریں</string>
+    <string name="no_scans_yet">ابھی تک کوئی اسکین نہیں ہے۔ ایک سلاٹ پر ٹیپ کریں۔</string>
+    <string name="scan">اسکین</string>
+    <string name="export">ایکسپورٹ</string>
+    <string name="about">ہمارے بارے میں</string>
+    <string name="pdf_filename">پی ڈی ایف فائل کا نام</string>
+    <string name="page_size">صفحہ کا سائز</string>
+    <string name="version_1_0">ورژن 1.0</string>
+    <string name="offline_desc">100% آف لائن۔</string>
+    <string name="no_data_desc">کوئی ڈیٹا اکٹھا نہیں کیا گیا۔</string>
+    <string name="edit_image">تصویر ایڈٹ کریں</string>
+    <string name="cancel">منسوخ کریں</string>
+    <string name="save">محفوظ کریں</string>
+    <string name="auto_enhance">خودکار بہتر بنائیں</string>
+    <string name="brightness">چمک</string>
+    <string name="contrast">کنسٹرسٹ</string>
+    <string name="sharpness">تیزی</string>
+    <string name="crop_document">دستاویز کاٹیں</string>
+    <string name="doc_not_found">دستاویز نہیں ملی۔ دستی طور پر منتقل کریں۔</string>
+    <string name="auto_crop_failed">خودکار کراپ ناکام رہا</string>
+    <string name="pdf_saved">پی ڈی ایف کامیابی سے محفوظ ہو گیا</string>
+    <string name="no_document_found">کوئی دستاویز نہیں ملی</string>
+</resources>

@@ -1,0 +1,10 @@
+# Android App Signing Properties Template
+# Instructions:
+# 1. Copy this file to 'signing.properties' in the same folder (/android/signing.properties).
+# 2. Fill in your actual keystore values.
+# 3. DO NOT commit your 'signing.properties' file to version control (it is added to .gitignore).
+
+key.store.file=release-key.jks
+key.store.password=YOUR_KEYSTORE_PASSWORD
+key.alias=YOUR_KEY_ALIAS
+key.alias.password=YOUR_KEY_PASSWORD
