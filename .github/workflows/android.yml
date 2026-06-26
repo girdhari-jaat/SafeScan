@@ -15,11 +15,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
       
-      - name: Grant gradle permission
-        run: chmod +x android/gradlew
-      
-      - name: Build Debug APK
-        run: cd android && ./gradlew assembleDebug --no-daemon
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build Debug APK with Gradle
+        run: cd android && gradle assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
