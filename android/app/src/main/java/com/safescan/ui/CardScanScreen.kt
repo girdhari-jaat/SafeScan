@@ -114,7 +114,7 @@ fun CardScanScreen(
                     ) {
                         if (slot.bitmap != null) {
                             androidx.compose.foundation.Image(
-                                bitmap = asImageBitmap(slot.bitmap),
+                                bitmap = slot.bitmap!!.asImageBitmap(),
                                 contentDescription = "Slot ${index + 1}",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = androidx.compose.ui.layout.ContentScale.Crop

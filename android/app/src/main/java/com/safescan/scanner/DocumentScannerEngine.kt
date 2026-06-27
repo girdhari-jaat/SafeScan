@@ -24,7 +24,7 @@ interface MLScannerEngine {
 open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) {
     var engineType: ScannerEngineType = ScannerEngineType.MLKIT
 
-    suspend fun scanDocument(bitmap: Bitmap): AppResult<Bitmap> = withContext(Dispatchers.Default) {
+    open suspend fun scanDocument(bitmap: Bitmap): AppResult<Bitmap> = withContext(Dispatchers.Default) {
         try {
             var corners: List<Point>? = null
 

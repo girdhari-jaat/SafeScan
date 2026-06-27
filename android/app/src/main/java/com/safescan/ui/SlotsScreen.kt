@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -375,7 +376,7 @@ fun SlotItem(slot: Slot, onClick: () -> Unit, onLongClick: () -> Unit, onClear: 
             .aspectRatio(0.72f)
             .clip(RoundedCornerShape(8.dp))
             .background(Color.LightGray)
-            .androidx.compose.foundation.combinedClickable(
+            .combinedClickable(
                 onClick = { if (slot.bitmap == null) onClick() },
                 onLongClick = { if (slot.bitmap != null) onLongClick() }
             ),
