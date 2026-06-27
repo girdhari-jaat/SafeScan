@@ -25,8 +25,7 @@ class ScannerViewModel @Inject constructor(
     private val scannerEngine: DocumentScannerEngine,
     private val settingsRepository: SettingsRepository,
     private val edgeDetectionEngine: com.safescan.scanner.EdgeDetectionEngine,
-    private val pdfExporter: com.safescan.domain.PdfExporter,
-    private val openCvScanner: com.safescan.android.scanner.OpenCVScanner
+    private val pdfExporter: com.safescan.domain.PdfExporter
 ) : ViewModel() {
 
     // IMPROVEMENT: Using com.safescan.data.ScannerUiState with isAutoRunning
@@ -99,7 +98,7 @@ class ScannerViewModel @Inject constructor(
     }
 
     // IMPROVEMENT: Added async detectEdges runner updating isAutoRunning state Flow
-    fun detectEdges(bitmap: Bitmap, onResult: (List<org.opencv.core.Point>?) -> Unit) {
+    fun detectEdges(bitmap: Bitmap, onResult: (List<com.safescan.android.scanner.Point>?) -> Unit) {
         _uiState.update { it.copy(isAutoRunning = true) }
         viewModelScope.launch(Dispatchers.IO) {
             val points = edgeDetectionEngine.detectEdges(bitmap)
@@ -199,8 +198,39 @@ class ScannerViewModel @Inject constructor(
     fun applyCrop(quad: com.safescan.android.scanner.Quadrilateral) {
         viewModelScope.launch(Dispatchers.IO) {
             croppingBitmap.value?.let { bmp ->
-                // IMPROVEMENT: Using injected openCvScanner instance to avoid instantiation overhead
-                val cropped = openCvScanner.cropDocument(bmp, quad)
+                val tl = quad.topLeft
+                val tr = quad.topRight
+                val br = quad.bottomRight
+                val bottomLeft = quad.bottomLeft
+
+                val widthA = kotlin.math.sqrt((br.x - bottomLeft.x).pow(2.0) + (br.y - bottomLeft.y).pow(2.0))
+                val widthB = kotlin.math.sqrt((tr.x - tl.x).pow(2.0) + (tr.y - tl.y).pow(2.0))
+                val maxWidth = kotlin.math.max(widthA, widthB).toInt().coerceAtLeast(1)
+
+                val heightA = kotlin.math.sqrt((tr.x - br.x).pow(2.0) + (tr.y - br.y).pow(2.0))
+                val heightB = kotlin.math.sqrt((tl.x - bottomLeft.x).pow(2.0) + (tl.y - bottomLeft.y).pow(2.0))
+                val maxHeight = kotlin.math.max(heightA, heightB).toInt().coerceAtLeast(1)
+
+                val matrix = android.graphics.Matrix()
+                val srcPoints = floatArrayOf(
+                    tl.x.toFloat(), tl.y.toFloat(),
+                    tr.x.toFloat(), tr.y.toFloat(),
+                    br.x.toFloat(), br.y.toFloat(),
+                    bottomLeft.x.toFloat(), bottomLeft.y.toFloat()
+                )
+                val dstPoints = floatArrayOf(
+                    0f, 0f,
+                    maxWidth.toFloat() - 1, 0f,
+                    maxWidth.toFloat() - 1, maxHeight.toFloat() - 1,
+                    0f, maxHeight.toFloat() - 1
+                )
+                matrix.setPolyToPoly(srcPoints, 0, dstPoints, 0, 4)
+
+                val cropped = Bitmap.createBitmap(maxWidth, maxHeight, Bitmap.Config.ARGB_8888)
+                val canvas = android.graphics.Canvas(cropped)
+                val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG)
+                canvas.drawBitmap(bmp, matrix, paint)
+
                 croppingSlotId.value?.let { slotId ->
                     captureToSlot(cropped, slotId)
                 }

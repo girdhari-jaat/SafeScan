@@ -1,8 +1,3 @@
-# OpenCV
--keep class org.opencv.** { *; }
--keep interface org.opencv.** { *; }
--keepclassmembers class org.opencv.** { *; }
-
 # ML Kit
 -keep class com.google.mlkit.** { *; }
 -keep interface com.google.mlkit.** { *; }

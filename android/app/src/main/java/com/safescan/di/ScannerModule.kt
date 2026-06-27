@@ -3,11 +3,11 @@ package com.safescan.di
 import android.graphics.Bitmap
 import com.safescan.scanner.DocumentScannerEngine
 import com.safescan.scanner.MLScannerEngine
+import com.safescan.android.scanner.Point
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import org.opencv.core.Point
 import javax.inject.Singleton
 
 @Module

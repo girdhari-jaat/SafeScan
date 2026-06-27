@@ -84,9 +84,8 @@ fun SlotsScreen(
                     onClick = {
                         val current = uiState.currentEngine
                         val next = when (current) {
-                            com.safescan.scanner.ScannerEngineType.OPENCV -> com.safescan.scanner.ScannerEngineType.MLKIT
                             com.safescan.scanner.ScannerEngineType.MLKIT -> com.safescan.scanner.ScannerEngineType.LOCAL_ML
-                            com.safescan.scanner.ScannerEngineType.LOCAL_ML -> com.safescan.scanner.ScannerEngineType.OPENCV
+                            com.safescan.scanner.ScannerEngineType.LOCAL_ML -> com.safescan.scanner.ScannerEngineType.MLKIT
                         }
                         viewModel.toggleEngine(next)
                     },
@@ -98,7 +97,6 @@ fun SlotsScreen(
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     val engineLabel = when (uiState.currentEngine) {
-                        com.safescan.scanner.ScannerEngineType.OPENCV -> "OpenCV"
                         com.safescan.scanner.ScannerEngineType.MLKIT -> "ML Kit"
                         com.safescan.scanner.ScannerEngineType.LOCAL_ML -> "Local ML"
                     }

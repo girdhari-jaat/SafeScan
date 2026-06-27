@@ -27,11 +27,4 @@ object AppModule {
     fun providePdfExporter(@ApplicationContext context: Context): PdfExporter {
         return PdfExporter(context)
     }
-
-    // IMPROVEMENT: Provide OpenCVScanner as a Singleton via Hilt to avoid reinstantiation
-    @Provides
-    @Singleton
-    fun provideOpenCVScanner(): com.safescan.android.scanner.OpenCVScanner {
-        return com.safescan.android.scanner.OpenCVScanner()
-    }
 }

@@ -94,9 +94,6 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$camerax_version")
     implementation("androidx.camera:camera-view:$camerax_version")
 
-    // OpenCV (Local AAR or library)
-    implementation(project(":opencv"))
-
     // ML Kit
     implementation("com.google.mlkit:text-recognition-latin:16.0.0")
     implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.0")

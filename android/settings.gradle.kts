@@ -15,4 +15,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "SafeScan"
 include(":app")
-include(":opencv")

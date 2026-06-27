@@ -112,10 +112,10 @@ class ScannerFragment : Fragment() {
 
         binding.btnSwitchEngine.setOnClickListener {
             val current = viewModel.uiState.value.currentEngine
-            val next = if (current == ScannerEngineType.OPENCV) {
+            val next = if (current == ScannerEngineType.MLKIT) {
                 ScannerEngineType.LOCAL_ML
             } else {
-                ScannerEngineType.OPENCV
+                ScannerEngineType.MLKIT
             }
             viewModel.toggleEngine(next)
             Toast.makeText(requireContext(), "Engine set to: $next", Toast.LENGTH_SHORT).show()

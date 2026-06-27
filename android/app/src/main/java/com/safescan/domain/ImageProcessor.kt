@@ -1,99 +1,203 @@
 package com.safescan.domain
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import com.safescan.data.EditorState
 import com.safescan.data.FilterType
-import org.opencv.android.Utils
-import org.opencv.core.Core
-import org.opencv.core.Mat
-import org.opencv.imgproc.Imgproc
-import org.opencv.core.Size
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 object ImageProcessor {
-    // IMPROVEMENT: Wrap OpenCV conversions in try-catch-finally to eliminate memory leaks and crashes
+
     suspend fun apply(bitmap: Bitmap, state: EditorState): Bitmap = withContext(Dispatchers.Default) {
-        val src = Mat()
-        val dest = Mat()
-        var blurred: Mat? = null
         try {
-            Utils.bitmapToMat(bitmap, src)
-            src.copyTo(dest)
+            // Apply brightness and contrast using ColorMatrix
+            val scale = state.contrast
+            val translate = state.brightness
+            val colorMatrix = ColorMatrix(floatArrayOf(
+                scale, 0f, 0f, 0f, translate,
+                0f, scale, 0f, 0f, translate,
+                0f, 0f, scale, 0f, translate,
+                0f, 0f, 0f, 1f, 0f
+            ))
 
-            // Brightness and Contrast
-            dest.convertTo(dest, -1, state.contrast.toDouble(), state.brightness.toDouble())
+            val workingBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(workingBitmap)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                colorFilter = ColorMatrixColorFilter(colorMatrix)
+            }
+            canvas.drawBitmap(bitmap, 0f, 0f, paint)
 
-            // Sharpness
-            if (state.sharpness > 0f) {
-                blurred = Mat()
-                Imgproc.GaussianBlur(dest, blurred, Size(0.0, 0.0), 3.0)
-                Core.addWeighted(dest, 1.0 + state.sharpness / 5.0, blurred, -state.sharpness / 5.0, 0.0, dest)
+            // Sharpness (3x3 Laplacian Convolution Kernel)
+            val sharpened = if (state.sharpness > 0f) {
+                sharpenBitmap(workingBitmap, state.sharpness)
+            } else {
+                workingBitmap
             }
 
-            // Filters
-            when (state.filter) {
+            // Grayscale / Binarization Filters
+            val filtered = when (state.filter) {
                 FilterType.GRAYSCALE -> {
-                    Imgproc.cvtColor(dest, dest, Imgproc.COLOR_RGBA2GRAY)
-                    Imgproc.cvtColor(dest, dest, Imgproc.COLOR_GRAY2RGBA)
+                    val gray = Bitmap.createBitmap(sharpened.width, sharpened.height, Bitmap.Config.ARGB_8888)
+                    val grayCanvas = Canvas(gray)
+                    val grayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
+                    }
+                    grayCanvas.drawBitmap(sharpened, 0f, 0f, grayPaint)
+                    gray
                 }
                 FilterType.BLACK_WHITE -> {
-                    Imgproc.cvtColor(dest, dest, Imgproc.COLOR_RGBA2GRAY)
-                    Imgproc.threshold(dest, dest, 128.0, 255.0, Imgproc.THRESH_BINARY or Imgproc.THRESH_OTSU)
-                    Imgproc.cvtColor(dest, dest, Imgproc.COLOR_GRAY2RGBA)
+                    thresholdBitmap(sharpened, 128)
                 }
                 FilterType.COLOR -> {
-                    // Keep existing channels
+                    sharpened
                 }
             }
 
-            val resultBitmap = Bitmap.createBitmap(dest.cols(), dest.rows(), Bitmap.Config.ARGB_8888)
-            Utils.matToBitmap(dest, resultBitmap)
-            resultBitmap
+            filtered
         } catch (e: Exception) {
             e.printStackTrace()
             bitmap
-        } finally {
-            src.release()
-            dest.release()
-            blurred?.release()
         }
     }
 
-    // IMPROVEMENT: Added try-catch-finally for robust AutoEnhance
     suspend fun autoEnhance(bitmap: Bitmap): Bitmap = withContext(Dispatchers.Default) {
-        val src = Mat()
-        val lab = Mat()
-        val channels = ArrayList<Mat>()
         try {
-            Utils.bitmapToMat(bitmap, src)
+            val width = bitmap.width
+            val height = bitmap.height
+            val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val pixels = IntArray(width * height)
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
 
-            Imgproc.cvtColor(src, lab, Imgproc.COLOR_RGBA2RGB)
-            Imgproc.cvtColor(lab, lab, Imgproc.COLOR_RGB2Lab)
-            
-            Core.split(lab, channels)
+            var minR = 255; var maxR = 0
+            var minG = 255; var maxG = 0
+            var minB = 255; var maxB = 0
 
-            if (channels.isNotEmpty()) {
-                val clahe = Imgproc.createCLAHE(2.0, Size(8.0, 8.0))
-                clahe.apply(channels[0], channels[0])
-                Core.merge(channels, lab)
+            // Step 1: Find minimum and maximum for each channel
+            for (i in pixels.indices) {
+                val color = pixels[i]
+                val r = (color shr 16) and 0xFF
+                val g = (color shr 8) and 0xFF
+                val b = color and 0xFF
+                if (r < minR) minR = r
+                if (r > maxR) maxR = r
+                if (g < minG) minG = g
+                if (g > maxG) maxG = g
+                if (b < minB) minB = b
+                if (b > maxB) maxB = b
             }
 
-            Imgproc.cvtColor(lab, lab, Imgproc.COLOR_Lab2RGB)
-            Imgproc.cvtColor(lab, lab, Imgproc.COLOR_RGB2RGBA)
+            // Avoid division by zero
+            val rangeR = (maxR - minR).coerceAtLeast(1)
+            val rangeG = (maxG - minG).coerceAtLeast(1)
+            val rangeB = (maxB - minB).coerceAtLeast(1)
 
-            val resultBitmap = Bitmap.createBitmap(lab.cols(), lab.rows(), Bitmap.Config.ARGB_8888)
-            Utils.matToBitmap(lab, resultBitmap)
-            resultBitmap
+            // Step 2: Scale/Stretch color channels to full dynamic range [0, 255]
+            for (i in pixels.indices) {
+                val color = pixels[i]
+                val a = (color shr 24) and 0xFF
+                val r = (color shr 16) and 0xFF
+                val g = (color shr 8) and 0xFF
+                val b = color and 0xFF
+
+                val newR = ((r - minR) * 255 / rangeR).coerceIn(0, 255)
+                val newG = ((g - minG) * 255 / rangeG).coerceIn(0, 255)
+                val newB = ((b - minB) * 255 / rangeB).coerceIn(0, 255)
+
+                pixels[i] = (a shl 24) or (newR shl 16) or (newG shl 8) or newB
+            }
+
+            result.setPixels(pixels, 0, width, 0, 0, width, height)
+            result
         } catch (e: Exception) {
             e.printStackTrace()
             bitmap
-        } finally {
-            src.release()
-            lab.release()
-            for (c in channels) {
-                c.release()
+        }
+    }
+
+    private fun sharpenBitmap(src: Bitmap, amount: Float): Bitmap {
+        val width = src.width
+        val height = src.height
+        val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val pixels = IntArray(width * height)
+        val outPixels = IntArray(width * height)
+        src.getPixels(pixels, 0, width, 0, 0, width, height)
+
+        val factor = amount * 0.5f
+        val center = 1f + 4f * factor
+        val edge = -factor
+
+        for (y in 1 until height - 1) {
+            for (x in 1 until width - 1) {
+                val idx = y * width + x
+
+                var rSum = 0f
+                var gSum = 0f
+                var bSum = 0f
+
+                // Center
+                val cColor = pixels[idx]
+                rSum += ((cColor shr 16) and 0xFF) * center
+                gSum += ((cColor shr 8) and 0xFF) * center
+                bSum += (cColor and 0xFF) * center
+
+                // 4-Neighbors
+                val nColor1 = pixels[idx - width]  // top
+                val nColor2 = pixels[idx - 1]      // left
+                val nColor3 = pixels[idx + 1]      // right
+                val nColor4 = pixels[idx + width]  // bottom
+
+                val rNeighbors = ((nColor1 shr 16) and 0xFF) + ((nColor2 shr 16) and 0xFF) + ((nColor3 shr 16) and 0xFF) + ((nColor4 shr 16) and 0xFF)
+                val gNeighbors = ((nColor1 shr 8) and 0xFF) + ((nColor2 shr 8) and 0xFF) + ((nColor3 shr 8) and 0xFF) + ((nColor4 shr 8) and 0xFF)
+                val bNeighbors = (nColor1 and 0xFF) + (nColor2 and 0xFF) + (nColor3 and 0xFF) + (nColor4 and 0xFF)
+
+                rSum += rNeighbors * edge
+                gSum += gNeighbors * edge
+                bSum += bNeighbors * edge
+
+                val r = rSum.coerceIn(0f, 255f).toInt()
+                val g = gSum.coerceIn(0f, 255f).toInt()
+                val b = bSum.coerceIn(0f, 255f).toInt()
+
+                outPixels[idx] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
             }
         }
+
+        // Copy border pixels
+        for (x in 0 until width) {
+            outPixels[x] = pixels[x]
+            outPixels[(height - 1) * width + x] = pixels[(height - 1) * width + x]
+        }
+        for (y in 0 until height) {
+            outPixels[y * width] = pixels[y * width]
+            outPixels[y * width + (width - 1)] = pixels[y * width + (width - 1)]
+        }
+
+        result.setPixels(outPixels, 0, width, 0, 0, width, height)
+        return result
+    }
+
+    private fun thresholdBitmap(src: Bitmap, threshold: Int): Bitmap {
+        val width = src.width
+        val height = src.height
+        val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val pixels = IntArray(width * height)
+        src.getPixels(pixels, 0, width, 0, 0, width, height)
+
+        for (i in pixels.indices) {
+            val color = pixels[i]
+            val r = (color shr 16) and 0xFF
+            val g = (color shr 8) and 0xFF
+            val b = color and 0xFF
+            val gray = (r * 0.299 + g * 0.587 + b * 0.114).toInt()
+            val binaryColor = if (gray >= threshold) 0xFFFFFFFF.toInt() else 0xFF000000.toInt()
+            pixels[i] = binaryColor
+        }
+
+        result.setPixels(pixels, 0, width, 0, 0, width, height)
+        return result
     }
 }

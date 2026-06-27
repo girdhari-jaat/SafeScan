@@ -10,7 +10,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.opencv.android.OpenCVLoader
 
 @RunWith(AndroidJUnit4::class)
 class DocumentScannerEngineTest {
@@ -18,7 +17,6 @@ class DocumentScannerEngineTest {
 
     @Before
     fun setup() {
-        OpenCVLoader.initDebug()
         engine = DocumentScannerEngine()
     }
 

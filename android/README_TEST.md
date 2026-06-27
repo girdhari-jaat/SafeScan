@@ -12,7 +12,7 @@ To run the automated tests locally:
 ```
 
 ## Test Structure
-- **DocumentScannerEngineTest.kt**: Validates OpenCV cropping, perspective transform, and image binarization.
+- **DocumentScannerEngineTest.kt**: Validates high-performance native cropping, perspective transform, and image processing.
 - **OcrEngineTest.kt**: Validates ML Kit Text Recognition with test dummy images.
 - **PdfExporterTest.kt**: Tests multi-page A4 PDF generation locally.
 

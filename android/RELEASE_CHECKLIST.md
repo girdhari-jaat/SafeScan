@@ -24,4 +24,4 @@ When prompted, use `password` as the password (as specified in `build.gradle.kts
 - No Firebase
 - No Crashlytics
 - Proguard enabled and obfuscating appropriately
-- OpenCV and ML Kit native libraries bundled successfully
+- ML Kit native libraries bundled successfully
