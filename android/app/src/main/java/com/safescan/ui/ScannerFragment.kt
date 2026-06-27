@@ -98,7 +98,6 @@ class ScannerFragment : Fragment() {
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
-        startCamera()
         setupObservers()
         setupListeners()
     }
@@ -152,6 +151,11 @@ class ScannerFragment : Fragment() {
     }
 
     private fun startCamera() {
+        if (!isAdded) return
+        if (ContextCompat.checkSelfPermission(requireContext(), android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
 
         cameraProviderFuture.addListener({
