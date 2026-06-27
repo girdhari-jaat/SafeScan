@@ -11,6 +11,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class PdfExporterTest {
@@ -36,16 +37,22 @@ class PdfExporterTest {
         )
         
         val result = try {
-            val file = pdfExporter.exportCardsToPdf(slots, "test_export.pdf", ScannerMode.GRID)
-            AppResult.Success(file)
+            val fileResult = pdfExporter.exportCardsToPdf(slots, "test_export.pdf", ScannerMode.GRID)
+            if (fileResult.isSuccess) {
+                AppResult.Success(fileResult.getOrThrow())
+            } else {
+                val exception = fileResult.exceptionOrNull() ?: Exception("Unknown error")
+                AppResult.Error(exception.message ?: "Failed", exception)
+            }
         } catch (e: Exception) {
             AppResult.Error(e.message ?: "Failed", e)
         }
         
         assertTrue("Result should be Success", result is AppResult.Success)
         if (result is AppResult.Success) {
-            assertTrue("PDF file should exist", result.data.exists())
-            assertTrue("PDF file length should be > 0", result.data.length() > 0)
+            val file = result.data
+            assertTrue("PDF file should exist", file.exists())
+            assertTrue("PDF file length should be > 0", file.length() > 0)
         }
     }
 }
