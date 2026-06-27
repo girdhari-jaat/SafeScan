@@ -8,6 +8,7 @@ on:
 
 jobs:
   build:
+    name: Build Release APK
     runs-on: ubuntu-latest
     timeout-minutes: 25
     defaults:
@@ -24,31 +25,43 @@ jobs:
         java-version: '17'
         distribution: 'zulu'
 
+    - name: Setup Android SDK 36
+      uses: android-actions/setup-android@v3
+      with:
+        api-level: 36
+        build-tools: 36.0.0
+
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
         gradle-version: '8.5'
+        build-root-directory: android
 
-    - name: Build Debug APK and Test APK
-      run: gradle assembleDebug assembleDebugAndroidTest --no-daemon
+    - name: Build Release APK and Test APK
+      run: |
+        gradle assembleRelease assembleDebugAndroidTest --no-daemon
+      env:
+        ANDROID_KEYSTORE_FILE: ${{ secrets.ANDROID_KEYSTORE_FILE }}
+        ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-release-apk
+        path: android/app/build/outputs/apk/release/app-release.apk
+        if-no-files-found: error
 
     - name: Run Instrumentation Tests on Android Emulator
       uses: reactivecircus/android-emulator-runner@v2
-      continue-on-error: true # ✅ Ye line add ki. Emulator fail hua to bhi aage jayega
       with:
-        api-level: 35
-        target: default 
+        api-level: 36
+        target: default
         arch: x86_64
         profile: Nexus 6
         disable-animations: true
         working-directory: android
         emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-audio -no-boot-anim -memory 2048
-        script: gradle connectedAndroidTest --no-daemon --stacktrace
-
-    - name: Upload APK Artifact
-      if: always() # ✅ Ye important hai. Test fail ho to bhi APK upload karo
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-debug-apk
-        path: android/app/build/outputs/apk/debug/app-debug.apk
-        if-no-files-found: error
+        script: |
+          gradle connectedAndroidTest --no-daemon --stacktrace

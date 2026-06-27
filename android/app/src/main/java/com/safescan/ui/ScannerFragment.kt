@@ -204,6 +204,9 @@ class ScannerFragment : Fragment() {
             permissionsToRequest.add(android.Manifest.permission.READ_EXTERNAL_STORAGE)
         } else {
             permissionsToRequest.add(android.Manifest.permission.READ_MEDIA_IMAGES)
+            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                permissionsToRequest.add(android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+            }
         }
 
         val missingPermissions = permissionsToRequest.filter {

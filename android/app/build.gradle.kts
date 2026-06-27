@@ -10,21 +10,17 @@ plugins {
 
 android {
     namespace = "com.safescan"
-    compileSdk = 34
-    buildToolsVersion = "34.0.0"
+    compileSdk = 36
+    buildToolsVersion = "36.0.0"
 
     defaultConfig {
         applicationId = "com.safescan"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        
-        ndk {
-            abiFilters.add("arm64-v8a")
-        }
     }
 
     signingConfigs {
@@ -40,6 +36,7 @@ android {
                 keyAlias = properties.getProperty("key.alias") ?: "key0"
                 keyPassword = properties.getProperty("key.alias.password") ?: "password"
             } else {
+                // Fallback to environment variables (ideal for CI/CD like GitHub Actions) or local defaults
                 val envStoreFile = System.getenv("ANDROID_KEYSTORE_FILE")
                 storeFile = if (envStoreFile != null) file(envStoreFile) else file("release-key.jks")
                 storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: "password"
@@ -51,17 +48,18 @@ android {
 
     buildTypes {
         getByName("release") {
-            signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = true // ✅ Wapis true
-            isShrinkResources = true 
+            val releaseConfig = signingConfigs.getByName("release")
+            signingConfig = if (releaseConfig.storeFile?.exists() == true) {
+                releaseConfig
+            } else {
+                signingConfigs.getByName("debug")
+            }
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro" // 👈 Ye file ab rules rakhegi
+                "proguard-rules.pro"
             )
-        }
-        getByName("debug") {
-            isMinifyEnabled = false // Debug me fast build ke liye off
-            applicationIdSuffix = ".debug"
         }
     }
 
@@ -76,6 +74,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        // Enable Jetpack Compose permanently
         compose = true
     }
 
