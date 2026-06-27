@@ -10,6 +10,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.camera.core.CameraControl
 import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
@@ -56,6 +57,24 @@ class ScannerFragment : Fragment() {
 
     private var flashEnabled = false
 
+    private enum class FragmentViewMode {
+        LIBRARY,
+        SCANNER
+    }
+    private var currentViewMode = FragmentViewMode.LIBRARY
+
+    // On-demand permission launcher
+    private val requestPermissionLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val cameraGranted = ContextCompat.checkSelfPermission(requireContext(), android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (cameraGranted) {
+            updateViewMode(FragmentViewMode.SCANNER)
+        } else {
+            Toast.makeText(context, "Camera permission is required to scan documents.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -68,38 +87,134 @@ class ScannerFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        binding.composeView.apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                SafeScanTheme {
-                    val isEditing by viewModel.isEditing.collectAsState()
-                    val isCropping by viewModel.isCropping.collectAsState()
-                    if (isCropping) {
-                        com.safescan.ui.CropScreen(viewModel = viewModel)
-                    } else if (isEditing) {
-                        com.safescan.ui.EditorScreen(viewModel = viewModel)
-                    } else {
-                        SlotsScreen(
-                            viewModel = viewModel,
-                            onSlotClick = { slotId ->
-                                viewModel.onSlotClick(slotId)
-                                // return to preview view and result image gone
-                                binding.resultImageView.visibility = View.GONE
-                                binding.previewView.visibility = View.VISIBLE
-                            },
-                            onSlotLongClick = { slotId ->
-                                viewModel.openCrop(slotId)
+        cameraExecutor = Executors.newSingleThreadExecutor()
+
+        setupObservers()
+        setupListeners()
+
+        // Handle physical device back presses gracefully
+        val callback = object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                val isEditing = viewModel.isEditing.value
+                val isCropping = viewModel.isCropping.value
+                if (isCropping) {
+                    viewModel.isCropping.value = false
+                } else if (isEditing) {
+                    viewModel.isEditing.value = false
+                } else if (currentViewMode == FragmentViewMode.SCANNER) {
+                    updateViewMode(FragmentViewMode.LIBRARY)
+                } else {
+                    isEnabled = false
+                    requireActivity().onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
+            }
+        }
+        requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, callback)
+
+        // Default app to Library on startup
+        updateViewMode(FragmentViewMode.LIBRARY)
+    }
+
+    private fun updateViewMode(mode: FragmentViewMode) {
+        currentViewMode = mode
+        if (mode == FragmentViewMode.LIBRARY) {
+            // Hide camera-related XML views entirely
+            binding.previewView.visibility = View.GONE
+            binding.btnCapture.visibility = View.GONE
+            binding.btnFlash.visibility = View.GONE
+            binding.btnSwitchEngine.visibility = View.GONE
+            binding.resultImageView.visibility = View.GONE
+
+            // Release Camera Resources immediately
+            val currentContext = context
+            if (currentContext != null) {
+                try {
+                    val cameraProviderFuture = ProcessCameraProvider.getInstance(currentContext)
+                    cameraProviderFuture.addListener({
+                        try {
+                            val cameraProvider = cameraProviderFuture.get()
+                            cameraProvider.unbindAll()
+                        } catch (e: Exception) {
+                            Log.e("ScannerFragment", "Failed to release camera", e)
+                        }
+                    }, ContextCompat.getMainExecutor(currentContext))
+                } catch (e: Exception) {
+                    Log.e("ScannerFragment", "Error requesting camera provider", e)
+                }
+            }
+
+            // Bind Compose View to LibraryScreen
+            binding.composeView.apply {
+                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+                setContent {
+                    SafeScanTheme {
+                        LibraryScreen(
+                            onStartScan = {
+                                checkPermissionAndStartScanner()
                             }
                         )
                     }
                 }
             }
+        } else {
+            // Show camera-related XML views
+            binding.previewView.visibility = View.VISIBLE
+            binding.btnCapture.visibility = View.VISIBLE
+            binding.btnFlash.visibility = View.VISIBLE
+            binding.btnSwitchEngine.visibility = View.VISIBLE
+
+            // Start live CameraX preview
+            startCamera()
+
+            // Bind Compose View to scanner/editor layout overlays
+            binding.composeView.apply {
+                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+                setContent {
+                    SafeScanTheme {
+                        val isEditing by viewModel.isEditing.collectAsState()
+                        val isCropping by viewModel.isCropping.collectAsState()
+                        if (isCropping) {
+                            com.safescan.ui.CropScreen(viewModel = viewModel)
+                        } else if (isEditing) {
+                            com.safescan.ui.EditorScreen(viewModel = viewModel)
+                        } else {
+                            SlotsScreen(
+                                viewModel = viewModel,
+                                onSlotClick = { slotId ->
+                                    viewModel.onSlotClick(slotId)
+                                    // return to preview view and result image gone
+                                    binding.resultImageView.visibility = View.GONE
+                                    binding.previewView.visibility = View.VISIBLE
+                                },
+                                onSlotLongClick = { slotId ->
+                                    viewModel.openCrop(slotId)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun checkPermissionAndStartScanner() {
+        val permissionsToRequest = mutableListOf(android.Manifest.permission.CAMERA)
+        if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.S_V2) {
+            permissionsToRequest.add(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+        } else {
+            permissionsToRequest.add(android.Manifest.permission.READ_MEDIA_IMAGES)
         }
 
-        cameraExecutor = Executors.newSingleThreadExecutor()
+        val missingPermissions = permissionsToRequest.filter {
+            ContextCompat.checkSelfPermission(requireContext(), it) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
 
-        setupObservers()
-        setupListeners()
+        if (missingPermissions.isEmpty()) {
+            updateViewMode(FragmentViewMode.SCANNER)
+        } else {
+            requestPermissionLauncher.launch(missingPermissions.toTypedArray())
+        }
     }
 
     private fun setupListeners() {
@@ -182,8 +297,6 @@ class ScannerFragment : Fragment() {
                 }
 
                 val previewBuilder = Preview.Builder()
-                // setTargetFrameRate is removed to avoid potential runtime crashes on unsupported devices
-                // as it is only natively supported in CameraX 1.4.0+ or via specific interop
                 
                 val preview = previewBuilder.build().also {
                     it.setSurfaceProvider(binding.previewView.surfaceProvider)
@@ -217,7 +330,7 @@ class ScannerFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        if (allPermissionsGranted()) {
+        if (currentViewMode == FragmentViewMode.SCANNER && allPermissionsGranted()) {
             startCamera()
         }
     }
@@ -280,8 +393,10 @@ class ScannerFragment : Fragment() {
                         binding.resultImageView.setImageBitmap(bitmap)
                         binding.previewView.visibility = View.INVISIBLE
                     } ?: run {
-                        binding.resultImageView.visibility = View.GONE
-                        binding.previewView.visibility = View.VISIBLE
+                        if (currentViewMode == FragmentViewMode.SCANNER) {
+                            binding.resultImageView.visibility = View.GONE
+                            binding.previewView.visibility = View.VISIBLE
+                        }
                     }
 
                     state.errorMessage?.let { msg ->
@@ -295,7 +410,9 @@ class ScannerFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.currentMode.collect { mode ->
-                    startCamera()
+                    if (currentViewMode == FragmentViewMode.SCANNER) {
+                        startCamera()
+                    }
                 }
             }
         }
