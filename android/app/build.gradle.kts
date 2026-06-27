@@ -1,4 +1,5 @@
 import com.android.build.gradle.internal.dsl.BaseAppModuleExtension
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -30,7 +31,7 @@ android {
         create("release") {
             val signingPropertiesFile = rootProject.file("signing.properties")
             if (signingPropertiesFile.exists()) {
-                val properties = java.util.Properties().apply {
+                val properties = Properties().apply {
                     signingPropertiesFile.inputStream().use { load(it) }
                 }
                 val keystoreFileName = properties.getProperty("key.store.file") ?: "release-key.jks"
