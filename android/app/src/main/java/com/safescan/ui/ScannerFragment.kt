@@ -119,7 +119,9 @@ class ScannerFragment : Fragment() {
                 ScannerEngineType.MLKIT
             }
             viewModel.toggleEngine(next)
-            Toast.makeText(requireContext(), "Engine set to: $next", Toast.LENGTH_SHORT).show()
+            context?.let { ctx ->
+                Toast.makeText(ctx, "Engine set to: $next", Toast.LENGTH_SHORT).show()
+            }
         }
 
         binding.previewView.setOnTouchListener { _, event ->
@@ -159,6 +161,7 @@ class ScannerFragment : Fragment() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
 
         cameraProviderFuture.addListener({
+            val context = context ?: return@addListener
             val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
             val mode = viewModel.currentMode.value
 
@@ -176,12 +179,9 @@ class ScannerFragment : Fragment() {
             }
 
             val previewBuilder = Preview.Builder()
-            try {
-                previewBuilder.setTargetFrameRate(targetFrameRateRange)
-            } catch (e: Exception) {
-                // Device fallback if specific frame rate setting is unsupported
-            }
-
+            // setTargetFrameRate is removed to avoid potential runtime crashes on unsupported devices
+            // as it is only natively supported in CameraX 1.4.0+ or via specific interop
+            
             val preview = previewBuilder.build().also {
                 it.setSurfaceProvider(binding.previewView.surfaceProvider)
             }
@@ -207,8 +207,19 @@ class ScannerFragment : Fragment() {
                 Log.e("ScannerFragment", "Use case binding failed", exc)
             }
 
-        }, ContextCompat.getMainExecutor(requireContext()))
+        }, ContextCompat.getMainExecutor(context ?: return))
     }
+
+    override fun onResume() {
+        super.onResume()
+        if (allPermissionsGranted()) {
+            startCamera()
+        }
+    }
+
+    private fun allPermissionsGranted() = ContextCompat.checkSelfPermission(
+        requireContext(), android.Manifest.permission.CAMERA
+    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
     private fun takePhoto() {
         val imageCapture = imageCapture ?: return
@@ -226,8 +237,10 @@ class ScannerFragment : Fragment() {
 
                 override fun onError(exception: ImageCaptureException) {
                     Log.e("ScannerFragment", "Photo capture failed: ${exception.message}", exception)
-                    binding.progressBar.visibility = View.GONE
-                    Toast.makeText(requireContext(), "Capture failed", Toast.LENGTH_SHORT).show()
+                    _binding?.progressBar?.visibility = View.GONE
+                    context?.let { ctx ->
+                        Toast.makeText(ctx, "Capture failed", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         )
