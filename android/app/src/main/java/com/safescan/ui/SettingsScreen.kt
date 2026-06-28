@@ -71,7 +71,7 @@ fun ScanTab(viewModel: ScannerViewModel) {
     val jpegQuality by viewModel.jpegQuality.collectAsState()
 
     Column {
-        Text(stringResource(id = R.string.brightness) + ": ${dpi.toInt()}", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(id = R.string.resolution_dpi) + ": ${dpi.toInt()}", style = MaterialTheme.typography.titleMedium)
         Slider(
             value = dpi,
             onValueChange = { viewModel.setDpi(it) },
@@ -79,7 +79,7 @@ fun ScanTab(viewModel: ScannerViewModel) {
             steps = 528
         )
         Spacer(modifier = Modifier.height(16.dp))
-        Text(stringResource(id = R.string.contrast) + ": ${jpegQuality.toInt()}%", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(id = R.string.jpeg_quality) + ": ${jpegQuality.toInt()}%", style = MaterialTheme.typography.titleMedium)
         Slider(
             value = jpegQuality,
             onValueChange = { viewModel.setJpegQuality(it) },

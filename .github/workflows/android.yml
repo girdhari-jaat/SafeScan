@@ -56,12 +56,12 @@ jobs:
     - name: Run Instrumentation Tests on Android Emulator
       uses: reactivecircus/android-emulator-runner@v2
       with:
-        api-level: 36
-        target: default
+        api-level: 34
+        target: google_apis
         arch: x86_64
         profile: Nexus 6
         disable-animations: true
         working-directory: android
-        emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-audio -no-boot-anim -memory 2048
+        emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-audio -no-boot-anim -camera-back none -camera-front none -memory 2048
         script: |
           gradle connectedAndroidTest --no-daemon --stacktrace

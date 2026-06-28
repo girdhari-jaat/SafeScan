@@ -33,7 +33,9 @@ object ImageProcessor {
 
             // Sharpness (3x3 Laplacian Convolution Kernel)
             val sharpened = if (state.sharpness > 0f) {
-                sharpenBitmap(workingBitmap, state.sharpness)
+                val temp = sharpenBitmap(workingBitmap, state.sharpness)
+                workingBitmap.recycle()
+                temp
             } else {
                 workingBitmap
             }
@@ -47,10 +49,21 @@ object ImageProcessor {
                         colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
                     }
                     grayCanvas.drawBitmap(sharpened, 0f, 0f, grayPaint)
+                    if (sharpened != workingBitmap) {
+                        sharpened.recycle()
+                    } else {
+                        workingBitmap.recycle()
+                    }
                     gray
                 }
                 FilterType.BLACK_WHITE -> {
-                    thresholdBitmap(sharpened, 128)
+                    val bw = thresholdBitmap(sharpened, 128)
+                    if (sharpened != workingBitmap) {
+                        sharpened.recycle()
+                    } else {
+                        workingBitmap.recycle()
+                    }
+                    bw
                 }
                 FilterType.COLOR -> {
                     sharpened

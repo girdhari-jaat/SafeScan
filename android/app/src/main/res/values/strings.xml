@@ -24,6 +24,8 @@
     <string name="brightness">Brightness</string>
     <string name="contrast">Contrast</string>
     <string name="sharpness">Sharpness</string>
+    <string name="resolution_dpi">Resolution (DPI)</string>
+    <string name="jpeg_quality">JPEG Quality (%)</string>
     <string name="crop_document">Crop Document</string>
     <string name="doc_not_found">Document not found. Move manually.</string>
     <string name="auto_crop_failed">Auto Crop Failed</string>

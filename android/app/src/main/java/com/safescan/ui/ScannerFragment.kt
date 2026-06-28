@@ -356,7 +356,16 @@ class ScannerFragment : Fragment() {
             ContextCompat.getMainExecutor(currentContext),
             object : ImageCapture.OnImageCapturedCallback() {
                 override fun onCaptureSuccess(imageProxy: ImageProxy) {
-                    val bitmap = imageProxy.toBitmap()
+                    val rawBitmap = imageProxy.toBitmap()
+                    val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+                    val bitmap = if (rotationDegrees != 0) {
+                        val matrix = android.graphics.Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+                        val rotated = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
+                        rawBitmap.recycle()
+                        rotated
+                    } else {
+                        rawBitmap
+                    }
                     viewModel.onCapture(bitmap)
                     imageProxy.close()
                 }
@@ -424,6 +433,9 @@ class ScannerFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+        imageCapture = null
+        cameraControl = null
+        cameraInfo = null
         cameraExecutor.shutdown()
     }
 }

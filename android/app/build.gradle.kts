@@ -1,3 +1,6 @@
+import com.android.build.gradle.internal.dsl.BaseAppModuleExtension
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -16,19 +19,47 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // SIGNING SKIP FOR TEST - Debug key use ho raha
+    signingConfigs {
+        create("release") {
+            val signingPropertiesFile = rootProject.file("signing.properties")
+            if (signingPropertiesFile.exists()) {
+                val properties = Properties().apply {
+                    signingPropertiesFile.inputStream().use { load(it) }
+                }
+                val keystoreFileName = properties.getProperty("key.store.file") ?: "release-key.jks"
+                storeFile = file(keystoreFileName)
+                storePassword = properties.getProperty("key.store.password") ?: "password"
+                keyAlias = properties.getProperty("key.alias") ?: "key0"
+                keyPassword = properties.getProperty("key.alias.password") ?: "password"
+            } else {
+                // Fallback to environment variables (ideal for CI/CD like GitHub Actions) or local defaults
+                val envStoreFile = System.getenv("ANDROID_KEYSTORE_FILE")
+                storeFile = if (envStoreFile != null) file(envStoreFile) else file("release-key.jks")
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: "password"
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: "key0"
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD") ?: "password"
+            }
+        }
+    }
+
     buildTypes {
         getByName("release") {
-            signingConfig = signingConfigs.getByName("debug") 
-            isMinifyEnabled = false  // ✅ CRASH FIX: R8 Band
-            isShrinkResources = false // ✅ CRASH FIX: Resource shrink band
-            // proguard file ab use nahi ho raha
-        }
-        getByName("debug") {
-            isMinifyEnabled = false
+            val releaseConfig = signingConfigs.getByName("release")
+            signingConfig = if (releaseConfig.storeFile?.exists() == true) {
+                releaseConfig
+            } else {
+                signingConfigs.getByName("debug")
+            }
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 
@@ -43,6 +74,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        // Enable Jetpack Compose permanently
         compose = true
     }
 

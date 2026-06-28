@@ -9,9 +9,11 @@ import java.util.Date
 import java.util.Locale
 
 class GlobalExceptionHandler(
-    private val context: Context,
+    context: Context,
     private val defaultHandler: Thread.UncaughtExceptionHandler?
 ) : Thread.UncaughtExceptionHandler {
+
+    private val context: Context = context.applicationContext
 
     override fun uncaughtException(t: Thread, e: Throwable) {
         try {
