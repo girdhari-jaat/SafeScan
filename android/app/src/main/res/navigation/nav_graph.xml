@@ -3,7 +3,13 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/nav_graph"
-    app:startDestination="@id/scannerFragment">
+    app:startDestination="@id/minimalFragment">
+
+    <fragment
+        android:id="@+id/minimalFragment"
+        android:name="com.safescan.ui.MinimalFragment"
+        android:label="Minimal"
+        tools:layout="@layout/fragment_minimal" />
 
     <fragment
         android:id="@+id/scannerFragment"
