@@ -638,12 +638,12 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean = false, modifier: Mo
         when (mode) {
             ScannerMode.CARD -> {
                 // Card aspect ratio: 3:2 (approx. 1.5)
-                rectWidth = width * 0.85f
+                rectWidth = width * 0.88f
                 rectHeight = rectWidth / 1.58f
             }
             ScannerMode.DOCUMENT -> {
                 // Document aspect ratio: A4 (approx. 1.41)
-                rectWidth = width * 0.90f
+                rectWidth = width * 0.92f
                 rectHeight = rectWidth * 1.414f
             }
             ScannerMode.GRID -> {
@@ -885,8 +885,9 @@ fun DocumentGridView(
                                         onDismiss()
                                     }
                             ) {
+                                bitmap?.let { b ->
                                     Image(
-                                        bitmap = bmp.asImageBitmap(),
+                                        bitmap = b.asImageBitmap(),
                                         contentDescription = "Page ${idx + 1}",
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Crop
