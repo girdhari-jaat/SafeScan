@@ -15,21 +15,8 @@ data class ProcessedImage(val bitmap: Bitmap)
 
 @Singleton
 class MLScannerEngine @Inject constructor(
-    private val mlKitObjectDetector: com.safescan.scanner.MLKitObjectDetector,
-    private val localMLEngine: LocalMLEngine
-) : DocumentScannerEngine(localMLEngine) {
-
-    /**
-     * Attempts to find document corners using ML Kit Object Detection if enabled,
-     * falling back to LocalMLEngine if needed.
-     */
-    override suspend fun detectCorners(bitmap: Bitmap): List<com.safescan.android.scanner.Point>? {
-        return if (engineType == ScannerEngineType.MLKIT) {
-            mlKitObjectDetector.detectDocumentEdges(bitmap) ?: localMLEngine.detectCorners(bitmap)
-        } else {
-            localMLEngine.detectCorners(bitmap)
-        }
-    }
+    mlEngine: LocalMLEngine
+) : DocumentScannerEngine(mlEngine) {
 
     suspend fun processFrame(bitmap: Bitmap): AppResult<ProcessedImage> = withContext(Dispatchers.IO) {
         try {

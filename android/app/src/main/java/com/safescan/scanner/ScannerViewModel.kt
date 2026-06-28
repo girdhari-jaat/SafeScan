@@ -22,15 +22,12 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ScannerViewModel @Inject constructor(
-    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
+    // IMPROVEMENT: Injecting all engines and repositories via Hilt DI
     private val scannerEngine: DocumentScannerEngine,
     private val settingsRepository: SettingsRepository,
     private val edgeDetectionEngine: com.safescan.scanner.EdgeDetectionEngine,
     private val pdfExporter: com.safescan.domain.PdfExporter,
-    private val documentRepository: com.safescan.data.DocumentRepository,
-    private val mlKitObjectDetector: com.safescan.scanner.MLKitObjectDetector,
-    private val mlKitDocumentScanner: com.safescan.scanner.MLKitDocumentScanner,
-    private val localMLEngine: com.safescan.android.ml.local.LocalMLEngine
+    private val documentRepository: com.safescan.data.DocumentRepository
 ) : ViewModel() {
 
     // IMPROVEMENT: Using com.safescan.data.ScannerUiState with isAutoRunning
@@ -157,12 +154,6 @@ class ScannerViewModel @Inject constructor(
     val croppingBitmap: MutableStateFlow<Bitmap?> = MutableStateFlow(null)
 
     val savedDocuments: MutableStateFlow<List<com.safescan.data.DocumentMetadata>> = MutableStateFlow(emptyList())
-    
-    private val _liveDetectionPoints = MutableStateFlow<List<com.safescan.android.scanner.Point>?>(null)
-    val liveDetectionPoints: StateFlow<List<com.safescan.android.scanner.Point>?> = _liveDetectionPoints.asStateFlow()
-
-    private val _liveDetectionResolution = MutableStateFlow<Pair<Int, Int>?>(null)
-    val liveDetectionResolution: StateFlow<Pair<Int, Int>?> = _liveDetectionResolution.asStateFlow()
 
     init {
         _uiState.update { it.copy(currentEngine = scannerEngine.engineType) }
@@ -199,58 +190,11 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    fun importFromUri(uri: android.net.Uri) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
-                inputStream?.close()
-                if (bitmap != null) {
-                    val file = java.io.File(context.filesDir, "captured_${System.currentTimeMillis()}.jpg")
-                    java.io.FileOutputStream(file).use { out ->
-                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
-                    }
-                    withContext(Dispatchers.Main) {
-                        capturedJpgFiles.add(file)
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    fun updateLiveDetectionPoints(points: List<com.safescan.android.scanner.Point>?, width: Int = 0, height: Int = 0) {
-        _liveDetectionPoints.value = points
-        if (width > 0 && height > 0) {
-            _liveDetectionResolution.value = width to height
-        }
-    }
-
     // IMPROVEMENT: Added async detectEdges runner updating isAutoRunning state Flow
-    fun detectEdges(imageProxy: androidx.camera.core.ImageProxy, onResult: (List<com.safescan.android.scanner.Point>?, Int, Int) -> Unit) {
-        _uiState.update { it.copy(isAutoRunning = true) }
-        val rotation = imageProxy.imageInfo.rotationDegrees
-        val width = if (rotation == 90 || rotation == 270) imageProxy.height else imageProxy.width
-        val height = if (rotation == 90 || rotation == 270) imageProxy.width else imageProxy.height
-        
-        viewModelScope.launch(Dispatchers.IO) {
-            val points = if (_uiState.value.currentEngine == ScannerEngineType.MLKIT) {
-                mlKitObjectDetector.detectDocumentEdges(imageProxy)
-            } else {
-                null // Local edge detection might need bitmap conversion
-            }
-            _uiState.update { it.copy(isAutoRunning = false) }
-            withContext(Dispatchers.Main) {
-                onResult(points, width, height)
-            }
-        }
-    }
-
     fun detectEdges(bitmap: Bitmap, onResult: (List<com.safescan.android.scanner.Point>?) -> Unit) {
         _uiState.update { it.copy(isAutoRunning = true) }
         viewModelScope.launch(Dispatchers.IO) {
-            val points = scannerEngine.detectCorners(bitmap)
+            val points = edgeDetectionEngine.detectEdges(bitmap)
             _uiState.update { it.copy(isAutoRunning = false) }
             withContext(Dispatchers.Main) {
                 onResult(points)
@@ -339,8 +283,6 @@ class ScannerViewModel @Inject constructor(
     fun setUiLanguage(language: String) {
         viewModelScope.launch {
             settingsRepository.setUiLanguage(language)
-            val appLocale: androidx.core.os.LocaleListCompat = androidx.core.os.LocaleListCompat.forLanguageTags(language)
-            androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(appLocale)
         }
     }
 
@@ -751,56 +693,16 @@ class ScannerViewModel @Inject constructor(
 
             when (val result = scannerEngine.scanDocument(resizedBitmap)) {
                 is com.safescan.core.AppResult.Success -> {
-                    var finalBitmap = result.data
-
-                    // 1. Shadow Removal (if enabled)
-                    if (shadowRemove.value) {
-                        finalBitmap = com.safescan.domain.ImageProcessor.removeShadows(finalBitmap)
-                    }
-
-                    // 2. Auto Rotation (if enabled)
-                    if (autoRotation.value) {
-                        // Very simple heuristic: if width > height, rotate 90 deg (assuming portrait is preferred)
-                        // In a real app, you might use OCR or ML to detect orientation
-                        if (finalBitmap.width > finalBitmap.height) {
-                            val matrix = android.graphics.Matrix().apply { postRotate(90f) }
-                            finalBitmap = android.graphics.Bitmap.createBitmap(finalBitmap, 0, 0, finalBitmap.width, finalBitmap.height, matrix, true)
-                        }
-                    }
-
-                    // 3. Auto Orientation (if enabled)
-                    if (autoOrientation.value) {
-                        // Heuristic: check if the document needs to be flipped or normalized
-                        // This can be expanded with more advanced image analysis
-                    }
-
-                    // 4. Default Filter (if enabled and not original)
-                    val filter = defaultFilter.value
-                    if (filter != "original") {
-                        finalBitmap = when (filter) {
-                            "magic" -> com.safescan.domain.ImageProcessor.autoEnhance(finalBitmap)
-                            "grayscale" -> {
-                                val state = com.safescan.data.EditorState(filter = com.safescan.data.FilterType.GRAYSCALE)
-                                com.safescan.domain.ImageProcessor.apply(finalBitmap, state)
-                            }
-                            "threshold" -> {
-                                val state = com.safescan.data.EditorState(filter = com.safescan.data.FilterType.BLACK_WHITE)
-                                com.safescan.domain.ImageProcessor.apply(finalBitmap, state)
-                            }
-                            else -> finalBitmap
-                        }
-                    }
-
                     val slotId = selectedSlotId.value ?: slots.value.firstOrNull { it.bitmap == null }?.id
                     if (slotId != null) {
-                        captureToSlot(finalBitmap, slotId)
+                        captureToSlot(result.data, slotId)
                         selectedSlotId.value = null
                     }
                     
                     _uiState.update { 
                         it.copy(
                             isLoading = false,
-                            scannedBitmap = finalBitmap,
+                            scannedBitmap = result.data,
                             error = null
                         )
                     }

@@ -24,13 +24,13 @@ interface MLScannerEngine {
 open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) {
     var engineType: ScannerEngineType = ScannerEngineType.MLKIT
 
-    open suspend fun detectCorners(bitmap: Bitmap): List<Point>? {
-        return mlEngine?.detectCorners(bitmap)
-    }
-
     open suspend fun scanDocument(bitmap: Bitmap): AppResult<Bitmap> = withContext(Dispatchers.Default) {
         try {
-            var corners: List<Point>? = detectCorners(bitmap)
+            var corners: List<Point>? = null
+
+            if (engineType == ScannerEngineType.LOCAL_ML && mlEngine != null) {
+                corners = mlEngine.detectCorners(bitmap)
+            }
 
             if (corners == null || corners.size != 4) {
                 // Fallback to default full-screen-ish quad if no ML detection is available

@@ -35,7 +35,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridCells
 import com.safescan.data.ScannerMode
@@ -47,7 +46,6 @@ import com.safescan.R
 fun SlotsScreen(
     viewModel: ScannerViewModel,
     onCaptureClick: () -> Unit,
-    onAutoScanClick: () -> Unit,
     onClose: () -> Unit,
     onFlashToggle: () -> Unit,
     onGalleryClick: () -> Unit,
@@ -76,18 +74,7 @@ fun SlotsScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
         // LAYER 1: Viewfinder Overlay Guides based on Selected Mood
-        ViewfinderOverlay(mode = currentMode, showGrid = showGrid, modifier = Modifier.fillMaxSize())
-
-        // NEW LAYER: Live Detection Visualization
-        val livePoints by viewModel.liveDetectionPoints.collectAsState()
-        val liveResolution by viewModel.liveDetectionResolution.collectAsState()
-        if (liveDetect && livePoints != null && liveResolution != null) {
-            LiveDetectionOverlay(
-                points = livePoints!!, 
-                resolution = liveResolution!!,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
+        ViewfinderOverlay(mode = currentMode, modifier = Modifier.fillMaxSize())
 
         // LAYER 2: Control Panel and Overlays
         Column(
@@ -261,26 +248,14 @@ fun SlotsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Left Action: Fallback Import Gallery Picker
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        IconButton(
-                            onClick = onGalleryClick,
-                            modifier = Modifier
-                                .size(52.dp)
-                                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                                .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape)
-                        ) {
-                            Text(text = "🖼️", fontSize = 22.sp)
-                        }
-
-                        IconButton(
-                            onClick = onAutoScanClick,
-                            modifier = Modifier
-                                .size(52.dp)
-                                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                                .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape)
-                        ) {
-                            Text(text = "✨", fontSize = 22.sp)
-                        }
+                    IconButton(
+                        onClick = onGalleryClick,
+                        modifier = Modifier
+                            .size(52.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                            .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                    ) {
+                        Text(text = "🖼️", fontSize = 22.sp)
                     }
 
                     // Center Action: Large Circular Shutter button
@@ -582,52 +557,7 @@ private fun PopoverToggleRow(
 }
 
 @Composable
-fun LiveDetectionOverlay(
-    points: List<com.safescan.android.scanner.Point>, 
-    resolution: Pair<Int, Int>,
-    modifier: Modifier = Modifier
-) {
-    Canvas(modifier = modifier) {
-        val canvasWidth = size.width
-        val canvasHeight = size.height
-        val imgWidth = resolution.first.toFloat()
-        val imgHeight = resolution.second.toFloat()
-        
-        val scaleX = canvasWidth / imgWidth
-        val scaleY = canvasHeight / imgHeight
-        
-        if (points.size >= 4) {
-            val path = androidx.compose.ui.graphics.Path().apply {
-                moveTo(points[0].x.toFloat() * scaleX, points[0].y.toFloat() * scaleY)
-                for (i in 1 until points.size) {
-                    lineTo(points[i].x.toFloat() * scaleX, points[i].y.toFloat() * scaleY)
-                }
-                close()
-            }
-            
-            drawPath(
-                path = path,
-                color = Color.Green.copy(alpha = 0.6f),
-                style = Stroke(
-                    width = 3.dp.toPx(),
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(20f, 10f), 0f)
-                )
-            )
-            
-            // Draw corner indicators
-            points.forEach { pt ->
-                drawCircle(
-                    color = Color.Green,
-                    radius = 5.dp.toPx(),
-                    center = Offset(pt.x.toFloat() * scaleX, pt.y.toFloat() * scaleY)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean = false, modifier: Modifier = Modifier) {
+fun ViewfinderOverlay(mode: ScannerMode, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height
@@ -639,13 +569,13 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean = false, modifier: Mo
         when (mode) {
             ScannerMode.CARD -> {
                 // Card aspect ratio: 3:2 (approx. 1.5)
-                rectWidth = width * 0.88f
-                rectHeight = rectWidth / 1.58f
+                rectWidth = width * 0.82f
+                rectHeight = rectWidth / 1.5f
             }
             ScannerMode.DOCUMENT -> {
                 // Document aspect ratio: A4 (approx. 1.41)
-                rectWidth = width * 0.92f
-                rectHeight = rectWidth * 1.414f
+                rectWidth = width * 0.75f
+                rectHeight = rectWidth * 1.35f
             }
             ScannerMode.GRID -> {
                 rectWidth = 0f
@@ -698,9 +628,7 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean = false, modifier: Mo
                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(15f, 15f), 0f)
                 )
             }
-        }
-
-        if (mode == ScannerMode.GRID || showGrid) {
+        } else if (mode == ScannerMode.GRID) {
             // Draw standard 3x3 alignment grids
             drawLine(
                 color = Color.White.copy(alpha = 0.35f),
@@ -886,9 +814,8 @@ fun DocumentGridView(
                                         onDismiss()
                                     }
                             ) {
-                                bitmap?.let { b ->
                                     Image(
-                                        bitmap = b.asImageBitmap(),
+                                        bitmap = bmp.asImageBitmap(),
                                         contentDescription = "Page ${idx + 1}",
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Crop

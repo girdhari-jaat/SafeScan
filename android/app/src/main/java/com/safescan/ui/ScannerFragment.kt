@@ -1,6 +1,5 @@
 package com.safescan.ui
 
-import android.app.Activity
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.os.Bundle
@@ -16,7 +15,6 @@ import androidx.camera.core.CameraControl
 import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.FocusMeteringAction
-import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
@@ -28,9 +26,7 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.google.android.gms.documentscanner.GmsDocumentScannerOptions
-import com.google.android.gms.documentscanner.GmsDocumentScanning
-import com.google.android.gms.documentscanner.GmsDocumentScanningResult
+import com.google.android.material.snackbar.Snackbar
 import com.safescan.databinding.FragmentScannerBinding
 import com.safescan.scanner.ScannerEngineType
 import com.safescan.scanner.ScannerViewModel
@@ -53,13 +49,11 @@ class ScannerFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val viewModel: ScannerViewModel by viewModels()
-    private val shutterSound = android.media.MediaActionSound()
 
     private lateinit var cameraExecutor: ExecutorService
     private var imageCapture: ImageCapture? = null
     private var cameraControl: CameraControl? = null
     private var cameraInfo: CameraInfo? = null
-    private var imageAnalysis: ImageAnalysis? = null
 
     private var flashEnabled = false
 
@@ -98,33 +92,6 @@ class ScannerFragment : Fragment() {
                 Toast.makeText(context, "Failed to import image", Toast.LENGTH_SHORT).show()
             }
         }
-    }
-
-    private val scannerLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val scanResult = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
-            scanResult?.pages?.forEach { page ->
-                val uri = page.imageUri
-                // Import this URI into the app's JPG storage
-                viewModel.importFromUri(uri)
-            }
-        }
-    }
-
-    private fun startMLKitScanner() {
-        val scanner = GmsDocumentScanning.getClient(
-            GmsDocumentScannerOptions.Builder()
-                .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
-                .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
-                .build()
-        )
-        scanner.getStartScanIntent(requireActivity())
-            .addOnSuccessListener { intentSender ->
-                scannerLauncher.launch(androidx.activity.result.IntentSenderRequest.Builder(intentSender).build())
-            }
-            .addOnFailureListener {
-                // Handle failure
-            }
     }
 
     override fun onCreateView(
@@ -251,7 +218,6 @@ class ScannerFragment : Fragment() {
                             SlotsScreen(
                                 viewModel = viewModel,
                                 onCaptureClick = { takePhoto() },
-                                onAutoScanClick = { startMLKitScanner() },
                                 onClose = { updateViewMode(FragmentViewMode.LIBRARY) },
                                 onFlashToggle = { toggleFlash() },
                                 onGalleryClick = { pickImageLauncher.launch("image/*") },
@@ -361,32 +327,18 @@ class ScannerFragment : Fragment() {
                 val mode = viewModel.currentMode.value
 
                 // 1. Dynamic Hardware Negotiation & Mood Alignment (from gemini.md rules)
-                val hdModeValue = viewModel.hdMode.value
-                val batterySaverActive = viewModel.batterySaver.value
-
-                val targetResolution = when (hdModeValue) {
-                    "Fast" -> android.util.Size(1280, 720)
-                    "High" -> android.util.Size(3840, 2160)
-                    else -> android.util.Size(1920, 1080)
+                val captureMode = when (mode) {
+                    com.safescan.data.ScannerMode.CARD -> ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY // Fast capture, lower latency
+                    com.safescan.data.ScannerMode.GRID -> ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
+                    com.safescan.data.ScannerMode.DOCUMENT -> ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY // Standard balanced
                 }
 
-                val resolutionSelector = androidx.camera.core.resolutionselector.ResolutionSelector.Builder()
-                    .setResolutionStrategy(
-                        androidx.camera.core.resolutionselector.ResolutionStrategy(
-                            targetResolution,
-                            androidx.camera.core.resolutionselector.ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
-                        )
-                    )
-                    .build()
-
-                val captureMode = when (mode) {
-                    com.safescan.data.ScannerMode.CARD -> ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
-                    com.safescan.data.ScannerMode.GRID -> ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
-                    com.safescan.data.ScannerMode.DOCUMENT -> ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
+                val targetFrameRateRange = when (mode) {
+                    com.safescan.data.ScannerMode.CARD -> Range(60, 60) // High frame rate for fast card detection
+                    else -> Range(30, 30) // Standard frame rate for high detail documents
                 }
 
                 val previewBuilder = Preview.Builder()
-                    .setResolutionSelector(resolutionSelector)
                 
                 val preview = previewBuilder.build().also {
                     it.setSurfaceProvider(binding.previewView.surfaceProvider)
@@ -395,43 +347,14 @@ class ScannerFragment : Fragment() {
                 imageCapture = ImageCapture.Builder()
                     .setCaptureMode(captureMode)
                     .setFlashMode(if (flashEnabled) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF)
-                    .setResolutionSelector(resolutionSelector)
                     .build()
-
-                val analysisResolution = if (batterySaverActive) android.util.Size(640, 480) else android.util.Size(1280, 720)
-                val analysisSelector = androidx.camera.core.resolutionselector.ResolutionSelector.Builder()
-                    .setResolutionStrategy(
-                        androidx.camera.core.resolutionselector.ResolutionStrategy(
-                            analysisResolution,
-                            androidx.camera.core.resolutionselector.ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER
-                        )
-                    )
-                    .build()
-
-                imageAnalysis = ImageAnalysis.Builder()
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .setResolutionSelector(analysisSelector)
-                    .build()
-                    .also {
-                        it.setAnalyzer(cameraExecutor) { imageProxy ->
-                            if (viewModel.liveDetect.value) {
-                                viewModel.detectEdges(imageProxy) { points, width, height ->
-                                    viewModel.updateLiveDetectionPoints(points, width, height)
-                                    imageProxy.close()
-                                }
-                            } else {
-                                viewModel.updateLiveDetectionPoints(null)
-                                imageProxy.close()
-                            }
-                        }
-                    }
 
                 val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
                 cameraProvider.unbindAll()
 
                 val camera = cameraProvider.bindToLifecycle(
-                    viewLifecycleOwner, cameraSelector, preview, imageCapture, imageAnalysis
+                    viewLifecycleOwner, cameraSelector, preview, imageCapture
                 )
 
                 cameraControl = camera.cameraControl
@@ -472,9 +395,6 @@ class ScannerFragment : Fragment() {
             ContextCompat.getMainExecutor(currentContext),
             object : ImageCapture.OnImageCapturedCallback() {
                 override fun onCaptureSuccess(imageProxy: ImageProxy) {
-                    if (viewModel.clickSound.value) {
-                        shutterSound.play(android.media.MediaActionSound.SHUTTER_CLICK)
-                    }
                     val rawBitmap = imageProxy.toBitmap()
                     val rotationDegrees = imageProxy.imageInfo.rotationDegrees
                     val bitmap = if (rotationDegrees != 0) {
@@ -541,31 +461,6 @@ class ScannerFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.currentMode.collect { mode ->
-                    if (currentViewMode == FragmentViewMode.SCANNER) {
-                        startCamera()
-                    }
-                }
-            }
-        }
-
-        // Sync Flash with ViewModel
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.flashOn.collect { enabled ->
-                    if (flashEnabled != enabled) {
-                        flashEnabled = enabled
-                        cameraControl?.enableTorch(enabled)
-                        imageCapture?.flashMode = if (enabled) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
-                        _binding?.btnFlash?.alpha = if (enabled) 1.0f else 0.5f
-                    }
-                }
-            }
-        }
-
-        // Handle HD Mode change
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.hdMode.collect { mode ->
                     if (currentViewMode == FragmentViewMode.SCANNER) {
                         startCamera()
                     }

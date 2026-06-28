@@ -93,52 +93,6 @@ fun ScanTab(viewModel: ScannerViewModel) {
             steps = 90
         )
         Spacer(modifier = Modifier.height(16.dp))
-        
-        // NEW: Scan Quality Selector
-        Text("Scan Quality", style = MaterialTheme.typography.titleMedium)
-        val hdMode by viewModel.hdMode.collectAsState()
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            listOf("Fast", "Standard", "High").forEach { mode ->
-                FilterChip(
-                    selected = hdMode == mode,
-                    onClick = { viewModel.setHdMode(mode) },
-                    label = { Text(mode) }
-                )
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Live Detection (Auto)", style = MaterialTheme.typography.titleMedium)
-            val liveDetect by viewModel.liveDetect.collectAsState()
-            Switch(
-                checked = liveDetect,
-                onCheckedChange = { viewModel.toggleLiveDetect(it) }
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Battery Saver", style = MaterialTheme.typography.titleMedium)
-            val batterySaver by viewModel.batterySaver.collectAsState()
-            Switch(
-                checked = batterySaver,
-                onCheckedChange = { viewModel.toggleBatterySaver(it) }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
