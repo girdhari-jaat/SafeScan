@@ -22,12 +22,15 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ScannerViewModel @Inject constructor(
-    // IMPROVEMENT: Injecting all engines and repositories via Hilt DI
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val scannerEngine: DocumentScannerEngine,
     private val settingsRepository: SettingsRepository,
     private val edgeDetectionEngine: com.safescan.scanner.EdgeDetectionEngine,
     private val pdfExporter: com.safescan.domain.PdfExporter,
-    private val documentRepository: com.safescan.data.DocumentRepository
+    private val documentRepository: com.safescan.data.DocumentRepository,
+    private val mlKitObjectDetector: com.safescan.scanner.MLKitObjectDetector,
+    private val mlKitDocumentScanner: com.safescan.scanner.MLKitDocumentScanner,
+    private val localMLEngine: com.safescan.android.ml.local.LocalMLEngine
 ) : ViewModel() {
 
     // IMPROVEMENT: Using com.safescan.data.ScannerUiState with isAutoRunning
@@ -88,6 +91,37 @@ class ScannerViewModel @Inject constructor(
     val uiLanguage: StateFlow<String> = settingsRepository.uiLanguageFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "en")
 
+    private val _editingBatchIndex = MutableStateFlow<Int?>(null)
+    val editingBatchIndex: StateFlow<Int?> = _editingBatchIndex
+
+    // Metadata cache for adjustments
+    private val imageMetadata = mutableMapOf<String, org.json.JSONObject>()
+
+    private fun getMetadataForFile(file: java.io.File): org.json.JSONObject {
+        val metaFile = java.io.File(file.parent, "${file.name}.meta.json")
+        if (imageMetadata.containsKey(file.absolutePath)) {
+            return imageMetadata[file.absolutePath]!!
+        }
+        if (metaFile.exists()) {
+            try {
+                val json = org.json.JSONObject(metaFile.readText())
+                imageMetadata[file.absolutePath] = json
+                return json
+            } catch (e: Exception) { e.printStackTrace() }
+        }
+        val newJson = org.json.JSONObject()
+        imageMetadata[file.absolutePath] = newJson
+        return newJson
+    }
+
+    private fun saveMetadataForFile(file: java.io.File, json: org.json.JSONObject) {
+        val metaFile = java.io.File(file.parent, "${file.name}.meta.json")
+        try {
+            metaFile.writeText(json.toString())
+            imageMetadata[file.absolutePath] = json
+        } catch (e: Exception) { e.printStackTrace() }
+    }
+
     val liveDetect: StateFlow<Boolean> = settingsRepository.liveDetectFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
@@ -123,6 +157,12 @@ class ScannerViewModel @Inject constructor(
     val croppingBitmap: MutableStateFlow<Bitmap?> = MutableStateFlow(null)
 
     val savedDocuments: MutableStateFlow<List<com.safescan.data.DocumentMetadata>> = MutableStateFlow(emptyList())
+    
+    private val _liveDetectionPoints = MutableStateFlow<List<com.safescan.android.scanner.Point>?>(null)
+    val liveDetectionPoints: StateFlow<List<com.safescan.android.scanner.Point>?> = _liveDetectionPoints.asStateFlow()
+
+    private val _liveDetectionResolution = MutableStateFlow<Pair<Int, Int>?>(null)
+    val liveDetectionResolution: StateFlow<Pair<Int, Int>?> = _liveDetectionResolution.asStateFlow()
 
     init {
         _uiState.update { it.copy(currentEngine = scannerEngine.engineType) }
@@ -159,11 +199,58 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    fun importFromUri(uri: android.net.Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                inputStream?.close()
+                if (bitmap != null) {
+                    val file = java.io.File(context.filesDir, "captured_${System.currentTimeMillis()}.jpg")
+                    java.io.FileOutputStream(file).use { out ->
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+                    }
+                    withContext(Dispatchers.Main) {
+                        capturedJpgFiles.add(file)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun updateLiveDetectionPoints(points: List<com.safescan.android.scanner.Point>?, width: Int = 0, height: Int = 0) {
+        _liveDetectionPoints.value = points
+        if (width > 0 && height > 0) {
+            _liveDetectionResolution.value = width to height
+        }
+    }
+
     // IMPROVEMENT: Added async detectEdges runner updating isAutoRunning state Flow
+    fun detectEdges(imageProxy: androidx.camera.core.ImageProxy, onResult: (List<com.safescan.android.scanner.Point>?, Int, Int) -> Unit) {
+        _uiState.update { it.copy(isAutoRunning = true) }
+        val rotation = imageProxy.imageInfo.rotationDegrees
+        val width = if (rotation == 90 || rotation == 270) imageProxy.height else imageProxy.width
+        val height = if (rotation == 90 || rotation == 270) imageProxy.width else imageProxy.height
+        
+        viewModelScope.launch(Dispatchers.IO) {
+            val points = if (_uiState.value.currentEngine == ScannerEngineType.MLKIT) {
+                mlKitObjectDetector.detectDocumentEdges(imageProxy)
+            } else {
+                null // Local edge detection might need bitmap conversion
+            }
+            _uiState.update { it.copy(isAutoRunning = false) }
+            withContext(Dispatchers.Main) {
+                onResult(points, width, height)
+            }
+        }
+    }
+
     fun detectEdges(bitmap: Bitmap, onResult: (List<com.safescan.android.scanner.Point>?) -> Unit) {
         _uiState.update { it.copy(isAutoRunning = true) }
         viewModelScope.launch(Dispatchers.IO) {
-            val points = edgeDetectionEngine.detectEdges(bitmap)
+            val points = scannerEngine.detectCorners(bitmap)
             _uiState.update { it.copy(isAutoRunning = false) }
             withContext(Dispatchers.Main) {
                 onResult(points)
@@ -252,6 +339,8 @@ class ScannerViewModel @Inject constructor(
     fun setUiLanguage(language: String) {
         viewModelScope.launch {
             settingsRepository.setUiLanguage(language)
+            val appLocale: androidx.core.os.LocaleListCompat = androidx.core.os.LocaleListCompat.forLanguageTags(language)
+            androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(appLocale)
         }
     }
 
@@ -342,6 +431,24 @@ class ScannerViewModel @Inject constructor(
     }
 
     fun applyCrop(quad: com.safescan.android.scanner.Quadrilateral) {
+        val index = _editingBatchIndex.value
+        if (index != null && index < capturedJpgFiles.size) {
+            val file = capturedJpgFiles[index]
+            val json = getMetadataForFile(file)
+            val cropJson = org.json.JSONObject().apply {
+                put("tl_x", quad.topLeft.x)
+                put("tl_y", quad.topLeft.y)
+                put("tr_x", quad.topRight.x)
+                put("tr_y", quad.topRight.y)
+                put("br_x", quad.bottomRight.x)
+                put("br_y", quad.bottomRight.y)
+                put("bl_x", quad.bottomLeft.x)
+                put("bl_y", quad.bottomLeft.y)
+            }
+            json.put("crop", cropJson)
+            saveMetadataForFile(file, json)
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             croppingBitmap.value?.let { bmp ->
                 val tl = quad.topLeft
@@ -398,18 +505,100 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    fun closeEditor(save: Boolean) {
-        if (save) {
-            editingBitmapPreview.value?.let { processed ->
-                editingSlotId.value?.let { slotId ->
-                    captureToSlot(processed, slotId)
+    fun openEditorFromBatch(index: Int) {
+        if (index >= 0 && index < capturedJpgFiles.size) {
+            val file = capturedJpgFiles[index]
+            _editingBatchIndex.value = index
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                    val json = getMetadataForFile(file)
+                    val rotation = json.optInt("rotation", 0)
+                    
+                    var processed = bitmap
+                    if (rotation != 0) {
+                        val matrix = android.graphics.Matrix()
+                        matrix.postRotate(rotation.toFloat())
+                        processed = android.graphics.Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        editingBitmapOriginal.value = processed
+                        editingBitmapPreview.value = processed
+                        editorState.value = com.safescan.data.EditorState()
+                        isEditing.value = true
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
         }
+    }
+
+    fun rotateEditingBitmap() {
+        val index = _editingBatchIndex.value
+        if (index != null && index < capturedJpgFiles.size) {
+            val file = capturedJpgFiles[index]
+            val json = getMetadataForFile(file)
+            val currentRotation = json.optInt("rotation", 0)
+            json.put("rotation", (currentRotation + 90) % 360)
+            saveMetadataForFile(file, json)
+        }
+
+        editingBitmapPreview.value?.let { bmp ->
+            val matrix = android.graphics.Matrix()
+            matrix.postRotate(90f)
+            val rotated = android.graphics.Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
+            editingBitmapPreview.value = rotated
+            
+            editingBitmapOriginal.value?.let { orig ->
+                val matrixOrig = android.graphics.Matrix()
+                matrixOrig.postRotate(90f)
+                editingBitmapOriginal.value = android.graphics.Bitmap.createBitmap(orig, 0, 0, orig.width, orig.height, matrixOrig, true)
+            }
+        }
+    }
+
+    fun closeEditor(save: Boolean) {
+        if (save) {
+            editingBitmapPreview.value?.let { processed ->
+                viewModelScope.launch(Dispatchers.IO) {
+                    val index = _editingBatchIndex.value
+                    if (index != null && index < capturedJpgFiles.size) {
+                        // Editing a batch file
+                        val file = capturedJpgFiles[index]
+                        try {
+                            java.io.FileOutputStream(file).use { out ->
+                                processed.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+                            }
+                            withContext(Dispatchers.Main) {
+                                capturedJpgFiles[index] = file // Trigger refresh
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    } else if (editingSlotId.value != null) {
+                        // Editing a slot in memory
+                        withContext(Dispatchers.Main) {
+                            captureToSlot(processed, editingSlotId.value!!)
+                        }
+                    }
+                    withContext(Dispatchers.Main) {
+                        finishCloseEditor()
+                    }
+                }
+            } ?: finishCloseEditor()
+        } else {
+            finishCloseEditor()
+        }
+    }
+
+    private fun finishCloseEditor() {
         isEditing.value = false
         editingSlotId.value = null
         editingBitmapOriginal.value = null
         editingBitmapPreview.value = null
+        _editingBatchIndex.value = null
         recognizedText.value = null
         isOcrRunning.value = false
     }
@@ -562,16 +751,56 @@ class ScannerViewModel @Inject constructor(
 
             when (val result = scannerEngine.scanDocument(resizedBitmap)) {
                 is com.safescan.core.AppResult.Success -> {
+                    var finalBitmap = result.data
+
+                    // 1. Shadow Removal (if enabled)
+                    if (shadowRemove.value) {
+                        finalBitmap = com.safescan.domain.ImageProcessor.removeShadows(finalBitmap)
+                    }
+
+                    // 2. Auto Rotation (if enabled)
+                    if (autoRotation.value) {
+                        // Very simple heuristic: if width > height, rotate 90 deg (assuming portrait is preferred)
+                        // In a real app, you might use OCR or ML to detect orientation
+                        if (finalBitmap.width > finalBitmap.height) {
+                            val matrix = android.graphics.Matrix().apply { postRotate(90f) }
+                            finalBitmap = android.graphics.Bitmap.createBitmap(finalBitmap, 0, 0, finalBitmap.width, finalBitmap.height, matrix, true)
+                        }
+                    }
+
+                    // 3. Auto Orientation (if enabled)
+                    if (autoOrientation.value) {
+                        // Heuristic: check if the document needs to be flipped or normalized
+                        // This can be expanded with more advanced image analysis
+                    }
+
+                    // 4. Default Filter (if enabled and not original)
+                    val filter = defaultFilter.value
+                    if (filter != "original") {
+                        finalBitmap = when (filter) {
+                            "magic" -> com.safescan.domain.ImageProcessor.autoEnhance(finalBitmap)
+                            "grayscale" -> {
+                                val state = com.safescan.data.EditorState(filter = com.safescan.data.FilterType.GRAYSCALE)
+                                com.safescan.domain.ImageProcessor.apply(finalBitmap, state)
+                            }
+                            "threshold" -> {
+                                val state = com.safescan.data.EditorState(filter = com.safescan.data.FilterType.BLACK_WHITE)
+                                com.safescan.domain.ImageProcessor.apply(finalBitmap, state)
+                            }
+                            else -> finalBitmap
+                        }
+                    }
+
                     val slotId = selectedSlotId.value ?: slots.value.firstOrNull { it.bitmap == null }?.id
                     if (slotId != null) {
-                        captureToSlot(result.data, slotId)
+                        captureToSlot(finalBitmap, slotId)
                         selectedSlotId.value = null
                     }
                     
                     _uiState.update { 
                         it.copy(
                             isLoading = false,
-                            scannedBitmap = result.data,
+                            scannedBitmap = finalBitmap,
                             error = null
                         )
                     }

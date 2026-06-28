@@ -77,6 +77,63 @@ object ImageProcessor {
         }
     }
 
+    suspend fun removeShadows(bitmap: Bitmap): Bitmap = withContext(Dispatchers.Default) {
+        try {
+            val width = bitmap.width
+            val height = bitmap.height
+            val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val pixels = IntArray(width * height)
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+
+            // Local adaptive thresholding-like illumination correction
+            // Divide image by its own blurred version (approximate)
+            // For simplicity in Kotlin, we'll use a basic box blur approximation or local mean
+            val blurred = IntArray(width * height)
+            val radius = 25
+            
+            for (y in 0 until height) {
+                var sumR = 0; var sumG = 0; var sumB = 0
+                for (x in 0 until width) {
+                    val color = pixels[y * width + x]
+                    sumR += (color shr 16) and 0xFF
+                    sumG += (color shr 8) and 0xFF
+                    sumB += color and 0xFF
+                    
+                    if (x >= radius) {
+                        val oldColor = pixels[y * width + x - radius]
+                        sumR -= (oldColor shr 16) and 0xFF
+                        sumG -= (oldColor shr 8) and 0xFF
+                        sumB -= oldColor and 0xFF
+                    }
+                    
+                    val count = if (x < radius) x + 1 else radius
+                    val avgR = sumR / count
+                    val avgG = sumG / count
+                    val avgB = sumB / count
+                    
+                    val r = (color shr 16) and 0xFF
+                    val g = (color shr 8) and 0xFF
+                    val b = color and 0xFF
+                    val a = (color shr 24) and 0xFF
+                    
+                    // Simple Division Shading Correction: (Original / Local Mean) * Target Mean
+                    val targetMean = 200
+                    val newR = (r.toDouble() / avgR.coerceAtLeast(1) * targetMean).toInt().coerceIn(0, 255)
+                    val newG = (g.toDouble() / avgG.coerceAtLeast(1) * targetMean).toInt().coerceIn(0, 255)
+                    val newB = (b.toDouble() / avgB.coerceAtLeast(1) * targetMean).toInt().coerceIn(0, 255)
+                    
+                    pixels[y * width + x] = (a shl 24) or (newR shl 16) or (newG shl 8) or newB
+                }
+            }
+
+            result.setPixels(pixels, 0, width, 0, 0, width, height)
+            result
+        } catch (e: Exception) {
+            e.printStackTrace()
+            bitmap
+        }
+    }
+
     suspend fun autoEnhance(bitmap: Bitmap): Bitmap = withContext(Dispatchers.Default) {
         try {
             val width = bitmap.width
