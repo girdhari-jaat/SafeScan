@@ -99,8 +99,8 @@ dependencies {
 
     // ML Kit
     implementation(platform("com.google.mlkit:mlkit-bom:33.1.2"))
-    implementation("com.google.mlkit:text-recognition")
-    implementation("com.google.mlkit:barcode-scanning")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition")
+    implementation("com.google.android.gms:play-services-mlkit-barcode-scanning")
     implementation("com.google.mlkit:document-scanner")
     implementation("com.google.mlkit:object-detection")
     implementation("com.google.mlkit:object-detection-custom")
