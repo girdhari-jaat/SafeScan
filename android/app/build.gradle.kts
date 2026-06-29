@@ -101,8 +101,9 @@ dependencies {
     implementation(platform("com.google.mlkit:mlkit-bom:33.1.2"))
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.0")
     implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.0")
-    implementation("com.google.mlkit:object-detection:17.0.2")
     implementation("com.google.mlkit:document-scanner")
+    implementation("com.google.mlkit:object-detection:17.0.2")
+    implementation("com.google.mlkit:object-detection-custom:17.0.2")
 
     // Lifecycle/ViewModel/Coroutines
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
