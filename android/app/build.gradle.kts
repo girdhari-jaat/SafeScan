@@ -100,7 +100,7 @@ dependencies {
     // ML Kit - Sab naya wala
 implementation("com.google.mlkit:text-recognition:16.0.0") // <--- play-services wala hata do
 implementation("com.google.mlkit:barcode-scanning:17.0.2")  // <--- play-services wala hata do
-implementation("com.google.mlkit:document-scanner:16.0.0")
+implementation("com.google.mlkit:document-scanner:1.0.0")
 implementation("com.google.mlkit:object-detection:17.0.2")
 implementation("com.google.mlkit:object-detection-custom:17.0.2")
 
