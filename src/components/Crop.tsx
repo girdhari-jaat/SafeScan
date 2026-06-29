@@ -355,7 +355,7 @@ function Crop({
   return (
     <div className="fixed inset-0 bg-[var(--bg-primary)] z-50 flex flex-col items-stretch h-full overflow-hidden text-[var(--text-primary)] animate-crop-open" id="image-editor-root">
       {/* Header Panel */}
-      <div className="bg-[var(--bg-card)] border-b border-[var(--border-color)] px-4 h-[56px] flex items-center justify-between select-none shrink-0 font-['Inter']">
+      <div className="bg-[var(--bg-card)] border-b border-[var(--border-color)] px-4 pt-[env(safe-area-inset-top,0px)] h-[calc(56px+env(safe-area-inset-top,0px))] flex items-center justify-between select-none shrink-0 font-['Inter']">
         <div className="flex items-center gap-4">
           <button
             onClick={onCancel}

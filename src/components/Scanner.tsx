@@ -37,7 +37,7 @@ const GridView = React.memo(({ pages, onDelete, onClose, onDone, scannerSubTab }
 
   return (
     <div className="fixed inset-0 z-[60] bg-[var(--bg-primary)] flex flex-col animate-in fade-in duration-300">
-      <div className="px-6 py-8 flex items-center justify-between border-b border-[var(--border-color)] shrink-0">
+      <div className="px-6 pt-[calc(2rem+env(safe-area-inset-top,0px))] pb-8 flex items-center justify-between border-b border-[var(--border-color)] shrink-0">
         <div className="flex flex-col">
           <h2 className="text-xl font-black text-[var(--text-primary)] uppercase tracking-tighter">Document Grid</h2>
           <p className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-widest">{pages.length} Pages Captured</p>
