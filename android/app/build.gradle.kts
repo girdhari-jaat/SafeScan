@@ -97,12 +97,12 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$camerax_version")
     implementation("androidx.camera:camera-view:$camerax_version")
 
-    // ML Kit
-    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.0")
-    implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.0")
-    implementation("com.google.mlkit:document-scanner:16.0.0")
-    implementation("com.google.mlkit:object-detection:17.0.2")
-    implementation("com.google.mlkit:object-detection-custom:17.0.2")
+    // ML Kit - Sab naya wala
+implementation("com.google.mlkit:text-recognition:16.0.0") // <--- play-services wala hata do
+implementation("com.google.mlkit:barcode-scanning:17.0.2")  // <--- play-services wala hata do
+implementation("com.google.mlkit:document-scanner:16.0.0")
+implementation("com.google.mlkit:object-detection:17.0.2")
+implementation("com.google.mlkit:object-detection-custom:17.0.2")
 
     // Lifecycle/ViewModel/Coroutines
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
