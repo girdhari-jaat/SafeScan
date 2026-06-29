@@ -60,6 +60,20 @@ jobs:
         # Add android platform to Capacitor
         npx cap add android
 
+        # Add Kotlin resolution strategy to resolve duplicate class issues
+        cat << 'EOF' >> android/build.gradle
+
+allprojects {
+    configurations.all {
+        resolutionStrategy {
+            force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+        }
+    }
+}
+EOF
+
         # Sync assets and web build files to the native Android platform project
         npx cap sync android
 
