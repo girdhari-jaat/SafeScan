@@ -1,21 +1,20 @@
 package com.safescan
 
 import android.os.Bundle
-import androidx.activity.enableEdgeToEdge
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.safescan.databinding.ActivityMainBinding
+import org.opencv.android.OpenCVLoader
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
-
-    private lateinit var binding: ActivityMainBinding
-
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        
+        if (!OpenCVLoader.initLocal()) {
+            Toast.makeText(this, "OpenCV init failed!", Toast.LENGTH_LONG).show()
+        }
+        
+        setContentView(R.layout.activity_main)
     }
 }

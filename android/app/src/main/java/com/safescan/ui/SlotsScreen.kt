@@ -669,7 +669,9 @@ fun SlotItem(slot: Slot, onClick: () -> Unit, onLongClick: () -> Unit, onClear: 
             .clip(RoundedCornerShape(8.dp))
             .background(Color.LightGray)
             .combinedClickable(
-                onClick = { if (slot.bitmap == null) onClick() },
+                onClick = { 
+                    if (slot.bitmap == null) onClick() else onLongClick()
+                },
                 onLongClick = { if (slot.bitmap != null) onLongClick() }
             ),
         contentAlignment = Alignment.Center
@@ -798,7 +800,8 @@ fun DocumentGridView(
                     if (capturedJpgs.isNotEmpty()) {
                         items(capturedJpgs.size) { idx ->
                             val file = capturedJpgs[idx]
-                            val bitmap = remember(file) {
+                            val lastModified = remember(file.absolutePath) { file.lastModified() }
+                            val bitmap = remember(file.absolutePath, lastModified) {
                                 try {
                                     android.graphics.BitmapFactory.decodeFile(file.absolutePath)
                                 } catch (e: Exception) {
@@ -816,18 +819,33 @@ fun DocumentGridView(
                                     Image(
                                         bitmap = bmp.asImageBitmap(),
                                         contentDescription = "Page ${idx + 1}",
-                                        modifier = Modifier.fillMaxSize(),
+                                        modifier = Modifier.fillMaxSize().clickable {
+                                            onDismiss()
+                                            viewModel.openEditorForJpg(idx)
+                                        },
                                         contentScale = ContentScale.Crop
                                     )
+                                }
+                                
+                                // Edit/Crop button
+                                IconButton(
+                                    onClick = {
+                                        onDismiss()
+                                        viewModel.openCropForJpg(idx)
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.TopStart)
+                                        .padding(4.dp)
+                                        .size(28.dp)
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.8f), CircleShape)
+                                ) {
+                                    Text("✂️", fontSize = 12.sp)
                                 }
                                 
                                 // Delete/Clear button
                                 IconButton(
                                     onClick = {
-                                        try {
-                                            file.delete()
-                                        } catch (e: Exception) {}
-                                        capturedJpgs.removeAt(idx)
+                                        viewModel.clearJpgAt(idx)
                                     },
                                     modifier = Modifier
                                         .align(Alignment.TopEnd)
@@ -866,7 +884,10 @@ fun DocumentGridView(
                                     Image(
                                         bitmap = bmp.asImageBitmap(),
                                         contentDescription = slot.label,
-                                        modifier = Modifier.fillMaxSize(),
+                                        modifier = Modifier.fillMaxSize().clickable {
+                                            onDismiss()
+                                            viewModel.openEditor(slot.id)
+                                        },
                                         contentScale = ContentScale.Crop
                                     )
                                 }

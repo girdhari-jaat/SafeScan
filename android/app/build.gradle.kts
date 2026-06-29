@@ -21,6 +21,10 @@ android {
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        ndk {
+            abiFilters.add("arm64-v8a")
+        }
     }
 
     signingConfigs {
@@ -100,9 +104,9 @@ dependencies {
     // ML Kit
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.0")
     implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.0")
-    implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
-    implementation("com.google.mlkit:object-detection:17.0.2")
-    implementation("com.google.mlkit:object-detection-custom:17.0.2")
+
+    // OpenCV
+    implementation("org.opencv:opencv:4.10.0")
 
     // Lifecycle/ViewModel/Coroutines
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")

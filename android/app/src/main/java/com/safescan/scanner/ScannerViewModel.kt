@@ -115,12 +115,15 @@ class ScannerViewModel @Inject constructor(
     private val ocrEngine = com.safescan.ocr.OcrEngine()
     val recognizedText: MutableStateFlow<String?> = MutableStateFlow(null)
     val isOcrRunning: MutableStateFlow<Boolean> = MutableStateFlow(false)
+    val isBarcodeRunning: MutableStateFlow<Boolean> = MutableStateFlow(false)
 
     val isCropping: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val isSettingsOpen: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val isGridViewVisible: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val croppingSlotId: MutableStateFlow<String?> = MutableStateFlow(null)
     val croppingBitmap: MutableStateFlow<Bitmap?> = MutableStateFlow(null)
+    val croppingJpgIndex: MutableStateFlow<Int?> = MutableStateFlow(null)
+    val editingJpgIndex: MutableStateFlow<Int?> = MutableStateFlow(null)
 
     val savedDocuments: MutableStateFlow<List<com.safescan.data.DocumentMetadata>> = MutableStateFlow(emptyList())
 
@@ -307,6 +310,19 @@ class ScannerViewModel @Inject constructor(
                 bitmap = bitmap
             )
             slots.value = currentSlots
+            
+            // Sync with capturedJpgFiles if it exists
+            if (index < capturedJpgFiles.size) {
+                val file = capturedJpgFiles[index]
+                try {
+                    val out = java.io.FileOutputStream(file)
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, jpegQuality.value.toInt(), out)
+                    out.flush()
+                    out.close()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -318,9 +334,33 @@ class ScannerViewModel @Inject constructor(
                 bitmap = null
             )
             slots.value = currentSlots
+            
+            // Sync with capturedJpgFiles if it exists
+            if (index < capturedJpgFiles.size) {
+                try {
+                    capturedJpgFiles[index].delete()
+                } catch (e: Exception) {}
+                capturedJpgFiles.removeAt(index)
+            }
         }
         if (selectedSlotId.value == slotId) {
             selectedSlotId.value = null
+        }
+    }
+
+    fun clearJpgAt(index: Int) {
+        if (index < capturedJpgFiles.size) {
+            try {
+                capturedJpgFiles[index].delete()
+            } catch (e: Exception) {}
+            capturedJpgFiles.removeAt(index)
+            
+            // Also sync back to slots if it corresponds to a slot
+            if (index < slots.value.size) {
+                val currentSlots = slots.value.toMutableList()
+                currentSlots[index] = currentSlots[index].copy(bitmap = null)
+                slots.value = currentSlots
+            }
         }
     }
 
@@ -328,8 +368,24 @@ class ScannerViewModel @Inject constructor(
         val slot = slots.value.find { it.id == slotId }
         if (slot?.bitmap != null) {
             croppingSlotId.value = slotId
+            croppingJpgIndex.value = null
             croppingBitmap.value = slot.bitmap
             isCropping.value = true
+        }
+    }
+
+    fun openCropForJpg(index: Int) {
+        val file = capturedJpgFiles.getOrNull(index) ?: return
+        try {
+            val bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+            if (bitmap != null) {
+                croppingSlotId.value = null
+                croppingJpgIndex.value = index
+                croppingBitmap.value = bitmap
+                isCropping.value = true
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -337,6 +393,7 @@ class ScannerViewModel @Inject constructor(
         isCropping.value = false
         if (!save) {
             croppingSlotId.value = null
+            croppingJpgIndex.value = null
             croppingBitmap.value = null
         }
     }
@@ -380,6 +437,19 @@ class ScannerViewModel @Inject constructor(
                 croppingSlotId.value?.let { slotId ->
                     captureToSlot(cropped, slotId)
                 }
+                croppingJpgIndex.value?.let { index ->
+                    val file = capturedJpgFiles.getOrNull(index)
+                    if (file != null) {
+                        try {
+                            val out = java.io.FileOutputStream(file)
+                            cropped.compress(Bitmap.CompressFormat.JPEG, jpegQuality.value.toInt(), out)
+                            out.flush()
+                            out.close()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
             }
             withContext(Dispatchers.Main) {
                 closeCrop(true)
@@ -391,10 +461,28 @@ class ScannerViewModel @Inject constructor(
         val slot = slots.value.find { it.id == slotId }
         if (slot?.bitmap != null) {
             editingSlotId.value = slotId
+            editingJpgIndex.value = null
             editingBitmapOriginal.value = slot.bitmap
             editingBitmapPreview.value = slot.bitmap
             editorState.value = com.safescan.data.EditorState()
             isEditing.value = true
+        }
+    }
+
+    fun openEditorForJpg(index: Int) {
+        val file = capturedJpgFiles.getOrNull(index) ?: return
+        try {
+            val bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+            if (bitmap != null) {
+                editingSlotId.value = null
+                editingJpgIndex.value = index
+                editingBitmapOriginal.value = bitmap
+                editingBitmapPreview.value = bitmap
+                editorState.value = com.safescan.data.EditorState()
+                isEditing.value = true
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -404,10 +492,22 @@ class ScannerViewModel @Inject constructor(
                 editingSlotId.value?.let { slotId ->
                     captureToSlot(processed, slotId)
                 }
+                editingJpgIndex.value?.let { index ->
+                    val file = capturedJpgFiles.getOrNull(index)
+                    if (file != null) {
+                        try {
+                            val out = java.io.FileOutputStream(file)
+                            processed.compress(Bitmap.CompressFormat.JPEG, jpegQuality.value.toInt(), out)
+                            out.flush()
+                            out.close()
+                        } catch (e: Exception) {}
+                    }
+                }
             }
         }
         isEditing.value = false
         editingSlotId.value = null
+        editingJpgIndex.value = null
         editingBitmapOriginal.value = null
         editingBitmapPreview.value = null
         recognizedText.value = null
@@ -441,6 +541,26 @@ class ScannerViewModel @Inject constructor(
                 when (result) {
                     is com.safescan.core.AppResult.Success -> {
                         recognizedText.value = result.data.joinToString("\n")
+                    }
+                    is com.safescan.core.AppResult.Error -> {
+                        recognizedText.value = "Error: ${result.message}"
+                    }
+                }
+            }
+        }
+    }
+
+    fun runBarcodeOnCurrentBitmap() {
+        val bmp = editingBitmapPreview.value ?: return
+        isBarcodeRunning.value = true
+        recognizedText.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = ocrEngine.scanQR(bmp)
+            withContext(Dispatchers.Main) {
+                isBarcodeRunning.value = false
+                when (result) {
+                    is com.safescan.core.AppResult.Success -> {
+                        recognizedText.value = result.data ?: "No QR/Barcode found."
                     }
                     is com.safescan.core.AppResult.Error -> {
                         recognizedText.value = "Error: ${result.message}"
@@ -571,7 +691,7 @@ class ScannerViewModel @Inject constructor(
                     _uiState.update { 
                         it.copy(
                             isLoading = false,
-                            scannedBitmap = result.data,
+                            scannedBitmap = null,
                             error = null
                         )
                     }

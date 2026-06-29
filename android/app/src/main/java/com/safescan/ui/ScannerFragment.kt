@@ -228,7 +228,7 @@ class ScannerFragment : Fragment() {
                                     binding.previewView.visibility = View.VISIBLE
                                 },
                                 onSlotLongClick = { slotId ->
-                                    viewModel.openCrop(slotId)
+                                    viewModel.openEditor(slotId)
                                 }
                             )
                         }

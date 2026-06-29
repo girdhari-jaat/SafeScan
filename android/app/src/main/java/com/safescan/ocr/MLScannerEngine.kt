@@ -1,7 +1,6 @@
 package com.safescan.ocr
 
 import android.graphics.Bitmap
-import com.google.mlkit.vision.common.InputImage
 import com.safescan.core.AppResult
 import com.safescan.scanner.DocumentScannerEngine
 import com.safescan.scanner.ScannerEngineType
@@ -16,13 +15,10 @@ class MLScannerEngine(
 
     suspend fun processFrame(bitmap: Bitmap): AppResult<ProcessedImage> = withContext(Dispatchers.IO) {
         try {
-            val inputImage = InputImage.fromBitmap(bitmap, 0)
-            // Simulating ML Kit Document Scanner processing for raw frames
-            // In a real ML Kit implementation with direct frame access,
-            // this would auto crop, perspective transform, and binarize the inputImage.
+            // MLKit removed to reduce size.
             AppResult.Success(ProcessedImage(bitmap))
         } catch (e: Exception) {
-            AppResult.Error(e.message ?: "ML Kit Processing failed", e)
+            AppResult.Error(e.message ?: "Processing failed", e)
         }
     }
 

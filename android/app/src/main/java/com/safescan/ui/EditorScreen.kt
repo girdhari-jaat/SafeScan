@@ -88,6 +88,26 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                 }
 
                 Button(
+                    onClick = { 
+                        // First save current edits to the state, then open crop
+                        val slotId = viewModel.editingSlotId.value
+                        val jpgIndex = viewModel.editingJpgIndex.value
+                        viewModel.closeEditor(save = true)
+                        if (slotId != null) {
+                            viewModel.openCrop(slotId)
+                        } else if (jpgIndex != null) {
+                            viewModel.openCropForJpg(jpgIndex)
+                        }
+                    },
+                    modifier = Modifier.weight(0.5f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.tertiary
+                    )
+                ) {
+                    Text("Crop")
+                }
+
+                Button(
                     onClick = { viewModel.runOcrOnCurrentBitmap() },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
@@ -102,7 +122,36 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Text("Recognize Text")
+                        Text("Text (OCR)")
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val isBarcodeRunning by viewModel.isBarcodeRunning.collectAsState()
+                Button(
+                    onClick = { viewModel.runBarcodeOnCurrentBitmap() },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                    ),
+                    enabled = !isBarcodeRunning
+                ) {
+                    if (isBarcodeRunning) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Scan QR / Barcode")
                     }
                 }
             }

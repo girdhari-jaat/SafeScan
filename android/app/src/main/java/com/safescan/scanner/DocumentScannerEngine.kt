@@ -1,13 +1,15 @@
 package com.safescan.scanner
 
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Matrix
-import android.graphics.Paint
 import com.safescan.core.AppResult
 import com.safescan.android.scanner.Point
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.opencv.android.Utils
+import org.opencv.core.Mat
+import org.opencv.core.MatOfPoint2f
+import org.opencv.core.Size
+import org.opencv.imgproc.Imgproc
 import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.sqrt
@@ -53,29 +55,33 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
                 val heightB = sqrt((tl.x - bl.x).pow(2) + (tl.y - bl.y).pow(2))
                 val maxHeight = max(heightA, heightB).toInt().coerceAtLeast(1)
 
-                // High-performance perspective warping using Android native Matrix poly-to-poly
-                val matrix = Matrix()
-                val srcPoints = floatArrayOf(
-                    tl.x.toFloat(), tl.y.toFloat(),
-                    tr.x.toFloat(), tr.y.toFloat(),
-                    br.x.toFloat(), br.y.toFloat(),
-                    bl.x.toFloat(), bl.y.toFloat()
-                )
-                val dstPoints = floatArrayOf(
-                    0f, 0f,
-                    maxWidth.toFloat() - 1, 0f,
-                    maxWidth.toFloat() - 1, maxHeight.toFloat() - 1,
-                    0f, maxHeight.toFloat() - 1
+                val srcMat = Mat()
+                Utils.bitmapToMat(bitmap, srcMat)
+                
+                val srcPoints = org.opencv.core.Point(tl.x, tl.y)
+                val srcMatOfPoint2f = MatOfPoint2f(
+                    org.opencv.core.Point(tl.x, tl.y),
+                    org.opencv.core.Point(tr.x, tr.y),
+                    org.opencv.core.Point(br.x, br.y),
+                    org.opencv.core.Point(bl.x, bl.y)
                 )
 
-                matrix.setPolyToPoly(srcPoints, 0, dstPoints, 0, 4)
+                val dstMatOfPoint2f = MatOfPoint2f(
+                    org.opencv.core.Point(0.0, 0.0),
+                    org.opencv.core.Point(maxWidth.toDouble() - 1, 0.0),
+                    org.opencv.core.Point(maxWidth.toDouble() - 1, maxHeight.toDouble() - 1),
+                    org.opencv.core.Point(0.0, maxHeight.toDouble() - 1)
+                )
 
-                val resultBitmap = Bitmap.createBitmap(maxWidth, maxHeight, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(resultBitmap)
-                val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-                canvas.drawBitmap(bitmap, matrix, paint)
+                val transformMatrix = Imgproc.getPerspectiveTransform(srcMatOfPoint2f, dstMatOfPoint2f)
 
-                return@withContext AppResult.Success(resultBitmap)
+                val dstMat = Mat()
+                Imgproc.warpPerspective(srcMat, dstMat, transformMatrix, Size(maxWidth.toDouble(), maxHeight.toDouble()))
+
+                val outBitmap = Bitmap.createBitmap(maxWidth, maxHeight, Bitmap.Config.ARGB_8888)
+                Utils.matToBitmap(dstMat, outBitmap)
+
+                return@withContext AppResult.Success(outBitmap)
             }
 
             return@withContext AppResult.Success(bitmap)
@@ -107,3 +113,4 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
         )
     }
 }
+
