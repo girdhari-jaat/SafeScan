@@ -32,12 +32,14 @@ jobs:
         build-tools: 36.0.0
 
     - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v4 # v3 se v4 kar diya
+      uses: gradle/actions/setup-gradle@v3
       with:
-        gradle-version: '8.9' # 8.5 se 8.9 kar diya
+        gradle-version: '8.5'
+        build-root-directory: android
 
     - name: Build Release APK
-      run: ./gradlew assembleRelease --no-daemon --refresh-dependencies # refresh add kiya
+      run: |
+        gradle assembleRelease --no-daemon
       env:
         ANDROID_KEYSTORE_FILE: ${{ secrets.ANDROID_KEYSTORE_FILE }}
         ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -48,5 +50,18 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: app-release-apk
-        path: app/build/outputs/apk/release/app-release.apk
+        path: app/build/outputs/apk/release/app-release.apk  # <--- Sirf yahan se `android/` hata diya
         if-no-files-found: error
+
+#    - name: Run Instrumentation Tests on Android Emulator
+#      uses: reactivecircus/android-emulator-runner@v2
+#      with:
+#        api-level: 34
+#        target: google_apis
+#        arch: x86_64
+#        profile: Nexus 6
+#        disable-animations: true
+#        working-directory: android
+#        emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-audio -no-boot-anim -camera-back none -camera-front none -memory 2048
+#        script: |
+#          gradle connectedAndroidTest --no-daemon --stacktrace
