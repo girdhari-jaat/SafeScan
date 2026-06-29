@@ -106,7 +106,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.0")
 
     // OpenCV
- org.opencv:opencv:4.10.0
+    implementation("org.opencv:opencv:4.10.0")
 
     // Lifecycle/ViewModel/Coroutines
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
