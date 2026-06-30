@@ -17,10 +17,9 @@ jobs:
           node-version: 20
           cache: "npm"
 
-      - name: Install Web Dependencies + Capacitor Plugins
+      - name: Install Web Dependencies
         run: |
           npm install --legacy-peer-deps
-          npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor-community/media @capacitor/share --save-dev
 
       - name: Build React Web App
         run: |
@@ -36,8 +35,11 @@ jobs:
         run: |
           # Temporarily rename existing native android folder to prevent naming conflict with Capacitor's android platform
           if [ -d "android" ]; then
-            mv android-native
+            mv android android-native
           fi
+
+          # Install Capacitor core, CLI, and android platform libraries
+          npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
 
           # Initialize Capacitor configuration
           npx cap init "SafeScan" "com.safescan.app" --web-dir=dist
@@ -45,17 +47,17 @@ jobs:
           # Add android platform to Capacitor
           npx cap add android
 
-          # Inject Camera, Flashlight, and Storage permissions into AndroidManifest.xml
+          # Inject Camera and Flashlight permissions into AndroidManifest.xml
           node -e "
           const fs = require('fs');
           const path = 'android/app/src/main/AndroidManifest.xml';
           if (fs.existsSync(path)) {
             let content = fs.readFileSync(path, 'utf8');
-            const permissions = '    <uses-permission android:name=\"android.permission.INTERNET\" />\n    <uses-permission android:name=\"android.permission.CAMERA\" />\n    <uses-permission android:name=\"android.permission.FLASHLIGHT\" />\n    <uses-permission android:name=\"android.permission.READ_EXTERNAL_STORAGE\" android:maxSdkVersion=\"32\" />\n    <uses-permission android:name=\"android.permission.WRITE_EXTERNAL_STORAGE\" android:maxSdkVersion=\"29\" />\n    <uses-feature android:name=\"android.hardware.camera\" android:required=\"false\" />\n    <uses-feature android:name=\"android.hardware.camera.autofocus\" android:required=\"false\" />\n    <uses-feature android:name=\"android.hardware.camera.flash\" android:required=\"false\" />';
             if (!content.includes('android.permission.CAMERA')) {
+              const permissions = '    <uses-permission android:name=\"android.permission.INTERNET\" />\n    <uses-permission android:name=\"android.permission.CAMERA\" />\n    <uses-permission android:name=\"android.permission.FLASHLIGHT\" />\n    <uses-feature android:name=\"android.hardware.camera\" android:required=\"false\" />\n    <uses-feature android:name=\"android.hardware.camera.autofocus\" android:required=\"false\" />\n    <uses-feature android:name=\"android.hardware.camera.flash\" android:required=\"false\" />';
               content = content.replace(\"<application\", permissions + \"\n    <application\");
               fs.writeFileSync(path, content, 'utf8');
-              console.log('Successfully injected permissions into AndroidManifest.xml!');
+              console.log('Successfully injected Camera permissions into AndroidManifest.xml!');
             }
           } else {
             console.error('AndroidManifest.xml not found!');
@@ -73,7 +75,7 @@ jobs:
           }
           EOF
 
-          # ONE TIME SYNC - After all npm installs are done
+          # Sync assets and web build files to the native Android platform project
           npx cap sync android
 
       - name: Set up Gradle
@@ -81,6 +83,12 @@ jobs:
         with:
           gradle-version: "8.5"
           build-root-directory: android
+
+      - name: Install Dependencies
+        run: npm install @capacitor-community/media
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
 
       - name: Build Capacitor APK
         run: |
