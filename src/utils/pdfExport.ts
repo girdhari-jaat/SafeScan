@@ -159,7 +159,7 @@ export async function saveImageToGallery(base64Image: string, fileName: string):
 export async function savePdfToDownloads(base64Pdf: string, fileName: string): Promise<void> {
   const { Filesystem, Directory } = await import('@capacitor/filesystem');
   await Filesystem.writeFile({
-    path: `Download/MyApp/${fileName}`,
+    path: `Download/SafeScan/${fileName}`,
     data: base64Pdf,
     directory: Directory.Documents,
     recursive: true
@@ -185,22 +185,52 @@ export async function saveOrShareBlob(
     const isImage = fileName.toLowerCase().endsWith('.jpg') || fileName.toLowerCase().endsWith('.png');
     
     if (isImage) {
-      await Filesystem.writeFile({
-        path: `Pictures/MyApp/${fileName}`,
-        data: base64Data,
-        directory: Directory.Documents,
-        recursive: true
-      });
-      alert(`Image saved in gallery`);
+      try {
+        const { Media } = await import('@capacitor-community/media');
+        
+        // Find or create album
+        let albumId;
+        const { albums } = await Media.getAlbums();
+        let album = albums.find(a => a.name === 'SafeScan');
+        
+        if (!album) {
+          await Media.createAlbum({ name: 'SafeScan' });
+          const updatedAlbums = await Media.getAlbums();
+          album = updatedAlbums.albums.find(a => a.name === 'SafeScan');
+        }
+        
+        if (album) {
+          albumId = album.identifier;
+        }
+
+        const mimeType = fileName.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
+        const dataUrl = `data:image/${mimeType};base64,${base64Data}`;
+        
+        await Media.savePhoto({
+          path: dataUrl,
+          albumIdentifier: albumId,
+          fileName: fileName.replace(/\.[^/.]+$/, "")
+        });
+        alert(`Image saved in DCIM/SafeScan`);
+      } catch (err) {
+        console.error("Media plugin failed, falling back to Filesystem:", err);
+        await Filesystem.writeFile({
+          path: `DCIM/SafeScan/${fileName}`,
+          data: base64Data,
+          directory: Directory.Documents,
+          recursive: true
+        });
+        alert(`Image saved in DCIM/SafeScan (Documents fallback)`);
+      }
     } else {
       const writeResult = await Filesystem.writeFile({
-        path: `Download/MyApp/${fileName}`,
+        path: `Download/SafeScan/${fileName}`,
         data: base64Data,
         directory: Directory.Documents,
         recursive: true
       });
       
-      if (window.confirm("Saved to Downloads/MyApp. Share now?")) {
+      if (window.confirm("Saved to Downloads/SafeScan. Share now?")) {
         await Share.share({
           title: title || fileName,
           text: fileName,

@@ -2,110 +2,97 @@ name: Build React Capacitor APK
 
 on:
   workflow_dispatch:
-    branches: [ main, master ]
-    paths-ignore:
-      - 'android/**'
-      - '.github/workflows/android.yml'
-      - 'metadata.json'
-      - 'README.md'
-  pull_request:
-    branches: [ main, master ]
-    paths-ignore:
-      - 'android/**'
-      - '.github/workflows/android.yml'
-      - 'metadata.json'
-      - 'README.md'
 
 jobs:
   build-capacitor:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
-        cache: 'npm'
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
 
-    - name: Install Web Dependencies
-      run: |
-        npm install --legacy-peer-deps
+      - name: Install Web Dependencies
+        run: |
+          npm install --legacy-peer-deps
 
-    - name: Build React Web App
-      run: |
-        npm run build
+      - name: Build React Web App
+        run: |
+          npm run build
 
-    - name: Setup Java JDK
-      uses: actions/setup-java@v4
-      with:
-        java-version: '21'
-        distribution: 'temurin'
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
 
-    - name: Setup Capacitor and Build Android Project
-      run: |
-        # Temporarily rename existing native android folder to prevent naming conflict with Capacitor's android platform
-        if [ -d "android" ]; then
-          mv android android-native
-        fi
+      - name: Setup Capacitor and Build Android Project
+        run: |
+          # Temporarily rename existing native android folder to prevent naming conflict with Capacitor's android platform
+          if [ -d "android" ]; then
+            mv android android-native
+          fi
 
-        # Install Capacitor core, CLI, and android platform libraries
-        npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
+          # Install Capacitor core, CLI, and android platform libraries
+          npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
 
-        # Initialize Capacitor configuration
-        npx cap init "SafeScan" "com.safescan.app" --web-dir=dist
+          # Initialize Capacitor configuration
+          npx cap init "SafeScan" "com.safescan.app" --web-dir=dist
 
-        # Add android platform to Capacitor
-        npx cap add android
+          # Add android platform to Capacitor
+          npx cap add android
 
-        # Inject Camera and Flashlight permissions into AndroidManifest.xml
-        node -e "
-        const fs = require('fs');
-        const path = 'android/app/src/main/AndroidManifest.xml';
-        if (fs.existsSync(path)) {
-          let content = fs.readFileSync(path, 'utf8');
-          if (!content.includes('android.permission.CAMERA')) {
-            const permissions = '    <uses-permission android:name=\"android.permission.INTERNET\" />\n    <uses-permission android:name=\"android.permission.CAMERA\" />\n    <uses-permission android:name=\"android.permission.FLASHLIGHT\" />\n    <uses-feature android:name=\"android.hardware.camera\" android:required=\"false\" />\n    <uses-feature android:name=\"android.hardware.camera.autofocus\" android:required=\"false\" />\n    <uses-feature android:name=\"android.hardware.camera.flash\" android:required=\"false\" />';
-            content = content.replace(\"<application\", permissions + \"\n    <application\");
-            fs.writeFileSync(path, content, 'utf8');
-            console.log('Successfully injected Camera permissions into AndroidManifest.xml!');
-          }
-        } else {
-          console.error('AndroidManifest.xml not found!');
-        }
-        "
-
-        # Add Kotlin resolution strategy to resolve duplicate class issues
-        cat << 'EOF' >> android/build.gradle
-
-        subprojects {
-            configurations.all {
-                exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
-                exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+          # Inject Camera and Flashlight permissions into AndroidManifest.xml
+          node -e "
+          const fs = require('fs');
+          const path = 'android/app/src/main/AndroidManifest.xml';
+          if (fs.existsSync(path)) {
+            let content = fs.readFileSync(path, 'utf8');
+            if (!content.includes('android.permission.CAMERA')) {
+              const permissions = '    <uses-permission android:name=\"android.permission.INTERNET\" />\n    <uses-permission android:name=\"android.permission.CAMERA\" />\n    <uses-permission android:name=\"android.permission.FLASHLIGHT\" />\n    <uses-feature android:name=\"android.hardware.camera\" android:required=\"false\" />\n    <uses-feature android:name=\"android.hardware.camera.autofocus\" android:required=\"false\" />\n    <uses-feature android:name=\"android.hardware.camera.flash\" android:required=\"false\" />';
+              content = content.replace(\"<application\", permissions + \"\n    <application\");
+              fs.writeFileSync(path, content, 'utf8');
+              console.log('Successfully injected Camera permissions into AndroidManifest.xml!');
             }
-        }
-        EOF
+          } else {
+            console.error('AndroidManifest.xml not found!');
+          }
+          "
 
-        # Sync assets and web build files to the native Android platform project
-        npx cap sync android
+          # Add Kotlin resolution strategy to resolve duplicate class issues
+          cat << 'EOF' >> android/build.gradle
 
-    - name: Set up Gradle
-      uses: gradle/actions/setup-gradle@v3
-      with:
-        gradle-version: '8.5'
-        build-root-directory: android
+          subprojects {
+              configurations.all {
+                  exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+                  exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+              }
+          }
+          EOF
 
-    - name: Build Capacitor APK
-      run: |
-        cd android
-        chmod +x gradlew
-        ./gradlew assembleDebug --no-daemon
+          # Sync assets and web build files to the native Android platform project
+          npx cap sync android
 
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: capacitor-debug-apk
-        path: android/app/build/outputs/apk/debug/app-debug.apk
-        if-no-files-found: error
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: "8.5"
+          build-root-directory: android
+
+      - name: Build Capacitor APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacitor-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
