@@ -211,7 +211,8 @@ export async function saveOrShareBlob(
   const { Capacitor } = await import("@capacitor/core");
 
   if (Capacitor.isNativePlatform()) {
-    const { Media } = await import("@capacitor-community/media");
+    const { Filesystem, Directory } = await import("@capacitor/filesystem");
+    const { Share } = await import("@capacitor/share");
     const base64Data = await blobToBase64(blob);
 
     const isImage =
@@ -219,26 +220,30 @@ export async function saveOrShareBlob(
       fileName.toLowerCase().endsWith(".png");
 
     if (isImage) {
-      const mimeType = fileName.toLowerCase().endsWith(".png")
-        ? "image/png"
-        : "image/jpeg";
-      // @ts-ignore
-      await Media.saveFile({
-        path: fileName,
-        album: "DCIM/SafeScan",
+      // Use ExternalStorage to write directly to /storage/emulated/0/DCIM without asking permissions on Android 11+
+      await Filesystem.writeFile({
+        path: `DCIM/SafeScan/${fileName}`,
         data: base64Data,
-        mimeType: mimeType,
+        directory: Directory.ExternalStorage,
+        recursive: true,
       });
-      alert(`Image saved in DCIM/SafeScan`);
+      alert(`Image saved in Gallery (DCIM/SafeScan)`);
     } else {
-      // @ts-ignore
-      await Media.saveFile({
-        path: fileName,
-        album: "Download/SafeScan",
+      // Use ExternalStorage to write directly to /storage/emulated/0/Download without asking permissions on Android 11+
+      const writeResult = await Filesystem.writeFile({
+        path: `Download/SafeScan/${fileName}`,
         data: base64Data,
-        mimeType: "application/pdf",
+        directory: Directory.ExternalStorage,
+        recursive: true,
       });
-      alert(`PDF saved in Download/SafeScan`);
+
+      if (window.confirm("Saved to Download/SafeScan. Share now?")) {
+        await Share.share({
+          title: title || fileName,
+          text: fileName,
+          url: writeResult.uri,
+        });
+      }
     }
     return;
   } else {
