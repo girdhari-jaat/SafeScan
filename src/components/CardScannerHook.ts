@@ -754,30 +754,36 @@ export function useCardScannerHook({ mode, initialPages: _initialPages, onAutosa
   }, [mode, slotIndex, slotCount, persistSession]);
 
   const executeExport = useCallback(async (title: string, action: 'save' | 'share' | 'print') => {
-    const { generatePDFFromCards } = await import('../utils/pdfExport');
-    const activeCards = cardsRef.current;
-    if (activeCards.every(c => !c)) {
-      alert('باکسز خالی ہیں، پہلے تصویریں لیں۔');
-      return;
-    }
-
-    const formatDateTime = () => {
-      const now = new Date();
-      return `${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}`;
-    };
-    const docTitle = title || (mode === 'idcard' ? `CNIC ${formatDateTime()}` : `Grid ${formatDateTime()}`);
-    await generatePDFFromCards(activeCards, docTitle, action as any, mode);
-    
-    // Policy rule: zero copy, clear RAM and DB after export
-    setTimeout(async () => {
-      await clearAllSlots();
-      // Remove DB items
-      for (const card of activeCards) {
-        if (card && card.imageId) {
-          try { await deleteImageBlob(card.imageId); } catch (e) {}
-        }
+    try {
+      const { generatePDFFromCards } = await import('../utils/pdfExport');
+      const activeCards = cardsRef.current;
+      if (activeCards.every(c => !c)) {
+        alert('باکسز خالی ہیں، پہلے تصویریں لیں۔');
+        return false;
       }
-    }, 500);
+
+      const formatDateTime = () => {
+        const now = new Date();
+        return `${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+      };
+      const docTitle = title || (mode === 'idcard' ? `CNIC ${formatDateTime()}` : `Grid ${formatDateTime()}`);
+      await generatePDFFromCards(activeCards, docTitle, action as any, mode);
+      
+      // Policy rule: zero copy, clear RAM and DB after export
+      setTimeout(async () => {
+        await clearAllSlots();
+        // Remove DB items
+        for (const card of activeCards) {
+          if (card && card.imageId) {
+            try { await deleteImageBlob(card.imageId); } catch (e) {}
+          }
+        }
+      }, 500);
+      return true;
+    } catch (e) {
+      console.error("Export failed:", e);
+      return false;
+    }
   }, [mode, clearAllSlots]);
 
   const cameraStreamRefExport = useRef(cameraStream);

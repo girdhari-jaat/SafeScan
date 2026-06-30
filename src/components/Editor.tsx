@@ -5,7 +5,8 @@ import { generatePageHash, processFinalImageOffThread } from '../utils/imageWork
 import { saveOrShareBlob } from '../utils/pdfExport';
 import { ArrowLeft, FileDown, Plus, Trash2, RefreshCw,
   Camera, Upload, ChevronLeft, ChevronRight, X, SlidersHorizontal,
-  Sparkles, Languages, Cpu, Layers, AlertCircle, Check, Copy, ZapOff
+  Sparkles, Languages, Cpu, Layers, AlertCircle, Check, Copy, ZapOff,
+  ArrowUpDown
 } from 'lucide-react';
 import Crop from './Crop';
 import { ExportModal } from './ExportModal';
@@ -116,6 +117,7 @@ const SingleVerticalPageCard = React.memo(function SingleVerticalPageCard({
   imgUrl,
   onUpdateFilter,
   onTriggerDocAI,
+  onReorderClick,
 }: {
   page: ScanPage;
   index: number;
@@ -130,6 +132,7 @@ const SingleVerticalPageCard = React.memo(function SingleVerticalPageCard({
   imgUrl: string;
   onUpdateFilter: (pageId: string, newFilter: any, applyToAll?: boolean) => void | Promise<void>;
   onTriggerDocAI: (page: ScanPage, index: number, imgUrl: string) => void;
+  onReorderClick?: () => void;
 }) {
   const [isSaving, setIsSaving] = useState(false);
   const [applyToAll, setApplyToAll] = useState(false);
@@ -193,8 +196,21 @@ const SingleVerticalPageCard = React.memo(function SingleVerticalPageCard({
           {/* Top Row Header Bar */}
           <div className="flex justify-between items-center bg-[var(--bg-primary)]/80 border-b border-[var(--border-color)] py-2.5 px-4 select-none">
             {/* Top Left: Clean borderless Page index indicator */}
-            <div className="text-[var(--text-primary)] text-[11px] font-black tracking-widest uppercase font-mono">
-              Page {index + 1} / {total}
+            <div className="text-[var(--text-primary)] text-[11px] font-black tracking-widest uppercase font-mono flex items-center gap-1.5">
+              <span>Page {index + 1} / {total}</span>
+              {total > 1 && onReorderClick && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onReorderClick();
+                  }}
+                  className="p-1 hover:bg-[var(--bg-card)] rounded text-[var(--primary)] hover:text-[var(--primary-hover)] transition-all ml-0.5"
+                  title="Reorder Pages"
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             {/* Top Right: Page Card Actions */}
@@ -361,6 +377,11 @@ function Editor({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState(activeDocument.title);
 
+  // States for custom mouse/touch drag and drop reordering in Editor
+  const [isReorderOpen, setIsReorderOpen] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
   // Gemini DocAI integration details
   const [aiPage, setAiPage] = useState<{ page: ScanPage; index: number; imgUrl: string } | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -483,6 +504,68 @@ function Editor({
     onClearInitialCropping,
   });
 
+  const performReorder = useCallback((fromIdx: number, toIdx: number) => {
+    if (!onReorderPages) return;
+    const newPages = [...docPages];
+    const [moved] = newPages.splice(fromIdx, 1);
+    newPages.splice(toIdx, 0, moved);
+    onReorderPages(newPages.map(p => p.id));
+  }, [docPages, onReorderPages]);
+
+  const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+    setDragOverIndex(index);
+  }, [draggedIndex]);
+
+  const handleDrop = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    const sourceIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+    if (isNaN(sourceIndex) || sourceIndex === index) return;
+    performReorder(sourceIndex, index);
+  }, [performReorder]);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  }, []);
+
+  // Touch handlers for responsive drag-and-drop on mobile devices
+  const handleTouchStart = useCallback((e: React.TouchEvent, index: number) => {
+    setDraggedIndex(index);
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (draggedIndex === null) return;
+    const touch = e.touches[0];
+    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (!element) return;
+    const card = element.closest('[data-reorder-page-index]');
+    if (card) {
+      const indexStr = card.getAttribute('data-reorder-page-index');
+      if (indexStr) {
+        const id = parseInt(indexStr, 10);
+        if (!isNaN(id) && id !== draggedIndex) {
+          setDragOverIndex(id);
+        }
+      }
+    }
+  }, [draggedIndex]);
+
+  const handleTouchEnd = useCallback(() => {
+    if (draggedIndex !== null && dragOverIndex !== null && draggedIndex !== dragOverIndex) {
+      performReorder(draggedIndex, dragOverIndex);
+    }
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  }, [draggedIndex, dragOverIndex, performReorder]);
+
   const handleUpdateFilter = useCallback(async (pageId: string, newFilter: ScanFilterType, applyToAll?: boolean) => {
     addLog(`Filter changed to ${newFilter} for page ${pageId} (applyToAll: ${applyToAll})`);
     
@@ -543,7 +626,7 @@ function Editor({
           id="fullscreen-lightbox-overlay"
         >
           {/* Header Controls */}
-          <div className="absolute top-0 left-0 right-0 h-16 flex items-center justify-between px-5 bg-gradient-to-b from-black/80 to-transparent z-10">
+          <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 bg-gradient-to-b from-black/80 to-transparent z-10 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-4 h-auto">
             <button
               onClick={() => setLightboxIndex(null)}
               className="w-10 h-10 flex items-center justify-center bg-[var(--bg-card)]/40 hover:bg-[var(--bg-primary)] rounded-full text-[var(--text-primary)] backdrop-blur-md transition-colors"
@@ -653,6 +736,15 @@ function Editor({
               </div>
             )}
           </div>
+          {docPages.length > 1 && (
+            <button
+              onClick={() => setIsReorderOpen(true)}
+              className="min-h-11 min-w-11 sm:min-h-12 sm:min-w-12 border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--primary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card)] rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-95 shadow-sm shrink-0"
+              title="Reorder Pages"
+            >
+              <ArrowUpDown className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Dynamic Toolbar for the 3 main actions */}
@@ -753,6 +845,7 @@ function Editor({
                 setAiResult(null);
                 setAiError(null);
               }}
+              onReorderClick={() => setIsReorderOpen(true)}
             />
           ))}
         </div>
@@ -1040,6 +1133,100 @@ function Editor({
                 Done
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Fullscreen Reorder Pages Overlay --- */}
+      {isReorderOpen && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[100] flex flex-col animate-in fade-in duration-200">
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 border-b border-zinc-800 bg-zinc-900/50 shrink-0 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-4 h-auto">
+            <div className="flex items-center gap-2">
+              <ArrowUpDown className="w-5 h-5 text-[var(--primary)] animate-pulse" />
+              <span className="text-sm font-black uppercase tracking-widest text-zinc-100">
+                Reorder Pages
+              </span>
+            </div>
+            <button
+              onClick={() => setIsReorderOpen(false)}
+              className="px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-black rounded-full shadow-lg shadow-[var(--primary)]/20 active:scale-95 transition-all cursor-pointer uppercase tracking-wider"
+            >
+              Done
+            </button>
+          </div>
+
+          {/* Grid View */}
+          <div className="flex-1 overflow-y-auto p-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 no-scrollbar">
+            {docPages.map((page, idx) => {
+              const isDragging = draggedIndex === idx;
+              const isDragOver = dragOverIndex === idx;
+              const imgUrl = pageUrls[page.id] || '';
+              return (
+                <div 
+                  key={page.id}
+                  data-reorder-page-index={idx}
+                  draggable="true"
+                  onDragStart={(e) => handleDragStart(e, idx)}
+                  onDragOver={(e) => handleDragOver(e, idx)}
+                  onDragEnd={handleDragEnd}
+                  onDrop={(e) => handleDrop(e, idx)}
+                  onTouchStart={(e) => handleTouchStart(e, idx)}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                  className={`flex flex-col gap-2 group transition-all duration-200 select-none cursor-grab active:cursor-grabbing touch-none ${
+                    isDragging ? 'opacity-30 scale-95 border-2 border-dashed border-[var(--primary)] rounded-xl' : ''
+                  } ${
+                    isDragOver ? 'border-2 border-solid border-[var(--primary)] scale-105 rounded-xl shadow-[0_0_15px_rgba(20,184,166,0.6)] font-black text-zinc-100' : ''
+                  }`}
+                >
+                  <div className="relative aspect-[3/4] bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden shadow-2xl group-hover:border-[var(--primary)]/50 transition-all">
+                    {imgUrl ? (
+                      <img
+                        src={imgUrl}
+                        alt={`Page ${idx + 1}`}
+                        className="w-full h-full object-cover rounded-xl pointer-events-none"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <RefreshCw className="w-5 h-5 animate-spin text-zinc-500" />
+                      </div>
+                    )}
+                    
+                    {/* Badge count */}
+                    <div className="absolute bottom-2 left-2 w-6 h-6 rounded-full bg-[var(--primary)] text-white text-[10px] font-black flex items-center justify-center shadow-xl border-2 border-zinc-900">
+                      {idx + 1}
+                    </div>
+
+                    {/* Left / Right quick arrows */}
+                    <div className="absolute top-2 right-2 flex gap-1 z-30 pointer-events-auto">
+                      <button
+                        disabled={idx === 0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          performReorder(idx, idx - 1);
+                        }}
+                        className="w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center disabled:opacity-20 active:scale-90 transition-all cursor-pointer"
+                        title="Move Page Back"
+                      >
+                        <ChevronLeft size={14} strokeWidth={2.5} />
+                      </button>
+                      <button
+                        disabled={idx === docPages.length - 1}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          performReorder(idx, idx + 1);
+                        }}
+                        className="w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center disabled:opacity-20 active:scale-90 transition-all cursor-pointer"
+                        title="Move Page Forward"
+                      >
+                        <ChevronRight size={14} strokeWidth={2.5} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

@@ -4,7 +4,7 @@ import { useUnifiedscannerHook } from './UnifiedscannerHook';
 import { useSharedSettings } from '../lib/useSharedSettings';
 import { useCamera } from '../contexts/CameraContext';
 import { CardScanner } from './CardScanner';
-import { X, Crop as CropIcon, RefreshCw } from 'lucide-react';
+import { X, Crop as CropIcon, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getImageBlob, savePageMeta } from '../utils/db';
 import Crop from './Crop';
 import { PAPER_RATIOS, CARD_RATIOS } from '../constants';
@@ -253,10 +253,10 @@ const GridView: React.FC<GridViewProps> = React.memo(({
               onTouchStart={(e) => handleTouchStart(e, idx)}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
-              className={`flex flex-col gap-2 group transition-all duration-200 select-none cursor-grab active:cursor-grabbing ${
+              className={`flex flex-col gap-2 group transition-all duration-200 select-none cursor-grab active:cursor-grabbing touch-none ${
                 isDragging ? 'opacity-30 scale-95 border-2 border-dashed border-[var(--primary)] rounded-xl' : ''
               } ${
-                isDragOver ? 'border-2 border-solid border-[var(--primary)] scale-105 rounded-xl shadow-[0_0_15px_rgba(20,184,166,0.6)]' : ''
+                isDragOver ? 'border-2 border-solid border-[var(--primary)] scale-105 rounded-xl shadow-[0_0_15px_rgba(20,184,166,0.6)] font-black text-zinc-100' : ''
               }`}
             >
               <div style={{ aspectRatio: designRatio }} className="relative bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] overflow-hidden shadow-2xl group-hover:border-[var(--primary)]/50 transition-all pointer-events-auto">
@@ -285,6 +285,30 @@ const GridView: React.FC<GridViewProps> = React.memo(({
                  </div>
                  <div className="absolute bottom-2 left-2 w-6 h-6 rounded-full bg-[var(--primary)] text-white text-[10px] font-black flex items-center justify-center shadow-xl border-2 border-[var(--bg-primary)]">
                    {idx + 1}
+                 </div>
+                 <div className="absolute bottom-2 right-2 flex gap-1 z-30 pointer-events-auto">
+                   <button
+                     disabled={idx === 0}
+                     onClick={(e) => {
+                       e.stopPropagation();
+                       performReorder(idx, idx - 1);
+                     }}
+                     className="w-6 h-6 rounded-full bg-black/60 hover:bg-black/80 disabled:opacity-25 text-white flex items-center justify-center transition-all cursor-pointer active:scale-90"
+                     title="Move Page Back"
+                   >
+                     <ChevronLeft size={12} strokeWidth={2.5} />
+                   </button>
+                   <button
+                     disabled={idx === pages.length - 1}
+                     onClick={(e) => {
+                       e.stopPropagation();
+                       performReorder(idx, idx + 1);
+                     }}
+                     className="w-6 h-6 rounded-full bg-black/60 hover:bg-black/80 disabled:opacity-25 text-white flex items-center justify-center transition-all cursor-pointer active:scale-90"
+                     title="Move Page Forward"
+                   >
+                     <ChevronRight size={12} strokeWidth={2.5} />
+                   </button>
                  </div>
               </div>
             </div>

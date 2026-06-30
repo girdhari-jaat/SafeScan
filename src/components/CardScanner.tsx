@@ -569,7 +569,13 @@ export function CardScanner({
             isOpen={showExportModal}
             onClose={() => setShowExportModal(false)}
             defaultTitle={documentTitle}
-            onExport={(opts) => executeExport(opts.title, opts.action as any)}
+            onExport={async (opts) => {
+              const success = await executeExport(opts.title, opts.action as any);
+              if (success) {
+                setShowExportModal(false);
+                setIsSlotsVisible(false);
+              }
+            }}
           />
         )}
 
@@ -827,7 +833,13 @@ export function CardScanner({
           isOpen={showExportModal}
           onClose={() => setShowExportModal(false)}
           defaultTitle={documentTitle}
-          onExport={(opts) => executeExport(opts.title, opts.action as any)}
+          onExport={async (opts) => {
+            const success = await executeExport(opts.title, opts.action as any);
+            if (success) {
+              setShowExportModal(false);
+              setIsSlotsVisible(false);
+            }
+          }}
         />
       )}
 
