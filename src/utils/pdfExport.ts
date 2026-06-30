@@ -167,7 +167,8 @@ export async function saveOrShareBlob(
       const writeResult = await Filesystem.writeFile({
         path: fileName,
         data: base64Data,
-        directory: Directory.Cache
+        directory: Directory.Cache,
+        recursive: true
       });
 
       // Show system share sheet. This allows user to "Save Image" to gallery, "Save to Files" to local documents, or send via apps.

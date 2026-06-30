@@ -742,8 +742,20 @@ export const UnifiedViewfinder = React.memo(
                   const paperHeight = ratio > 0.75 ? 99 * (0.75 / ratio) : 99;
 
                   // Fluid transitionable styles
-                  const widthVal = isPaper ? `${paperWidth}%` : "99%";
-                  const heightVal = isPaper ? `${paperHeight}%` : "62.43%"; // exact aspect ratio height for card (99% / 1.5857)
+                  let widthVal = "99%";
+                  let heightVal = "62.43%";
+
+                  if (isPaper) {
+                    const ratio = PAPER_RATIOS.A4;
+                    const paperWidth = ratio > 0.75 ? 99 : 99 * (ratio / 0.75);
+                    const paperHeight = ratio > 0.75 ? 99 * (0.75 / ratio) : 99;
+                    widthVal = `${paperWidth}%`;
+                    heightVal = `${paperHeight}%`;
+                  } else if (mode === "idcard" || mode === "grid") {
+                    const ratio = CARD_RATIOS.LANDSCAPE;
+                    widthVal = "99%";
+                    heightVal = `${(99 / ratio) * 0.85}%`;
+                  }
 
                   const guidanceText = activeSlotLabel || (isPaper 
                     ? "Document Align" 

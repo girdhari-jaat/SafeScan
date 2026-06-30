@@ -253,7 +253,8 @@ export function useScannerHook({ onCapture }: UseScannerHookProps) {
       }
       
       // Check RAM (best effort)
-      const isLowMemory = (navigator as any).deviceMemory ? (navigator as any).deviceMemory < 3 : false;
+      const isDeviceLowMemory = (navigator as any).deviceMemory ? (navigator as any).deviceMemory < 3 : false;
+      const isLowMemory = isDeviceLowMemory || settings.hdMode === 'Fast';
       
       const bitmapRatio = bitmap.width > bitmap.height 
         ? (bitmap.width / bitmap.height) 
