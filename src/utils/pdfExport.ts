@@ -30,12 +30,12 @@ export async function exportDocumentToPDF(
   const pagesData: { blob: Blob; page: ScanPage }[] = [];
 
   const savedHdMode =
-    typeof window!== "undefined"? localStorage.getItem("hdMode") : "Fast";
+    typeof window !== "undefined" ? localStorage.getItem("hdMode") : "Fast";
   const hdModeSuffix =
     savedHdMode === "High"
-     ? "_High"
+      ? "_High"
       : savedHdMode === "Standard"
-       ? "_Standard"
+        ? "_Standard"
         : "_Fast";
 
   for (let i = 0; i < total; i++) {
@@ -51,7 +51,7 @@ export async function exportDocumentToPDF(
       continue;
     }
     const pageWithSourceType = {
-     ...page,
+      ...page,
       sourceType: ((page as any).sourceType || "paper") + hdModeSuffix,
     };
     pagesData.push({ blob, page: pageWithSourceType as any });
@@ -75,14 +75,14 @@ export async function generatePDFFromCards(
 ): Promise<void> {
   try {
     const isIdCard = mode === "idcard";
-    const iterations = isIdCard? 8 : cards.length;
+    const iterations = isIdCard ? 8 : cards.length;
     const cardsData: ({ blob: Blob; card: any } | null)[] = new Array(
       iterations,
     ).fill(null);
     const loadedBlobs = new Map<string, Blob>();
 
     for (let i = 0; i < iterations; i++) {
-      const sourceIndex = isIdCard? i % cards.length : i;
+      const sourceIndex = isIdCard ? i % cards.length : i;
       const card = cards[sourceIndex];
       if (!card) continue;
 
@@ -105,18 +105,18 @@ export async function generatePDFFromCards(
       };
 
       const savedHdMode =
-        typeof window!== "undefined"? localStorage.getItem("hdMode") : "Fast";
+        typeof window !== "undefined" ? localStorage.getItem("hdMode") : "Fast";
       const hdModeSuffix =
         savedHdMode === "High"
-         ? "_High"
+          ? "_High"
           : savedHdMode === "Standard"
-           ? "_Standard"
+            ? "_Standard"
             : "_Fast";
 
       const finalCard = {
         corners: meta.cropPoints || meta.corners || card.corners,
         rotation:
-          typeof meta.rotate === "number"? meta.rotate : card.rotation || 0,
+          typeof meta.rotate === "number" ? meta.rotate : card.rotation || 0,
         filter: meta.filter || card.filter || "original",
         adjustments: card.adjustments || {
           brightness: 0,
@@ -127,13 +127,13 @@ export async function generatePDFFromCards(
           temperature: 0,
         },
         originalIndex: sourceIndex,
-        sourceType: (mode === "idcard"? "idcard" : "grid") + hdModeSuffix,
+        sourceType: (mode === "idcard" ? "idcard" : "grid") + hdModeSuffix,
       };
 
       cardsData[i] = { blob, card: finalCard };
     }
 
-    if (cardsData.filter((c) =>!!c).length === 0) {
+    if (cardsData.filter((c) => !!c).length === 0) {
       throw new Error("No valid cards captured to generate PDF");
     }
 
@@ -175,7 +175,6 @@ function blobToBase64(blob: Blob): Promise<string> {
 
 /**
  * Universal file saver/sharer that works in both standard web browsers and Capacitor-wrapped mobile apps (APKs).
- * Android 10+ ke liye @capacitor-community/media use hota hai. Permission nahi lagti.
  */
 export async function saveOrShareBlob(
   blob: Blob,
@@ -186,47 +185,50 @@ export async function saveOrShareBlob(
   const { Capacitor } = await import("@capacitor/core");
 
   if (Capacitor.isNativePlatform()) {
-    const { Media } = await import("@capacitor-community/media");
+    const { Filesystem, Directory } = await import("@capacitor/filesystem");
+    const { Share } = await import("@capacitor/share");
     const base64Data = await blobToBase64(blob);
 
     const isImage =
       fileName.toLowerCase().endsWith(".jpg") ||
       fileName.toLowerCase().endsWith(".png");
 
-    try {
-      if (isImage) {
-        // Android 10+ : DCIM folder me bina permission save
-        await Media.saveFile({
-          path: `DCIM/SafeScan/${fileName}`,
-          data: base64Data,
-          album: 'DCIM/SafeScan'
-        });
-        alert(`Image saved in Gallery (DCIM/SafeScan)`);
-      } else {
-        // Android 10+ : Downloads folder me bina permission save
-        // Note: Android 10+ pe MediaStore URI ko Share plugin share nahi kar sakta
-        await Media.saveFile({
-          path: `Download/SafeScan/${fileName}`,
-          data: base64Data,
-          album: 'Download/SafeScan'
-        });
-        alert(`PDF saved to Downloads/SafeScan`);
-      }
-      return;
-    } catch (e) {
-      console.error("Media.saveFile failed, falling back to web download", e);
-    }
-  }
+    if (isImage) {
+      // Use Directory.External to write to Android/data/com.safescan.app/files/SafeScan/ (No permissions needed on Android 11+)
+      await Filesystem.writeFile({
+        path: `SafeScan/${fileName}`,
+        data: base64Data,
+        directory: Directory.External,
+        recursive: true,
+      });
+      alert(`Image saved in Android/data/.../SafeScan`);
+    } else {
+      // Save PDF to Directory.External so it persists on the device, then share
+      const writeResult = await Filesystem.writeFile({
+        path: `SafeScan/${fileName}`,
+        data: base64Data,
+        directory: Directory.External,
+        recursive: true,
+      });
 
-  // Web Browser fallback OR if Media failed on native
-  const downloadUrl = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = downloadUrl;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(downloadUrl);
+      alert(`PDF saved in Android/data/.../SafeScan`);
+
+      await Share.share({
+        files: [writeResult.uri],
+      });
+    }
+    return;
+  } else {
+    // Web Browser fallback
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
+  }
 }
 
 /**
@@ -239,7 +241,7 @@ export async function shareOrDownloadFile(
   title?: string,
   forceDownload: boolean = false,
 ): Promise<void> {
-  // Normalize fileName to end with.pdf if not yet present
+  // Normalize fileName to end with .pdf if not yet present
   let normalizedName = fileName.trim() || "Scanned_Doc";
   if (!normalizedName.toLowerCase().endsWith(".pdf")) {
     normalizedName += ".pdf";
@@ -249,7 +251,7 @@ export async function shareOrDownloadFile(
 
   // Native Web Share API integration (perfect for Android APK wrapper context)
   if (
-   !forceDownload &&
+    !forceDownload &&
     navigator.share &&
     navigator.canShare &&
     navigator.canShare({ files: [file] })
