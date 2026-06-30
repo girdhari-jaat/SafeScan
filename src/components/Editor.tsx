@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ScanDocument, ScanPage, ScanFilterType } from '../types';
 import { getImageBlob, savePageMeta, getDisplayCacheBlob, saveDisplayCacheBlob } from '../utils/db';
 import { generatePageHash, processFinalImageOffThread } from '../utils/imageWorkerClient';
+import { saveOrShareBlob } from '../utils/pdfExport';
 import { ArrowLeft, FileDown, Plus, Trash2, RefreshCw,
   Camera, Upload, ChevronLeft, ChevronRight, X, SlidersHorizontal,
   Sparkles, Languages, Cpu, Layers, AlertCircle, Check, Copy, ZapOff
@@ -138,18 +139,12 @@ const SingleVerticalPageCard = React.memo(function SingleVerticalPageCard({
     setIsSaving(true);
     try {
       const hash = generatePageHash(page);
+      const fileName = `PageScanned_${index + 1}.jpg`;
       
       // Step 1: Look up display-cache (Policy compliant)
       const cachedBlob = await getDisplayCacheBlob(hash);
       if (cachedBlob) {
-        const url = URL.createObjectURL(cachedBlob);
-        const a = window.document.createElement('a');
-        a.href = url;
-        a.download = `PageScanned_${index + 1}.jpg`;
-        window.document.body.appendChild(a);
-        a.click();
-        window.document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        await saveOrShareBlob(cachedBlob, fileName, `Page Scanned ${index + 1}`);
         return;
       }
 
@@ -169,24 +164,13 @@ const SingleVerticalPageCard = React.memo(function SingleVerticalPageCard({
         if (processedBlob) {
           // Persist to display-cache for future instant action
           await saveDisplayCacheBlob(hash, processedBlob);
-          
-          const url = URL.createObjectURL(processedBlob);
-          const a = window.document.createElement('a');
-          a.href = url;
-          a.download = `PageScanned_${index + 1}.jpg`;
-          window.document.body.appendChild(a);
-          a.click();
-          window.document.body.removeChild(a);
-          URL.revokeObjectURL(url);
+          await saveOrShareBlob(processedBlob, fileName, `Page Scanned ${index + 1}`);
         }
       } else if (imgUrl) {
         // Safe ultimate fallback using memory Object URL if original is somehow missing
-        const a = window.document.createElement('a');
-        a.href = imgUrl;
-        a.download = `PageScanned_${index + 1}.jpg`;
-        window.document.body.appendChild(a);
-        a.click();
-        window.document.body.removeChild(a);
+        const response = await fetch(imgUrl);
+        const fallbackBlob = await response.blob();
+        await saveOrShareBlob(fallbackBlob, fileName, `Page Scanned ${index + 1}`);
       }
     } catch (error) {
       console.error('Failed to save page image:', error);

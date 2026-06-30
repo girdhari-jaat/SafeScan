@@ -131,8 +131,71 @@ export async function generatePDFFromCards(
 }
 
 /**
+ * Converts a Blob to a base64 string
+ */
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Universal file saver/sharer that works in both standard web browsers and Capacitor-wrapped mobile apps (APKs).
+ */
+export async function saveOrShareBlob(
+  blob: Blob,
+  fileName: string,
+  title?: string
+): Promise<void> {
+  const isCapacitor = typeof window !== 'undefined' && (window as any).Capacitor;
+
+  if (isCapacitor) {
+    try {
+      const { Filesystem, Directory } = await import('@capacitor/filesystem');
+      const { Share } = await import('@capacitor/share');
+
+      const base64Data = await blobToBase64(blob);
+
+      // Save to a temp file in cache so we don't need storage permissions
+      const writeResult = await Filesystem.writeFile({
+        path: fileName,
+        data: base64Data,
+        directory: Directory.Cache
+      });
+
+      // Show system share sheet. This allows user to "Save Image" to gallery, "Save to Files" to local documents, or send via apps.
+      await Share.share({
+        title: title || fileName,
+        text: fileName,
+        url: writeResult.uri
+      });
+      return;
+    } catch (err) {
+      console.error('Capacitor native saving failed, falling back to browser download:', err);
+    }
+  }
+
+  // Web Browser fallback
+  const downloadUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = downloadUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(downloadUrl);
+}
+
+/**
  * Shares a PDF file using Web Share API if supported (excellent for APKs / mobile browsers),
- * or falls back to standard client-side <a> layout download link simulation.
+ * or falls back to our universal saver/sharer.
  */
 export async function shareOrDownloadFile(
   blob: Blob,
@@ -166,14 +229,7 @@ export async function shareOrDownloadFile(
     }
   }
 
-  // Fallback to standard client-side download anchor click simulation
-  const downloadUrl = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = downloadUrl;
-  link.download = normalizedName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(downloadUrl);
+  // Fallback to standard universal downloader/sharer
+  await saveOrShareBlob(blob, normalizedName, title);
 }
 

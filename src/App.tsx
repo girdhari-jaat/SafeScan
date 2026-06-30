@@ -1,4 +1,5 @@
 import React, { Suspense } from "react";
+import { motion } from "motion/react";
 import {
   Folder,
   ShieldCheck,
@@ -674,127 +675,136 @@ export default function App() {
               </div>
             }
           >
-            {/* Home view block is now unified directly within the primary scanner block below */}
+            <motion.div
+              key={currentView}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="h-full w-full flex flex-col"
+            >
+              {/* Home view block is now unified directly within the primary scanner block below */}
 
-            {currentView === "library" && (
-              <ViewDocumentGrid
-                batterySaverEnabled={settings.batterySaverEnabled}
-                documents={documents}
-                pages={pages}
-                onSelectDocument={handleSelectDocument}
-                onCreateDocument={handleCreateDocument}
-                onDeleteDocument={handleDeleteDocument}
-                onDeleteDocuments={handleDeleteDocuments}
-                onRenameDocument={handleRenameDocument}
-                onExportPDF={handlePDFExportRequest}
-                onAddScanToDocument={handleAddScanToDocument}
-                onUpdateDocumentTags={handleUpdateDocumentTags}
-                onTriggerImport={handleTriggerFileInput}
-                onTriggerScan={handleTabHome}
-              />
-            )}
-
-            {(currentView === "home" || currentView === "camera") && (
-              <div
-                className={`flex-1 flex flex-col w-full bg-[var(--bg-primary)] text-[var(--text-primary)] p-0 rounded-none border-0 overflow-hidden relative select-none transition-all duration-300 ${
-                  isNavBarVisible
-                    ? "max-h-[calc(100vh-105px-env(safe-area-inset-bottom,0px))] mb-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:max-h-[calc(100vh-190px)] md:mb-[148px]"
-                    : "max-h-full mb-0"
-                }`}
-                id="unified-scanner-container"
-              >
-                {/* Unified Scanner Stage */}
-                <UnifiedScanner
-                  currentTab={scannerSubTab as any}
-                  onChangeTab={setScannerSubTab}
+              {currentView === "library" && (
+                <ViewDocumentGrid
                   batterySaverEnabled={settings.batterySaverEnabled}
-                  onCapture={
-                    currentView === "home"
-                      ? handleHomeCapture
-                      : handleScannerCapture
-                  }
-                  onFallbackUpload={handleTriggerFileInput}
-                  onDone={
-                    currentView === "home"
-                      ? handleHomeCaptureDone
-                      : handleScannerDone
-                  }
-                  onClose={
-                    currentView === "home"
-                      ? () => {
-                          setCurrentView("library");
-                          cleanupEmptyDocuments();
-                        }
-                      : handleScannerClose
-                  }
-                  pages={pages.filter((p) => p.docId === activeDocId)}
+                  documents={documents}
+                  pages={pages}
+                  onSelectDocument={handleSelectDocument}
+                  onCreateDocument={handleCreateDocument}
+                  onDeleteDocument={handleDeleteDocument}
+                  onDeleteDocuments={handleDeleteDocuments}
+                  onRenameDocument={handleRenameDocument}
+                  onExportPDF={handlePDFExportRequest}
+                  onAddScanToDocument={handleAddScanToDocument}
+                  onUpdateDocumentTags={handleUpdateDocumentTags}
+                  onTriggerImport={handleTriggerFileInput}
+                  onTriggerScan={handleTabHome}
+                />
+              )}
+
+              {(currentView === "home" || currentView === "camera") && (
+                <div
+                  className={`flex-1 flex flex-col w-full bg-[var(--bg-primary)] text-[var(--text-primary)] p-0 rounded-none border-0 overflow-hidden relative select-none transition-all duration-300 ${
+                    isNavBarVisible
+                      ? "max-h-[calc(100vh-105px-env(safe-area-inset-bottom,0px))] mb-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:max-h-[calc(100vh-190px)] md:mb-[148px]"
+                      : "max-h-full mb-0"
+                  }`}
+                  id="unified-scanner-container"
+                >
+                  {/* Unified Scanner Stage */}
+                  <UnifiedScanner
+                    currentTab={scannerSubTab as any}
+                    onChangeTab={setScannerSubTab}
+                    batterySaverEnabled={settings.batterySaverEnabled}
+                    onCapture={
+                      currentView === "home"
+                        ? handleHomeCapture
+                        : handleScannerCapture
+                    }
+                    onFallbackUpload={handleTriggerFileInput}
+                    onDone={
+                      currentView === "home"
+                        ? handleHomeCaptureDone
+                        : handleScannerDone
+                    }
+                    onClose={
+                      currentView === "home"
+                        ? () => {
+                            setCurrentView("library");
+                            cleanupEmptyDocuments();
+                          }
+                        : handleScannerClose
+                    }
+                    pages={pages.filter((p) => p.docId === activeDocId)}
+                    onDeletePage={handleDeletePage}
+                    onRetakePage={handleRetakePageInApp}
+                    documentTitle={activeDoc?.title}
+                    onUpdatePage={handleUpdatePage}
+                    onReorderPages={handleReorderPages}
+                  />
+                </div>
+              )}
+
+              {currentView === "pdf" && (
+                <div className="flex-1 flex flex-col justify-start py-2 h-full gap-4">
+                  <ViewPDFReader
+                    batterySaverEnabled={settings.batterySaverEnabled}
+                    ref={pdfReaderRef}
+                    onImportPage={handlePDFPageImport}
+                    onClose={handleClosePDF}
+                    onScroll={(e) =>
+                      handleScrollEvent("pdf-viewport", e.currentTarget.scrollTop)
+                    }
+                  />
+                </div>
+              )}
+
+              {currentView === "editor" && activeDoc && (
+                <ViewEditor
+                  batterySaverEnabled={settings.batterySaverEnabled}
+                  document={activeDoc}
+                  pages={pages}
+                  onBack={handleEditorBack}
+                  onAddPage={handleEditorAddPage}
+                  onImportPage={handleTriggerFileInput}
+                  onUpdateDocumentTags={handleUpdateDocumentTags}
                   onDeletePage={handleDeletePage}
-                  onRetakePage={handleRetakePageInApp}
-                  documentTitle={activeDoc?.title}
                   onUpdatePage={handleUpdatePage}
                   onReorderPages={handleReorderPages}
+                  initialCroppingPageId={newlyCapturedPageId || undefined}
+                  onClearInitialCropping={handleClearInitialCropping}
+                  onRenameDocument={handleRenameDocument}
                 />
-              </div>
-            )}
-
-            {currentView === "pdf" && (
-              <div className="flex-1 flex flex-col justify-start py-2 h-full gap-4">
-                <ViewPDFReader
-                  batterySaverEnabled={settings.batterySaverEnabled}
-                  ref={pdfReaderRef}
-                  onImportPage={handlePDFPageImport}
-                  onClose={handleClosePDF}
-                  onScroll={(e) =>
-                    handleScrollEvent("pdf-viewport", e.currentTarget.scrollTop)
-                  }
-                />
-              </div>
-            )}
-
-            {currentView === "editor" && activeDoc && (
-              <ViewEditor
-                batterySaverEnabled={settings.batterySaverEnabled}
-                document={activeDoc}
-                pages={pages}
-                onBack={handleEditorBack}
-                onAddPage={handleEditorAddPage}
-                onImportPage={handleTriggerFileInput}
-                onUpdateDocumentTags={handleUpdateDocumentTags}
-                onDeletePage={handleDeletePage}
-                onUpdatePage={handleUpdatePage}
-                onReorderPages={handleReorderPages}
-                initialCroppingPageId={newlyCapturedPageId || undefined}
-                onClearInitialCropping={handleClearInitialCropping}
-                onRenameDocument={handleRenameDocument}
-              />
-            )}
-            {currentView === "settings" && (
-              <div className="flex-1 flex flex-col justify-start py-2 h-full gap-4">
-                <ViewSettings
-                  documentsCount={documents.length}
-                  onClose={() => setCurrentView("library")}
-                  onCloseToDefault={handleTabHome}
-                  canInstall={!!deferredPrompt}
-                  triggerToast={triggerToast}
-                  onInstall={async () => {
-                    if (deferredPrompt) {
-                      deferredPrompt.prompt();
-                      const { outcome } = await deferredPrompt.userChoice;
-                      if (outcome === "accepted") {
-                        setDeferredPrompt(null);
-                        triggerToast("App installed successfully!");
+              )}
+              {currentView === "settings" && (
+                <div className="flex-1 flex flex-col justify-start py-2 h-full gap-4">
+                  <ViewSettings
+                    documentsCount={documents.length}
+                    onClose={() => setCurrentView("library")}
+                    onCloseToDefault={handleTabHome}
+                    canInstall={!!deferredPrompt}
+                    triggerToast={triggerToast}
+                    onInstall={async () => {
+                      if (deferredPrompt) {
+                        deferredPrompt.prompt();
+                        const { outcome } = await deferredPrompt.userChoice;
+                        if (outcome === "accepted") {
+                          setDeferredPrompt(null);
+                          triggerToast("App installed successfully!");
+                        }
                       }
-                    }
-                  }}
-                />
-              </div>
-            )}
+                    }}
+                  />
+                </div>
+              )}
+            </motion.div>
           </Suspense>
         </div>
 
         {/* Static Bottom Navigation Bar (Non-Draggable, Fixed at bottom) */}
         {["home", "library", "pdf", "settings", "camera"].includes(currentView) && (
-          <div className="absolute bottom-[calc(0.6rem+env(safe-area-inset-bottom,0px))] md:bottom-[32px] left-1/2 -translate-x-1/2 z-40 w-max no-print cursor-default transition-all duration-300">
+          <div className="absolute bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] md:bottom-[48px] left-1/2 -translate-x-1/2 z-40 w-max no-print cursor-default transition-all duration-300">
             <div
               className={`flex items-center bg-[var(--bg-card)]/90 backdrop-blur-xl border border-[var(--border-color)] px-2 py-1.5 gap-1 select-none shadow-2xl rounded-full transition-all duration-300 ${
                 isNavBarVisible
