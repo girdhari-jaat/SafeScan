@@ -229,15 +229,15 @@ export async function saveOrShareBlob(
       });
       alert(`Image saved in Gallery (DCIM/SafeScan)`);
     } else {
-      // Use ExternalStorage to write directly to /storage/emulated/0/Download without asking permissions on Android 11+
+      // Use Documents directory to avoid Android 11+ permission issues with Downloads folder
       const writeResult = await Filesystem.writeFile({
-        path: `Download/SafeScan/${fileName}`,
+        path: `SafeScan/${fileName}`,
         data: base64Data,
-        directory: Directory.ExternalStorage,
+        directory: Directory.Documents,
         recursive: true,
       });
 
-      if (window.confirm("Saved to Download/SafeScan. Share now?")) {
+      if (window.confirm("Saved to Documents/SafeScan. Share now?")) {
         await Share.share({
           title: title || fileName,
           text: fileName,
