@@ -540,12 +540,14 @@ export function useAppHook() {
     } else if (currentView === 'pdf') {
       setCurrentView('library');
       cleanupEmptyDocuments();
+    } else if (currentView === 'settings') {
+      setCurrentView('library');
     } else if (currentView === 'library') {
-      setCurrentView('home');
+      // Handled at App level to trigger exit confirmation
     } else {
-      triggerToast('Home dashboard page active');
+      // Handled at App level to trigger exit confirmation
     }
-  }, [currentView, cleanupEmptyDocuments, triggerToast]);
+  }, [currentView, cleanupEmptyDocuments]);
 
   const handlePDFPageImport = useCallback(async (blobs: Blob[]) => {
     let docIdToUse = activeDocId;

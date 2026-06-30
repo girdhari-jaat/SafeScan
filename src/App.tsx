@@ -71,6 +71,9 @@ export default function App() {
   const logContainerRef = React.useRef<HTMLDivElement>(null);
   const [isConfirmingExit, setIsConfirmingExit] = React.useState(false);
   const [showSplash, setShowSplash] = React.useState(true);
+  const [showExitPrompt, setShowExitPrompt] = React.useState(false);
+  const lastBackButtonPressRef = React.useRef(0);
+  const exitTimerRef = React.useRef<any>(null);
 
   React.useEffect(() => {
     if (settings?.customAppName) {
@@ -246,6 +249,33 @@ export default function App() {
     hasUnsavedChanges,
   } = useAppHook();
 
+  const handleExitAttempt = React.useCallback(async () => {
+    const now = Date.now();
+    if (now - lastBackButtonPressRef.current < 2000) {
+      const isCapacitor = typeof window !== 'undefined' && (window as any).Capacitor;
+      if (isCapacitor) {
+        try {
+          const { App: CapApp } = await import('@capacitor/app');
+          CapApp.exitApp();
+        } catch (err) {
+          console.error(err);
+        }
+      } else {
+        triggerToast("Exiting...");
+      }
+      setShowExitPrompt(false);
+    } else {
+      lastBackButtonPressRef.current = now;
+      setShowExitPrompt(true);
+      if (exitTimerRef.current) {
+        clearTimeout(exitTimerRef.current);
+      }
+      exitTimerRef.current = setTimeout(() => {
+        setShowExitPrompt(false);
+      }, 2000);
+    }
+  }, [triggerToast]);
+
   const handleGlobalBackPress = React.useCallback(() => {
     if (hasUnsavedChanges && !isConfirmingExit) {
       setIsConfirmingExit(true);
@@ -258,13 +288,16 @@ export default function App() {
 
   const handleGlobalBack = React.useCallback(() => {
     if (handleGlobalBackPress()) {
-      handleAndroidBackButton();
+      if (currentView === "home" || currentView === "library") {
+        handleExitAttempt();
+      } else {
+        handleAndroidBackButton();
+      }
     }
-  }, [handleGlobalBackPress, handleAndroidBackButton]);
+  }, [handleGlobalBackPress, currentView, handleExitAttempt, handleAndroidBackButton]);
 
   React.useEffect(() => {
     let listenerPromise: Promise<any> | null = null;
-    let lastBackButtonPress = 0;
 
     const setupBackButton = async () => {
       const isCapacitor = typeof window !== 'undefined' && (window as any).Capacitor;
@@ -274,14 +307,8 @@ export default function App() {
         const { App: CapApp } = await import('@capacitor/app');
         
         listenerPromise = CapApp.addListener('backButton', () => {
-          if (currentView === 'home') {
-            const now = Date.now();
-            if (now - lastBackButtonPress < 2000) {
-              CapApp.exitApp();
-            } else {
-              lastBackButtonPress = now;
-              triggerToast("بند کرنے کے لیے دوبارہ دبائیں / بند ڪرڻ لاءِ ٻيهر دٻايو (Press again to exit)");
-            }
+          if (currentView === 'home' || currentView === 'library') {
+            handleExitAttempt();
           } else {
             handleGlobalBack();
           }
@@ -298,7 +325,7 @@ export default function App() {
         listenerPromise.then(l => l.remove()).catch(err => console.error(err));
       }
     };
-  }, [currentView, handleGlobalBack, triggerToast]);
+  }, [currentView, handleGlobalBack, handleExitAttempt]);
 
   const handleSelectDocument = React.useCallback(
     (id: string) => {
@@ -683,6 +710,18 @@ export default function App() {
           <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[100] bg-emerald-500 text-zinc-100 font-bold px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 animate-bounce text-xs border border-emerald-400 font-sans uppercase tracking-wider select-none">
             <ShieldCheck className="w-4 h-4" />
             <span>{toastMessage}</span>
+          </div>
+        )}
+
+        {/* Centered Exit Prompt Overlay */}
+        {showExitPrompt && (
+          <div className="absolute inset-0 flex items-center justify-center z-[1000] bg-black/10 backdrop-blur-[2px] pointer-events-none animate-in fade-in duration-200">
+            <div className="bg-zinc-900/95 border border-zinc-800 text-zinc-100 font-black px-6 py-4 rounded-2xl shadow-2xl flex flex-col items-center gap-2.5 max-w-[240px] text-center pointer-events-auto">
+              <ShieldCheck className="w-8 h-8 text-[var(--primary)] animate-pulse" />
+              <span className="text-[11px] uppercase tracking-widest font-sans leading-snug">
+                Press again to exit
+              </span>
+            </div>
           </div>
         )}
 
