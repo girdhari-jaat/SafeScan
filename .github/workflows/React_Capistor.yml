@@ -21,7 +21,7 @@ jobs:
         run: |
           npm install --legacy-peer-deps
           npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
-          npm install @capacitor-community/media
+          npm install @capacitor-community/media @capacitor/filesystem @capacitor/share
 
       - name: Build React Web App
         run: |
@@ -37,11 +37,14 @@ jobs:
         run: |
           # Temporarily rename existing native android folder to prevent naming conflict with Capacitor's android platform
           if [ -d "android" ]; then
-            mv android-native
+            echo "Moving existing native android folder to android-native"
+            mv android android-native
           fi
 
-          # Initialize Capacitor configuration
-          npx cap init "SafeScan" "com.safescan.app" --web-dir=dist
+          # Initialize Capacitor configuration only if it doesn't exist
+          if [ ! -f "capacitor.config.json" ]; then
+            npx cap init "SafeScan" "com.safescan.app" --web-dir=dist
+          fi
 
           # Add android platform to Capacitor
           npx cap add android
@@ -64,7 +67,8 @@ jobs:
           "
 
           # Add Kotlin resolution strategy to resolve duplicate class issues
-          cat << 'EOF' >> android/build.gradle
+          if [ -f "android/build.gradle" ]; then
+            cat << 'EOF' >> android/build.gradle
 
           subprojects {
               configurations.all {
@@ -73,6 +77,7 @@ jobs:
               }
           }
           EOF
+          fi
 
           # Sync assets and web build files to the native Android platform project
           npx cap sync android
