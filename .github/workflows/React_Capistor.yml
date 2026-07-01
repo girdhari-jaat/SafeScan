@@ -60,6 +60,35 @@ jobs:
               content = content.replace(\"<application\", permissions + \"\n    <application\");
               // Also enable legacy storage for better compatibility on some Android 10/11 devices
               content = content.replace('<application', '<application android:requestLegacyExternalStorage=\"true\"');
+              
+              // Inject PDF Intent Filter
+              if (!content.includes('application/pdf')) {
+                const targetPattern = '<intent-filter>\\\\s*<action android:name=\"android.intent.action.MAIN\" />\\\\s*<category android:name=\"android.intent.category.LAUNCHER\" />\\\\s*</intent-filter>';
+                const replacementFilter = '<intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n            <intent-filter>\n                <action android:name=\"android.intent.action.VIEW\" />\n                <category android:name=\"android.intent.category.DEFAULT\" />\n                <category android:name=\"android.intent.category.BROWSABLE\" />\n                <data android:mimeType=\"application/pdf\" />\n                <data android:scheme=\"content\" />\n                <data android:scheme=\"file\" />\n            </intent-filter>';
+                
+                const regex = new RegExp(targetPattern, 'g');
+                if (regex.test(content)) {
+                  content = content.replace(regex, replacementFilter);
+                  console.log('Successfully injected PDF view intent-filter via regex!');
+                } else {
+                  const simpleTarget = '<intent-filter>\\n                <action android:name=\"android.intent.action.MAIN\" />\\n                <category android:name=\"android.intent.category.LAUNCHER\" />\\n            </intent-filter>';
+                  if (content.includes(simpleTarget)) {
+                    content = content.replace(simpleTarget, replacementFilter);
+                    console.log('Successfully injected PDF view intent-filter via simple string match!');
+                  } else {
+                    // Direct replace of a simpler segment if whitespace differs
+                    const simpleTarget2 = '<action android:name=\"android.intent.action.MAIN\" />\\n                <category android:name=\"android.intent.category.LAUNCHER\" />';
+                    const replacementFilter2 = '<action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n            <intent-filter>\n                <action android:name=\"android.intent.action.VIEW\" />\n                <category android:name=\"android.intent.category.DEFAULT\" />\n                <category android:name=\"android.intent.category.BROWSABLE\" />\n                <data android:mimeType=\"application/pdf\" />\n                <data android:scheme=\"content\" />\n                <data android:scheme=\"file\" />';
+                    if (content.includes(simpleTarget2)) {
+                      content = content.replace(simpleTarget2, replacementFilter2);
+                      console.log('Successfully injected PDF view intent-filter via action tag replacement!');
+                    } else {
+                      console.error('Warning: Launcher intent filter pattern not matched for PDF injection.');
+                    }
+                  }
+                }
+              }
+
               fs.writeFileSync(path, content, 'utf8');
               console.log('Successfully injected Camera and Storage permissions into AndroidManifest.xml!');
             }

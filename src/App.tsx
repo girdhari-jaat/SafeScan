@@ -247,6 +247,88 @@ export default function App() {
     triggerToast,
   } = useAppHook();
 
+  const [preloadedPdfFile, setPreloadedPdfFile] = React.useState<File | null>(null);
+
+  React.useEffect(() => {
+    let appUrlListenerPromise: Promise<any> | null = null;
+
+    const setupAppUrlListener = async () => {
+      const isCapacitor = typeof window !== 'undefined' && (window as any).Capacitor;
+      if (!isCapacitor) return;
+
+      try {
+        const { App: CapApp } = await import('@capacitor/app');
+        const { Filesystem } = await import('@capacitor/filesystem');
+
+        const handleUrlOpen = async (data: { url: string }) => {
+          if (!data.url) return;
+          
+          const lowercaseUrl = data.url.toLowerCase();
+          if (data.url.startsWith('content://') || data.url.startsWith('file://') || lowercaseUrl.endsWith('.pdf')) {
+            try {
+              triggerToast("Opening PDF file...");
+              
+              const fileResult = await Filesystem.readFile({
+                path: data.url
+              });
+              
+              const base64Data = fileResult.data;
+              if (!base64Data) {
+                triggerToast("Unable to read PDF data");
+                return;
+              }
+              
+              const response = await fetch(`data:application/pdf;base64,${base64Data}`);
+              const blob = await response.blob();
+              
+              let fileName = "Imported_Document.pdf";
+              try {
+                const parts = data.url.split('/');
+                const lastPart = parts[parts.length - 1];
+                if (lastPart) {
+                  fileName = decodeURIComponent(lastPart);
+                  if (!fileName.toLowerCase().endsWith('.pdf')) {
+                    fileName += ".pdf";
+                  }
+                }
+              } catch (e) {
+                console.warn("Failed to decode filename", e);
+              }
+
+              const pdfFile = new File([blob], fileName, { type: 'application/pdf' });
+              
+              setActiveDocId(null);
+              setPreloadedPdfFile(pdfFile);
+              setCurrentView("pdf");
+            } catch (err: any) {
+              console.error("Error opening pdf from intent URI:", err);
+              triggerToast("Failed to load PDF: " + (err.message || String(err)));
+            }
+          }
+        };
+
+        appUrlListenerPromise = CapApp.addListener('appUrlOpen', (data) => {
+          handleUrlOpen(data);
+        });
+
+        const launchUrlResult = await CapApp.getLaunchUrl();
+        if (launchUrlResult && launchUrlResult.url) {
+          handleUrlOpen(launchUrlResult);
+        }
+      } catch (err) {
+        console.error('Failed to set up appUrlOpen listener:', err);
+      }
+    };
+
+    setupAppUrlListener();
+
+    return () => {
+      if (appUrlListenerPromise) {
+        appUrlListenerPromise.then(l => l.remove()).catch(err => console.error(err));
+      }
+    };
+  }, [setCurrentView, setActiveDocId, triggerToast]);
+
   const handleExitAttempt = React.useCallback(async () => {
     const now = Date.now();
     if (now - lastBackButtonPressRef.current < 2000) {
@@ -816,6 +898,8 @@ export default function App() {
                     ref={pdfReaderRef}
                     onImportPage={handlePDFPageImport}
                     onClose={handleClosePDF}
+                    preloadedFile={preloadedPdfFile}
+                    onClearPreloadedFile={() => setPreloadedPdfFile(null)}
                     onScroll={(e) =>
                       handleScrollEvent("pdf-viewport", e.currentTarget.scrollTop)
                     }
