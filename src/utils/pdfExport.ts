@@ -187,6 +187,7 @@ export async function saveOrShareBlob(
   if (Capacitor.isNativePlatform()) {
     const { Filesystem, Directory } = await import("@capacitor/filesystem");
     const { Share } = await import("@capacitor/share");
+    const { Toast } = await import("@capacitor/toast");
     const base64Data = await blobToBase64(blob);
 
     const isImage =
@@ -194,16 +195,7 @@ export async function saveOrShareBlob(
       fileName.toLowerCase().endsWith(".png");
 
     if (isImage) {
-      // Use Directory.External to write to Android/data/com.safescan.app/files/SafeScan/ (No permissions needed on Android 11+)
-      await Filesystem.writeFile({
-        path: `SafeScan/${fileName}`,
-        data: base64Data,
-        directory: Directory.External,
-        recursive: true,
-      });
-      alert(`Image saved in Android/data/.../SafeScan`);
-    } else {
-      // Save PDF to Directory.External so it persists on the device, then share
+      const { Media } = await import("@capacitor-community/media");
       const writeResult = await Filesystem.writeFile({
         path: `SafeScan/${fileName}`,
         data: base64Data,
@@ -211,9 +203,58 @@ export async function saveOrShareBlob(
         recursive: true,
       });
 
-      alert(`PDF saved in Android/data/.../SafeScan`);
+      try {
+        const { albums } = await Media.getAlbums();
+        const album = albums.find((a) => a.name === "SafeScan");
 
+        await Media.savePhoto({
+          path: writeResult.uri,
+          albumIdentifier: album?.identifier,
+          fileName: fileName.replace(/\.[^/.]+$/, ""), // Remove extension for fileName prop
+        });
+
+        await Toast.show({
+          text: `Image saved in Gallery (DCIM/SafeScan)`,
+          duration: "short",
+          position: "bottom",
+        });
+      } catch (err) {
+        console.error("Media save error:", err);
+        // Fallback for when album creation/access fails but file is already written
+        await Toast.show({
+          text: `Image saved in SafeScan folder`,
+          duration: "short",
+          position: "bottom",
+        });
+      }
+
+      if (!forceSaveDirectly) {
+        await Share.share({
+          title: fileName,
+          text: "Scanned Image",
+          files: [writeResult.uri],
+        });
+      }
+      return;
+    }
+
+    const writeResult = await Filesystem.writeFile({
+      path: `SafeScan/${fileName}`,
+      data: base64Data,
+      directory: Directory.External,
+      recursive: true,
+    });
+
+    await Toast.show({
+      text: `PDF saved to SafeScan folder`,
+      duration: "short",
+      position: "bottom",
+    });
+
+    if (!forceSaveDirectly) {
       await Share.share({
+        title: fileName,
+        text: "Scanned Document",
         files: [writeResult.uri],
       });
     }
