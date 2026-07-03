@@ -13,7 +13,6 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@capacitor-community/image-to-text": "^8.0.0",
     "@capacitor-community/media": "^9.1.0",
     "@capacitor-mlkit/barcode-scanning": "latest",
     "@capacitor-mlkit/document-scanner": "^8.1.0",
