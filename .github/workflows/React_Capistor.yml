@@ -21,7 +21,7 @@ jobs:
         run: |
           npm install --legacy-peer-deps
           npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
-          npm install @capacitor-community/media @capacitor/filesystem @capacitor/share @capacitor/toast @capacitor-mlkit/document-scanner @capacitor-mlkit/barcode-scanning
+          npm install @capacitor-community/media @capacitor/filesystem @capacitor/share @capacitor/toast @capacitor-mlkit/document-scanner @capacitor-mlkit/barcode-scanning @pantrist/capacitor-plugin-ml-kit-text-recognition
 
       - name: Build React Web App
         run: |
@@ -91,7 +91,7 @@ jobs:
 
               // Inject ML Kit dependencies metadata so that the models are downloaded on-demand (keeping APK unbundled and small)
               if (!content.includes('com.google.mlkit.vision.DEPENDENCIES')) {
-                const metadataTag = '    <meta-data android:name=\"com.google.mlkit.vision.DEPENDENCIES\" android:value=\"barcode\" />\n    </application>';
+                const metadataTag = '    <meta-data android:name=\"com.google.mlkit.vision.DEPENDENCIES\" android:value=\"ocr,barcode\" />\n    </application>';
                 content = content.replace('</application>', metadataTag);
                 console.log('Successfully injected ML Kit unbundled dependencies metadata!');
               }
