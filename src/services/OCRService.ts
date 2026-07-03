@@ -1,4 +1,3 @@
-import { Ocr } from '@capacitor-community/image-to-text';
 
 export class OCRService {
   public static async processImage(base64Data: string, documentTitle: string): Promise<any> {
