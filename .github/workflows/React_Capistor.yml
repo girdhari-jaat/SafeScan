@@ -21,7 +21,7 @@ jobs:
         run: |
           npm install --legacy-peer-deps
           npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
-          npm install @capacitor-community/media @capacitor/filesystem @capacitor/share @capacitor/toast @capacitor-mlkit/document-scanner @capacitor-mlkit/text-recognition @capacitor-mlkit/barcode-scanning
+          npm install @capacitor-community/media @capacitor/filesystem @capacitor/share @capacitor/toast @capacitor-mlkit/document-scanner @capacitor-mlkit/barcode-scanning
 
       - name: Build React Web App
         run: |
@@ -117,7 +117,7 @@ jobs:
 
           # Add Kotlin resolution strategy to resolve duplicate class issues
           if [ -f "android/build.gradle" ]; then
-            cat << 'EOF' >> android/build.gradle
+            cat << 'INNER_EOF' >> android/build.gradle
 
           subprojects {
               configurations.all {
@@ -125,7 +125,7 @@ jobs:
                   exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
               }
           }
-          EOF
+INNER_EOF
           fi
 
           # Sync assets and web build files to the native Android platform project

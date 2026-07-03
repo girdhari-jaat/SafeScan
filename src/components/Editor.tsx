@@ -16,7 +16,6 @@ import { ZoomableImage } from './ZoomableImage';
 import { globalRenderCountRef, addLog } from '../utils/renderStats';
 import { useSharedSettings } from '../lib/useSharedSettings';
 import { useTranslation, Language } from '../lib/i18n';
-import { OCRService } from '../services/OCRService';
 import { BarcodeService } from '../services/BarcodeService';
 
 interface EditorProps {
@@ -434,10 +433,10 @@ function Editor({
         if (barcodeResult.success) {
           parsed = barcodeResult;
         } else {
-          parsed = await OCRService.processImage(base64DataString, activeDocument.title);
+          parsed = { success: false, error: "No barcode found in the document" };
         }
       } catch (err: any) {
-         parsed = { success: false, error: err.message || "Local OCR/Barcode scan failed" };
+         parsed = { success: false, error: err.message || "Local Barcode scan failed" };
       }
 
       if (!parsed.success) {

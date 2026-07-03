@@ -22,7 +22,6 @@ class OcrEngine {
             Barcode.FORMAT_ALL_FORMATS
         )
         .build()
-
     private val barcodeScanner = BarcodeScanning.getClient(barcodeScannerOptions)
 
     suspend fun recognizeText(bitmap: Bitmap): AppResult<List<String>> = withContext(Dispatchers.IO) {
