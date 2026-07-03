@@ -89,6 +89,13 @@ jobs:
                 }
               }
 
+              // Inject ML Kit dependencies metadata so that the models are downloaded on-demand (keeping APK unbundled and small)
+              if (!content.includes('com.google.mlkit.vision.DEPENDENCIES')) {
+                const metadataTag = '    <meta-data android:name=\"com.google.mlkit.vision.DEPENDENCIES\" android:value=\"barcode\" />\n    </application>';
+                content = content.replace('</application>', metadataTag);
+                console.log('Successfully injected ML Kit unbundled dependencies metadata!');
+              }
+
               fs.writeFileSync(path, content, 'utf8');
               console.log('Successfully injected Camera and Storage permissions into AndroidManifest.xml!');
             }
