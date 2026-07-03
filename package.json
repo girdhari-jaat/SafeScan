@@ -16,6 +16,7 @@
     "@capacitor-community/media": "^9.1.0",
     "@capacitor-mlkit/barcode-scanning": "latest",
     "@capacitor-mlkit/document-scanner": "^8.1.0",
+    "@capacitor-mlkit/text-recognition": "latest",
     "@capacitor/app": "^8.1.0",
     "@capacitor/core": "^8.4.1",
     "@capacitor/filesystem": "^8.1.2",
