@@ -1,64 +1,151 @@
-name: Android CI
+name: Build React Capacitor APK
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build Release APK
+  build-capacitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    defaults:
-      run:
-        working-directory: android
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install All Dependencies
+        run: |
+          npm install --legacy-peer-deps
+          npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
+          npm install @capacitor-community/media @capacitor/filesystem @capacitor/share @capacitor/toast @capacitor-mlkit/document-scanner
+
+      - name: Build React Web App
+        run: |
+          npm run build
+
+      - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
-          java-version: "17"
-          distribution: "zulu"
+          java-version: "21"
+          distribution: "temurin"
 
-      - name: Setup Android SDK 36
-        uses: android-actions/setup-android@v3
-        with:
-          api-level: 36
-          build-tools: 36.0.0
+      - name: Setup Capacitor and Build Android Project
+        run: |
+          # Temporarily rename existing native android folder to prevent naming conflict with Capacitor's android platform
+          if [ -d "android" ]; then
+            echo "Moving existing native android folder to android-native"
+            mv android android-native
+          fi
 
-      - name: Setup Gradle
+          # Initialize Capacitor configuration only if it doesn't exist
+          if [ ! -f "capacitor.config.json" ]; then
+            npx cap init "SafeScan" "com.safescan.app" --web-dir=dist
+          fi
+
+          # Add android platform to Capacitor
+          npx cap add android
+
+          # Inject Camera, Flashlight and Storage permissions into AndroidManifest.xml
+          node -e "
+          const fs = require('fs');
+          const path = 'android/app/src/main/AndroidManifest.xml';
+          if (fs.existsSync(path)) {
+            let content = fs.readFileSync(path, 'utf8');
+            if (!content.includes('android.permission.CAMERA')) {
+              const permissions = '    <uses-permission android:name=\"android.permission.INTERNET\" />\n    <uses-permission android:name=\"android.permission.CAMERA\" />\n    <uses-permission android:name=\"android.permission.FLASHLIGHT\" />\n    <uses-permission android:name=\"android.permission.VIBRATE\" />\n    <uses-permission android:name=\"android.permission.READ_EXTERNAL_STORAGE\" />\n    <uses-permission android:name=\"android.permission.WRITE_EXTERNAL_STORAGE\" android:maxSdkVersion=\"28\" />\n    <uses-permission android:name=\"android.permission.READ_MEDIA_IMAGES\" />\n    <uses-feature android:name=\"android.hardware.camera\" android:required=\"false\" />\n    <uses-feature android:name=\"android.hardware.camera.autofocus\" android:required=\"false\" />\n    <uses-feature android:name=\"android.hardware.camera.flash\" android:required=\"false\" />';
+              content = content.replace(\"<application\", permissions + \"\n    <application\");
+              // Also enable legacy storage and hardware acceleration for better performance
+              content = content.replace('<application', '<application android:requestLegacyExternalStorage=\"true\" android:hardwareAccelerated=\"true\"');
+              
+              // Inject PDF Intent Filter
+              if (!content.includes('application/pdf')) {
+                const targetPattern = '<intent-filter>\\\\s*<action android:name=\"android.intent.action.MAIN\" />\\\\s*<category android:name=\"android.intent.category.LAUNCHER\" />\\\\s*</intent-filter>';
+                const replacementFilter = '<intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n            <intent-filter>\n                <action android:name=\"android.intent.action.VIEW\" />\n                <category android:name=\"android.intent.category.DEFAULT\" />\n                <category android:name=\"android.intent.category.BROWSABLE\" />\n                <data android:mimeType=\"application/pdf\" />\n                <data android:scheme=\"content\" />\n                <data android:scheme=\"file\" />\n            </intent-filter>';
+                
+                const regex = new RegExp(targetPattern, 'g');
+                if (regex.test(content)) {
+                  content = content.replace(regex, replacementFilter);
+                  console.log('Successfully injected PDF view intent-filter via regex!');
+                } else {
+                  const simpleTarget = '<intent-filter>\\n                <action android:name=\"android.intent.action.MAIN\" />\\n                <category android:name=\"android.intent.category.LAUNCHER\" />\\n            </intent-filter>';
+                  if (content.includes(simpleTarget)) {
+                    content = content.replace(simpleTarget, replacementFilter);
+                    console.log('Successfully injected PDF view intent-filter via simple string match!');
+                  } else {
+                    // Direct replace of a simpler segment if whitespace differs
+                    const simpleTarget2 = '<action android:name=\"android.intent.action.MAIN\" />\\n                <category android:name=\"android.intent.category.LAUNCHER\" />';
+                    const replacementFilter2 = '<action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n            <intent-filter>\n                <action android:name=\"android.intent.action.VIEW\" />\n                <category android:name=\"android.intent.category.DEFAULT\" />\n                <category android:name=\"android.intent.category.BROWSABLE\" />\n                <data android:mimeType=\"application/pdf\" />\n                <data android:scheme=\"content\" />\n                <data android:scheme=\"file\" />';
+                    if (content.includes(simpleTarget2)) {
+                      content = content.replace(simpleTarget2, replacementFilter2);
+                      console.log('Successfully injected PDF view intent-filter via action tag replacement!');
+                    } else {
+                      console.error('Warning: Launcher intent filter pattern not matched for PDF injection.');
+                    }
+                  }
+                }
+              }
+
+              fs.writeFileSync(path, content, 'utf8');
+              console.log('Successfully injected Camera and Storage permissions into AndroidManifest.xml!');
+            }
+          } else {
+            console.error('AndroidManifest.xml not found!');
+          }
+          "
+
+          # Enable Minification (Proguard) and Fallback Signing configuration in android/app/build.gradle
+          node -e "
+          const fs = require('fs');
+          const path = 'android/app/build.gradle';
+          if (fs.existsSync(path)) {
+            let content = fs.readFileSync(path, 'utf8');
+            if (content.includes('minifyEnabled false')) {
+              content = content.replace('minifyEnabled false', 'minifyEnabled true\n            signingConfig signingConfigs.debug');
+              fs.writeFileSync(path, content, 'utf8');
+              console.log('Successfully configured build.gradle with minifyEnabled true and debug signing fallback!');
+            } else {
+              console.log('Warning: minifyEnabled false not found or already modified in build.gradle');
+            }
+          } else {
+            console.error('build.gradle not found at ' + path);
+          }
+          "
+
+          # Add Kotlin resolution strategy to resolve duplicate class issues
+          if [ -f "android/build.gradle" ]; then
+            cat << 'EOF' >> android/build.gradle
+
+          subprojects {
+              configurations.all {
+                  exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+                  exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+              }
+          }
+          EOF
+          fi
+
+          # Sync assets and web build files to the native Android platform project
+          npx cap sync android
+
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: "8.5"
           build-root-directory: android
 
-      - name: Build Release APK
+      - name: Build Capacitor APK
         run: |
-          gradle assembleRelease --no-daemon
-        env:
-          ANDROID_KEYSTORE_FILE: ${{ secrets.ANDROID_KEYSTORE_FILE }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
+          name: capacitor-release-apk
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
-
-#    - name: Run Instrumentation Tests on Android Emulator
-#      uses: reactivecircus/android-emulator-runner@v2
-#      with:
-#        api-level: 34
-#        target: google_apis
-#        arch: x86_64
-#        profile: Nexus 6
-#        disable-animations: true
-#        working-directory: android
-#        emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-audio -no-boot-anim -camera-back none -camera-front none -memory 2048
-#        script: |
-#          gradle connectedAndroidTest --no-daemon --stacktrace
