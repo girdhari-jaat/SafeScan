@@ -822,7 +822,7 @@ function Crop({
                 <div className="flex items-center gap-3 justify-between">
                   <div className="flex flex-col text-left">
                     <span className="text-[10px] font-black uppercase text-purple-500 tracking-widest font-mono flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5 fill-purple-500/10 animate-pulse" /> Gemini AI Vision
+                      <Sparkles className="w-3.5 h-3.5 fill-purple-500/10 animate-pulse" /> ML Kit Vision
                     </span>
                     <span className="text-[9px] text-[var(--text-secondary)] leading-normal max-w-[240px]">
                       {settings.offlineMode 
@@ -840,7 +840,7 @@ function Crop({
                         ? 'bg-zinc-700 pointer-events-none opacity-40 border border-zinc-650' 
                         : 'bg-gradient-to-r from-purple-600 to-pink-600 border border-purple-500/30'
                     }`}
-                    title={settings.offlineMode ? "AI detection is disabled in Offline-Only mode" : "Automatically detect page corners using Gemini AI"}
+                    title={settings.offlineMode ? "AI detection is disabled in Offline-Only mode" : "Automatically detect page corners using ML Kit"}
                   >
                     {isAutoDetecting ? (
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />

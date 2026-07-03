@@ -86,9 +86,6 @@ function getSelectedQuality(sourceType?: string): 'Fast' | 'Standard' | 'High' {
   return 'Fast';
 }
 
-const workerProcessCache = new Map<string, Blob>();
-const workerWarpCache = new Map<string, ImageBitmap>();
-
 const workerAPI = {
   async detectCorners(bitmap: ImageBitmap, scanMode: 'paper' | 'card' | 'grid' | 'cnic' | 'idcard' | 'a4' = 'paper', isRealtime: boolean = false) {
     let w = 0;
@@ -131,80 +128,11 @@ const workerAPI = {
       ctx.filter = 'grayscale(100%)';
       ctx.drawImage(bitmap, cropX, cropY, cropW, cropH, 0, 0, sw, sh);
 
-      // Try Gemini AI first for robust detection
+      // Try ML Kit AI first for robust detection
       let aiSucceeded = false;
       let aiErrorMsg: string | null = null;
       if (!isRealtime) {
-        try {
-          // Compress aggressively to save bandwidth
-          const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.1 });
-          const reader = new FileReader();
-          const base64Promise = new Promise<string>((resolve, reject) => {
-            reader.onloadend = () => {
-              const res = reader.result as string;
-              resolve(res.split(',')[1]);
-            };
-            reader.onerror = reject;
-          });
-          reader.readAsDataURL(blob);
-          const base64 = await base64Promise;
-
-          const response = await fetch('/api/gemini/detect-edges', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageBase64: base64 })
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            if (data.points && Array.isArray(data.points) && data.points.length === 4) {
-              // Convert and normalize points dynamically (handles 0.0-1.0, 0-100%, or downscaled pixel space)
-              adjustedCorners = data.points.map((pt: any) => {
-                let px = parseFloat(pt.x);
-                let py = parseFloat(pt.y);
-                if (isNaN(px) || isNaN(py)) {
-                  px = 0.5;
-                  py = 0.5;
-                }
-                
-                // Check if coords are in pixels or percentage (> 1.0)
-                if (px > 1.0 || py > 1.0) {
-                  if (px <= 100.0 && py <= 100.0) {
-                    // Normalize percentage to 0.0 - 1.0
-                    px /= 100.0;
-                    py /= 100.0;
-                  } else {
-                    // Normalize downscaled pixel coordinates relative to sw and sh
-                    px /= sw;
-                    py /= sh;
-                  }
-                }
-                
-                // Clamp strictly to [0, 1] range to avoid out of bounds mapping
-                px = Math.max(0, Math.min(1, px));
-                py = Math.max(0, Math.min(1, py));
-
-                return {
-                  x: px * w,
-                  y: py * h
-                };
-              });
-              aiSucceeded = true;
-            } else {
-              aiErrorMsg = "Invalid response structure from server";
-            }
-          } else {
-            try {
-              const errData = await response.json();
-              aiErrorMsg = errData.error || `Server returned status ${response.status}`;
-            } catch (jsonErr) {
-              aiErrorMsg = `Server returned status ${response.status}`;
-            }
-          }
-        } catch (err: any) {
-          console.warn('Gemini edge detection failed, falling back to local vision engine:', err);
-          aiErrorMsg = err.message || "Network request failed";
-        }
+        aiSucceeded = false;
       }
 
       // Fallback to local CV engine if AI failed
@@ -369,35 +297,14 @@ const workerAPI = {
     adjustments: any,
     sourceType?: string
   ) {
-    const hashData = { corners, rotation, filter, adjustments, sourceType };
-    const hash = `wk_proc|${JSON.stringify(hashData)}`;
-    
-    if (workerProcessCache.has(hash)) {
-      imageBitmap.close();
-      return workerProcessCache.get(hash)!;
-    }
-
     const blob = await processFinalImage(imageBitmap, corners, rotation, filter, adjustments, sourceType);
     imageBitmap.close();
-    
-    workerProcessCache.set(hash, blob);
-    if (workerProcessCache.size > 20) {
-      const first = workerProcessCache.keys().next().value;
-      if (first) workerProcessCache.delete(first);
-    }
     return blob;
   },
   async warpPreview(
     imageBitmap: ImageBitmap,
     meta: { cropPoints: any; rotate: number; filter: string; adjustments: any; scanMode?: 'paper' | 'card' | 'grid' | 'idcard' | 'a4' | 'cnic' }
   ) {
-    const hash = `wk_warp|${JSON.stringify(meta)}`;
-    if (workerWarpCache.has(hash)) {
-      const cached = workerWarpCache.get(hash)!;
-      imageBitmap.close();
-      return createImageBitmap(cached);
-    }
-
     const w = imageBitmap.width;
     const h = imageBitmap.height;
 
@@ -545,22 +452,9 @@ const workerAPI = {
 
     const resultBitmap = rotatedCanvas.transferToImageBitmap();
     
-    // Store in cache
-    workerWarpCache.set(hash, resultBitmap);
-    if (workerWarpCache.size > 15) {
-      const first = workerWarpCache.keys().next().value;
-      if (first) {
-        const old = workerWarpCache.get(first);
-        if (old) old.close();
-        workerWarpCache.delete(first);
-      }
-    }
-
     imageBitmap.close(); // Immediate cleanup!
 
-    // Return a copy so the cache stays valid (Zero-copy transfer of the copy)
-    const transferBitmap = await createImageBitmap(resultBitmap);
-    return Comlink.transfer(transferBitmap, [transferBitmap]);
+    return Comlink.transfer(resultBitmap, [resultBitmap]);
   },
   async generatePDFOffThread(
     pagesData: { blob: Blob; page: any }[],

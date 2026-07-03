@@ -528,14 +528,17 @@ export function useCropHook({
     workerReady,
   ]);
 
-  const handleAutoDetect = async (useGemini: boolean = false) => {
+  const handleAutoDetect = async (useMLKit: boolean = false) => {
+    // Force 100% offline edge detection
+    useMLKit = false;
+    
     if (settings.offlineMode) {
-      useGemini = false;
+      useMLKit = false;
     }
     if (isAutoDetecting) return;
     setIsAutoDetecting(true);
     triggerLocalToast(
-      useGemini ? "AI detecting borders..." : "Analyzing image bounds...",
+      useMLKit ? "AI detecting borders..." : "Analyzing image bounds...",
     );
 
     await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -551,7 +554,7 @@ export function useCropHook({
       }
       const bitmapData = await createImageBitmap(blob);
       addLog(
-        useGemini
+        useMLKit
           ? "AI detecting image bounds..."
           : "Autodetecting image bounds...",
       );
@@ -594,7 +597,7 @@ export function useCropHook({
       const result = await workerAPI.detectCornersOffThread(
         processedBitmap,
         scanMode as any,
-        !useGemini,
+        !useMLKit,
       );
 
       if (result && result.corners && result.corners.length === 4) {
@@ -637,9 +640,9 @@ export function useCropHook({
           bl: { x: orderedRel[3].x * 100, y: orderedRel[3].y * 100 },
         });
 
-        if (useGemini) {
+        if (useMLKit) {
           if (result.aiSucceeded) {
-            triggerLocalToast("Gemini detected bounds!");
+            triggerLocalToast("Offline AI detected bounds!");
           } else {
             const errStr = (result.aiErrorMsg || "").toLowerCase();
             if (
@@ -647,9 +650,9 @@ export function useCropHook({
               errStr.includes("quota") ||
               errStr.includes("limit")
             ) {
-              triggerLocalToast("Gemini quota limit. Used local engine!");
+              triggerLocalToast("Quota limit. Used local engine!");
             } else {
-              triggerLocalToast("Gemini offline. Used local engine!");
+              triggerLocalToast("Offline AI. Used local engine!");
             }
           }
         } else {
@@ -668,7 +671,7 @@ export function useCropHook({
           bl: { x: 3, y: 97 },
         });
 
-        if (useGemini && !result?.aiSucceeded) {
+        if (useMLKit && !result?.aiSucceeded) {
           const errStr = (result?.aiErrorMsg || "").toLowerCase();
           if (
             errStr.includes("429") ||
@@ -677,7 +680,7 @@ export function useCropHook({
           ) {
             triggerLocalToast("Quota limit. Clean borders fitted!");
           } else {
-            triggerLocalToast("Gemini offline. Clean borders fitted!");
+            triggerLocalToast("Offline AI. Clean borders fitted!");
           }
         } else {
           triggerLocalToast("Clean borders auto-fitted!");

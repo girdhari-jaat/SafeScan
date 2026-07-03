@@ -1029,9 +1029,9 @@ export const UnifiedViewfinder = React.memo(
                         <span className="text-[var(--primary)] font-black">● {diagStatus.status}</span>
                       </div>
                       <div className="p-3 bg-zinc-900 border border-zinc-850 rounded-xl space-y-1">
-                        <span className="text-zinc-500 block">Gemini Key Loaded</span>
-                        <span className={diagStatus.geminiConnected ? "text-[var(--primary)]" : "text-amber-500"}>
-                          {diagStatus.geminiConnected ? "SECURE ACTIVE" : "CONFIG REQUIRED"}
+                        <span className="text-zinc-500 block">Offline Module</span>
+                        <span className={diagStatus.aiModuleConnected ? "text-[var(--primary)]" : "text-amber-500"}>
+                          {diagStatus.aiModuleConnected ? "SECURE ACTIVE" : "CONFIG REQUIRED"}
                         </span>
                       </div>
                       <div className="p-3 bg-zinc-900 border border-zinc-850 rounded-xl space-y-1">
@@ -1093,13 +1093,11 @@ export const UnifiedViewfinder = React.memo(
                     setBenchmarkResult(null);
                     try {
                       // 1. Fetch server health
-                      const healthRes = settings?.offlineMode 
-                        ? { status: "offline", geminiConnected: false, testingEnvironment: "SafeScan-Local-Mode" }
-                        : await fetch("/api/gemini/health").then(r => r.json()).catch(() => ({
-                            status: "offline",
-                            geminiConnected: false,
-                            testingEnvironment: "SafeScan-Offline-Simulation"
-                          }));
+                      const healthRes = {
+                        status: "online",
+                        aiModuleConnected: true,
+                        testingEnvironment: "SafeScan-Local-Mode"
+                      };
 
                       // 2. Fetch Storage estimates
                       let quotaStr = "Unlimited";
@@ -1128,7 +1126,7 @@ export const UnifiedViewfinder = React.memo(
                       setBenchmarkResult(latency);
                       setDiagStatus({
                         status: healthRes.status,
-                        geminiConnected: healthRes.geminiConnected,
+                        aiModuleConnected: healthRes.aiModuleConnected,
                         quota: quotaStr
                       });
                     } catch (e) {

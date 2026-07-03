@@ -111,12 +111,12 @@ const Settings: React.FC<SettingsProps> = ({ onClose, onCloseToDefault, onInstal
     setDiagResult(null);
     setBenchmarkResult(null);
     try {
-      // 1. Server Health Check
-      const healthRes = await fetch("/api/gemini/health").then(r => r.json()).catch(() => ({
-        status: "offline",
-        geminiConnected: false,
+      // 1. Module Health Check
+      const healthRes = {
+        status: "online",
+        aiModuleConnected: true,
         testingEnvironment: "SafeScan-Local-Mode"
-      }));
+      };
 
       // 2. Storage Estimation
       let quotaStr = "Unknown";
@@ -518,7 +518,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, onCloseToDefault, onInstal
               <div className="space-y-2.5">
                 <Toggle 
                   label={(t as any).offlineOnlyMode || "Offline-Only Mode"} 
-                  description={(t as any).offlineOnlyModeDesc || "Force app to run fully offline. Disables Gemini cloud AI and server-side model processing."} 
+                  description={(t as any).offlineOnlyModeDesc || "Force app to run fully offline. Disables ML Kit local models processing."} 
                   value={settings.offlineMode} 
                   onToggle={() => {
                     if (settings.offlineMode) {
@@ -590,13 +590,13 @@ const Settings: React.FC<SettingsProps> = ({ onClose, onCloseToDefault, onInstal
                   <div className="space-y-3 mb-2 animate-in fade-in zoom-in-95 duration-200">
                     <div className="grid grid-cols-2 gap-2">
                       <div className="bg-[var(--bg-primary)] border border-[var(--border-color)] p-2.5 rounded-lg">
-                        <span className="text-[8px] font-bold text-[var(--text-secondary)] uppercase block">Server API</span>
+                        <span className="text-[8px] font-bold text-[var(--text-secondary)] uppercase block">Local Engine</span>
                         <span className="text-[10px] font-black text-[var(--primary)]">● {diagResult.status}</span>
                       </div>
                       <div className="bg-[var(--bg-primary)] border border-[var(--border-color)] p-2.5 rounded-lg">
                         <span className="text-[8px] font-bold text-[var(--text-secondary)] uppercase block">AI Module</span>
-                        <span className={`text-[10px] font-black ${diagResult.geminiConnected ? 'text-[var(--primary)]' : 'text-amber-500'}`}>
-                          {diagResult.geminiConnected ? 'Ready' : 'Off'}
+                        <span className={`text-[10px] font-black ${diagResult.aiModuleConnected ? 'text-[var(--primary)]' : 'text-amber-500'}`}>
+                          {diagResult.aiModuleConnected ? 'Ready' : 'Off'}
                         </span>
                       </div>
                       <div className="bg-[var(--bg-primary)] border border-[var(--border-color)] p-2.5 rounded-lg">

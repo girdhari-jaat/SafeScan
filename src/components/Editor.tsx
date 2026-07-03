@@ -16,6 +16,8 @@ import { ZoomableImage } from './ZoomableImage';
 import { globalRenderCountRef, addLog } from '../utils/renderStats';
 import { useSharedSettings } from '../lib/useSharedSettings';
 import { useTranslation, Language } from '../lib/i18n';
+import { OCRService } from '../services/OCRService';
+import { BarcodeService } from '../services/BarcodeService';
 
 interface EditorProps {
   document: ScanDocument;
@@ -423,24 +425,23 @@ function Editor({
         reader.readAsDataURL(blob);
       });
 
-      // 3. Synchronize with our secure offline-ready Express server API
-      const apiResponse = await fetch('/api/gemini/analyze', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          base64Data,
-          mimeType: blob.type || 'image/jpeg',
-          documentTitle: activeDocument.title,
-          targetLanguage: targetLanguage,
-          appName: settings.customAppName || "SafeScan"
-        }),
-      });
+      // 3. Synchronize with our secure offline-ready ML Kit services
+      const base64DataString = base64Data.split(',')[1] || base64Data;
+      let parsed;
+      try {
+        // Try barcode first
+        const barcodeResult = await BarcodeService.processImage(base64DataString);
+        if (barcodeResult.success) {
+          parsed = barcodeResult;
+        } else {
+          parsed = await OCRService.processImage(base64DataString, activeDocument.title);
+        }
+      } catch (err: any) {
+         parsed = { success: false, error: err.message || "Local OCR/Barcode scan failed" };
+      }
 
-      const parsed = await apiResponse.json();
-      if (!apiResponse.ok || !parsed.success) {
-        throw new Error(parsed.error || "Server-side analysis failed. Check server logs or configure GEMINI_API_KEY.");
+      if (!parsed.success) {
+        throw new Error(parsed.error || "Local analysis failed.");
       }
 
       setAiResult(parsed.data);
@@ -1009,7 +1010,7 @@ function Editor({
                   </div>
                   <div className="text-center font-mono space-y-1">
                     <p className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">
-                      Analyzing with Gemini-3.5-flash...
+                      Analyzing with Local Engine...
                     </p>
                     <p className="text-[10px] text-[var(--text-secondary)]">
                       Scanning OCR boundaries, extracting layout & values
