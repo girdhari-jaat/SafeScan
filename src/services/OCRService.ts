@@ -1,32 +1,17 @@
-import { TextRecognition } from '@capacitor-mlkit/text-recognition';
-import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Ocr } from '@capacitor-community/image-to-text';
 
 export class OCRService {
   public static async processImage(base64Data: string, documentTitle: string): Promise<any> {
-    const tempFileName = `temp_ocr_${Date.now()}.jpg`;
-    
     try {
-      const writeResult = await Filesystem.writeFile({
-        path: tempFileName,
-        data: base64Data,
-        directory: Directory.Cache
+      const result = await Ocr.detectText({
+        base64: base64Data,
       });
 
-      const result = await TextRecognition.recognizeText({
-        path: writeResult.uri,
-      });
-
-      // Cleanup
-      await Filesystem.deleteFile({
-        path: tempFileName,
-        directory: Directory.Cache
-      }).catch(console.error);
-
-      if (!result || !result.text) {
+      if (!result || !result.textDetections || result.textDetections.length === 0) {
          throw new Error("No text found in the document");
       }
 
-      const text = result.text;
+      const text = result.textDetections.map(d => d.text).join('\n');
       
       // Basic extraction simulating Gemini
       const summaryText = text.substring(0, 150) + (text.length > 150 ? '...' : '');

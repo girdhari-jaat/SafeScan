@@ -13,16 +13,17 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@capacitor-community/image-to-text": "^8.0.0",
     "@capacitor-community/media": "^9.1.0",
     "@capacitor-mlkit/barcode-scanning": "latest",
     "@capacitor-mlkit/document-scanner": "^8.1.0",
-    "@capacitor-mlkit/text-recognition": "latest",
     "@capacitor/app": "^8.1.0",
     "@capacitor/core": "^8.4.1",
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/share": "^8.0.1",
     "@capacitor/toast": "^8.0.1",
     "@google/genai": "^2.9.0",
+    "@pantrist/capacitor-plugin-ml-kit-text-recognition": "^8.0.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "comlink": "^4.4.2",
