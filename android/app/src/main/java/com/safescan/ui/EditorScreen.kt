@@ -516,7 +516,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
             text = {
                 Box(
                     modifier = Modifier
-                        .maxHeight(300.dp)
+                        .heightIn(max = 300.dp)
                         .verticalScroll(rememberScrollState())
                 ) {
                     Text(text)
@@ -584,6 +584,72 @@ fun PopoverMenuItem(
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+fun FilterItem(
+    filterType: FilterType,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val displayName = when (filterType) {
+        FilterType.COLOR -> "Original"
+        FilterType.GRAYSCALE -> "Grayscale"
+        FilterType.BLACK_WHITE -> "B&W"
+        FilterType.MAGIC_COLOR -> "Magic"
+        FilterType.PHOTO -> "Photo"
+        FilterType.BLACK_WHITE_2 -> "B&W 2"
+    }
+
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick)
+            .border(
+                width = 2.dp,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = displayName,
+            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium,
+            fontSize = 13.sp
+        )
+    }
+}
+
+@Composable
+fun AdjustmentSlider(
+    label: String,
+    value: Float,
+    valueRange: ClosedRange<Float>,
+    onValueChange: (Float) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(text = label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                text = String.format("%.1f", value),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }

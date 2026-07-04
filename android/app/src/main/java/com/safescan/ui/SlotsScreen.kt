@@ -583,20 +583,34 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean, modifier: Modifier =
         val width = size.width
         val height = size.height
 
-        val rectWidth: Float
-        val rectHeight: Float
-        var isBookMode = false
+        var rectWidth = 0f
+        var rectHeight = 0f
+        val isBookMode = false
 
         when (mode) {
             ScannerMode.CARD -> {
-                // Card aspect ratio: 3:2 (approx. 1.5)
-                rectWidth = width * 0.82f
-                rectHeight = rectWidth / 1.5f
+                // Card aspect ratio: 1.586 (standard ID-1 card size)
+                val preferredWidth = width * 0.85f
+                val preferredHeight = preferredWidth / 1.586f
+                if (preferredHeight > height * 0.6f) {
+                    rectHeight = height * 0.45f
+                    rectWidth = rectHeight * 1.586f
+                } else {
+                    rectWidth = preferredWidth
+                    rectHeight = preferredHeight
+                }
             }
             ScannerMode.DOCUMENT -> {
-                // Document aspect ratio: A4 (approx. 1.41)
-                rectWidth = width * 0.95f
-                rectHeight = rectWidth * 1.35f
+                // Document aspect ratio: A4 (approx. 1.414)
+                val preferredHeight = height * 0.65f
+                val preferredWidth = preferredHeight / 1.414f
+                if (preferredWidth > width * 0.85f) {
+                    rectWidth = width * 0.85f
+                    rectHeight = rectWidth * 1.414f
+                } else {
+                    rectWidth = preferredWidth
+                    rectHeight = preferredHeight
+                }
             }
             ScannerMode.GRID -> {
                 rectWidth = 0f
@@ -651,7 +665,7 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean, modifier: Modifier =
             }
         }
         
-        if (showGrid) {
+        if (showGrid || mode == ScannerMode.GRID) {
             // Draw standard 3x3 alignment grids
             drawLine(
                 color = Color.White.copy(alpha = 0.35f),
