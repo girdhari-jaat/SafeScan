@@ -164,26 +164,108 @@ fun CropScreen(viewModel: ScannerViewModel) {
                             close()
                         }
                         
-                        // Draw semi-transparent overlay outside crop area (simplified as stroke for now)
+                        // Draw semi-transparent overlay outside crop area
+                        drawPath(
+                            path = path,
+                            color = Color.Cyan.copy(alpha = 0.2f)
+                        )
+
                         drawPath(
                             path = path,
                             color = Color.Cyan,
-                            style = Stroke(width = 4.dp.toPx())
+                            style = Stroke(width = 2.dp.toPx())
                         )
 
-                        // Draw corner circles
-                        val radius = 20.dp.toPx()
-                        drawCircle(Color.Cyan, radius = radius, center = tl)
-                        drawCircle(Color.Cyan, radius = radius, center = tr)
-                        drawCircle(Color.Cyan, radius = radius, center = br)
-                        drawCircle(Color.Cyan, radius = radius, center = bl)
+                        // Draw corner handles
+                        val handleRadius = 12.dp.toPx()
+                        val outerRadius = 16.dp.toPx()
+                        
+                        listOf(tl, tr, br, bl).forEach { center ->
+                            drawCircle(Color.White, radius = outerRadius, center = center)
+                            drawCircle(Color.Cyan, radius = handleRadius, center = center)
+                        }
                     }
 
-                    // Touch handlers for each corner
-                    CornerHandle(offset = tl, onDrag = { tl = updateOffset(tl, it, imageSize) })
-                    CornerHandle(offset = tr, onDrag = { tr = updateOffset(tr, it, imageSize) })
-                    CornerHandle(offset = br, onDrag = { br = updateOffset(br, it, imageSize) })
-                    CornerHandle(offset = bl, onDrag = { bl = updateOffset(bl, it, imageSize) })
+                    // Touch handlers with Magnifier logic
+                    var draggingCorner by remember { mutableStateOf<String?>(null) }
+                    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+
+                    CornerHandle(
+                        offset = tl, 
+                        onDragStart = { draggingCorner = "tl" },
+                        onDragEnd = { draggingCorner = null },
+                        onDrag = { 
+                            tl = updateOffset(tl, it, imageSize)
+                            dragOffset = tl
+                        }
+                    )
+                    CornerHandle(
+                        offset = tr, 
+                        onDragStart = { draggingCorner = "tr" },
+                        onDragEnd = { draggingCorner = null },
+                        onDrag = { 
+                            tr = updateOffset(tr, it, imageSize)
+                            dragOffset = tr
+                        }
+                    )
+                    CornerHandle(
+                        offset = br, 
+                        onDragStart = { draggingCorner = "br" },
+                        onDragEnd = { draggingCorner = null },
+                        onDrag = { 
+                            br = updateOffset(br, it, imageSize)
+                            dragOffset = br
+                        }
+                    )
+                    CornerHandle(
+                        offset = bl, 
+                        onDragStart = { draggingCorner = "bl" },
+                        onDragEnd = { draggingCorner = null },
+                        onDrag = { 
+                            bl = updateOffset(bl, it, imageSize)
+                            dragOffset = bl
+                        }
+                    )
+
+                    // Simple Magnifier (Simulated by showing a zoomed box at top or bottom)
+                    draggingCorner?.let {
+                        val magnifierSize = 120.dp
+                        val magnifierPos = if (dragOffset.y < imageSize.height / 2) {
+                            Alignment.BottomCenter
+                        } else {
+                            Alignment.TopCenter
+                        }
+                        
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            contentAlignment = magnifierPos
+                        ) {
+                            Card(
+                                shape = RoundedCornerShape(magnifierSize / 2),
+                                border = androidx.compose.foundation.BorderStroke(2.dp, Color.Cyan),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                            ) {
+                                Box(modifier = Modifier.size(magnifierSize)) {
+                                    Image(
+                                        bitmap = bmp.asImageBitmap(),
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .size(magnifierSize * 3) // 3x zoom
+                                            .offset(
+                                                x = -(dragOffset.x * (magnifierSize.value * 3 / imageSize.width)).dp + (magnifierSize / 2),
+                                                y = -(dragOffset.y * (magnifierSize.value * 3 / imageSize.height)).dp + (magnifierSize / 2)
+                                            ),
+                                        contentScale = ContentScale.FillBounds
+                                    )
+                                    // Crosshair
+                                    Divider(modifier = Modifier.width(20.dp).align(Alignment.Center), color = Color.Cyan, thickness = 1.dp)
+                                    Divider(modifier = Modifier.height(20.dp).width(1.dp).align(Alignment.Center), color = Color.Cyan)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -197,7 +279,12 @@ private fun updateOffset(current: Offset, delta: Offset, bounds: IntSize): Offse
 }
 
 @Composable
-fun CornerHandle(offset: Offset, onDrag: (Offset) -> Unit) {
+fun CornerHandle(
+    offset: Offset, 
+    onDragStart: () -> Unit = {},
+    onDragEnd: () -> Unit = {},
+    onDrag: (Offset) -> Unit
+) {
     Box(
         modifier = Modifier
             .offset(
@@ -206,7 +293,11 @@ fun CornerHandle(offset: Offset, onDrag: (Offset) -> Unit) {
             )
             .size(48.dp)
             .pointerInput(Unit) {
-                detectDragGestures { change, dragAmount ->
+                detectDragGestures(
+                    onDragStart = { onDragStart() },
+                    onDragEnd = { onDragEnd() },
+                    onDragCancel = { onDragEnd() }
+                ) { change, dragAmount ->
                     change.consume()
                     onDrag(dragAmount)
                 }

@@ -28,6 +28,10 @@ object ImageProcessor {
             val beta = state.brightness.toDouble() * 255.0 / 100.0 // approximate translation
             src.convertTo(src, -1, alpha, beta)
 
+            // Apply Shadow Removal if requested via settings (we check a hypothetical setting here or just implement it)
+            // Since we don't have a direct toggle in EditorState, we can add it or just use it in autoEnhance.
+            // For now, let's just make it available as a helper.
+            
             // Apply Sharpness
             if (state.sharpness > 0f) {
                 val blurred = Mat()
@@ -46,9 +50,42 @@ object ImageProcessor {
                 FilterType.BLACK_WHITE -> {
                     val gray = Mat()
                     Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY)
-                    // Otsu's binarization + Gaussian blur for better results, but simple threshold works too
                     Imgproc.threshold(gray, outMat, 128.0, 255.0, Imgproc.THRESH_BINARY or Imgproc.THRESH_OTSU)
                     Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
+                }
+                FilterType.BLACK_WHITE_2 -> {
+                    val gray = Mat()
+                    Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY)
+                    // Adaptive threshold for cleaner photocopy-like scans
+                    Imgproc.adaptiveThreshold(gray, outMat, 255.0, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY, 11, 2.0)
+                    Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
+                }
+                FilterType.MAGIC_COLOR -> {
+                    // Convert to LAB color space to enhance color without blowing out whites
+                    val lab = Mat()
+                    Imgproc.cvtColor(src, lab, Imgproc.COLOR_BGR2Lab)
+                    val channels = mutableListOf<Mat>()
+                    Core.split(lab, channels)
+                    
+                    // Apply CLAHE to the Luminance channel
+                    val clahe = Imgproc.createCLAHE(2.0, Size(8.0, 8.0))
+                    clahe.apply(channels[0], channels[0])
+                    
+                    Core.merge(channels, lab)
+                    Imgproc.cvtColor(lab, outMat, Imgproc.COLOR_Lab2RGBA)
+                }
+                FilterType.PHOTO -> {
+                    // Increase saturation for "Vibrant" look
+                    val hsv = Mat()
+                    Imgproc.cvtColor(src, hsv, Imgproc.COLOR_BGR2HSV)
+                    val channels = mutableListOf<Mat>()
+                    Core.split(hsv, channels)
+                    
+                    // Scale saturation channel
+                    channels[1].convertTo(channels[1], -1, 1.2, 0.0)
+                    
+                    Core.merge(channels, hsv)
+                    Imgproc.cvtColor(hsv, outMat, Imgproc.COLOR_HSV2RGBA)
                 }
                 FilterType.COLOR -> {
                     Imgproc.cvtColor(src, outMat, Imgproc.COLOR_BGR2RGBA)
@@ -71,14 +108,34 @@ object ImageProcessor {
             
             Imgproc.cvtColor(src, src, Imgproc.COLOR_RGBA2BGR)
 
-            // Auto-level / contrast stretching
-            val channels = ArrayList<Mat>()
-            Core.split(src, channels)
+            // 1. Shadow Removal Logic (Akylas inspired)
+            val lab = Mat()
+            Imgproc.cvtColor(src, lab, Imgproc.COLOR_BGR2Lab)
+            val labChannels = ArrayList<Mat>()
+            Core.split(lab, labChannels)
             
-            for (i in channels.indices) {
-                Core.normalize(channels[i], channels[i], 0.0, 255.0, Core.NORM_MINMAX)
+            val lChannel = labChannels[0]
+            val dilated = Mat()
+            val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(15.0, 15.0))
+            Imgproc.dilate(lChannel, dilated, kernel)
+            val bgIllum = Mat()
+            Imgproc.medianBlur(dilated, bgIllum, 21)
+            
+            // Divide L by background illumination to flatten the shadows
+            val diff = Mat()
+            Core.absdiff(lChannel, bgIllum, diff)
+            Core.subtract(Mat.ones(lChannel.size(), lChannel.type()).apply { setTo(org.opencv.core.Scalar(255.0)) }, diff, lChannel)
+            
+            Core.merge(labChannels, lab)
+            Imgproc.cvtColor(lab, src, Imgproc.COLOR_Lab2BGR)
+
+            // 2. Auto-level / contrast stretching
+            val bgrChannels = ArrayList<Mat>()
+            Core.split(src, bgrChannels)
+            for (i in bgrChannels.indices) {
+                Core.normalize(bgrChannels[i], bgrChannels[i], 0.0, 255.0, Core.NORM_MINMAX)
             }
-            Core.merge(channels, src)
+            Core.merge(bgrChannels, src)
 
             val outMat = Mat()
             Imgproc.cvtColor(src, outMat, Imgproc.COLOR_BGR2RGBA)

@@ -88,6 +88,12 @@ class ScannerViewModel @Inject constructor(
     val uiLanguage: StateFlow<String> = settingsRepository.uiLanguageFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "en")
 
+    val vibrateOnCapture: StateFlow<Boolean> = settingsRepository.vibrateOnCaptureFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val saveToGallery: StateFlow<Boolean> = settingsRepository.saveToGalleryFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val liveDetect: StateFlow<Boolean> = settingsRepository.liveDetectFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
@@ -258,6 +264,18 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    fun setVibrateOnCapture(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setVibrateOnCapture(enabled)
+        }
+    }
+
+    fun setSaveToGallery(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setSaveToGallery(enabled)
+        }
+    }
+
     fun toggleLiveDetect(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setLiveDetect(enabled)
@@ -401,38 +419,8 @@ class ScannerViewModel @Inject constructor(
     fun applyCrop(quad: com.safescan.android.scanner.Quadrilateral) {
         viewModelScope.launch(Dispatchers.IO) {
             croppingBitmap.value?.let { bmp ->
-                val tl = quad.topLeft
-                val tr = quad.topRight
-                val br = quad.bottomRight
-                val bottomLeft = quad.bottomLeft
-
-                val widthA = kotlin.math.sqrt((br.x - bottomLeft.x).pow(2.0) + (br.y - bottomLeft.y).pow(2.0))
-                val widthB = kotlin.math.sqrt((tr.x - tl.x).pow(2.0) + (tr.y - tl.y).pow(2.0))
-                val maxWidth = kotlin.math.max(widthA, widthB).toInt().coerceAtLeast(1)
-
-                val heightA = kotlin.math.sqrt((tr.x - br.x).pow(2.0) + (tr.y - br.y).pow(2.0))
-                val heightB = kotlin.math.sqrt((tl.x - bottomLeft.x).pow(2.0) + (tl.y - bottomLeft.y).pow(2.0))
-                val maxHeight = kotlin.math.max(heightA, heightB).toInt().coerceAtLeast(1)
-
-                val matrix = android.graphics.Matrix()
-                val srcPoints = floatArrayOf(
-                    tl.x.toFloat(), tl.y.toFloat(),
-                    tr.x.toFloat(), tr.y.toFloat(),
-                    br.x.toFloat(), br.y.toFloat(),
-                    bottomLeft.x.toFloat(), bottomLeft.y.toFloat()
-                )
-                val dstPoints = floatArrayOf(
-                    0f, 0f,
-                    maxWidth.toFloat() - 1, 0f,
-                    maxWidth.toFloat() - 1, maxHeight.toFloat() - 1,
-                    0f, maxHeight.toFloat() - 1
-                )
-                matrix.setPolyToPoly(srcPoints, 0, dstPoints, 0, 4)
-
-                val cropped = Bitmap.createBitmap(maxWidth, maxHeight, Bitmap.Config.ARGB_8888)
-                val canvas = android.graphics.Canvas(cropped)
-                val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG)
-                canvas.drawBitmap(bmp, matrix, paint)
+                val scanner = com.safescan.android.scanner.DocumentScanner()
+                val cropped = scanner.cropAndTransform(bmp, quad, currentMode.value.name)
 
                 croppingSlotId.value?.let { slotId ->
                     captureToSlot(cropped, slotId)
@@ -692,6 +680,8 @@ class ScannerViewModel @Inject constructor(
                         it.copy(
                             isLoading = false,
                             scannedBitmap = null,
+                            lastCapturedThumbnail = result.data,
+                            capturedCount = it.capturedCount + 1,
                             error = null
                         )
                     }

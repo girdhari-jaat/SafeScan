@@ -45,13 +45,25 @@ class PdfExporter(private val context: Context) {
                 var pageNum = 1
                 for (slot in slots) {
                     val bmp = slot.bitmap ?: continue
-                    val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum++).create()
+                    
+                    val currentWidth: Int
+                    val currentHeight: Int
+                    
+                    if (pageSizeStr.equals("Original", ignoreCase = true)) {
+                        currentWidth = bmp.width
+                        currentHeight = bmp.height
+                    } else {
+                        currentWidth = if (isA4) 595 else 612
+                        currentHeight = if (isA4) 842 else 792
+                    }
+
+                    val pageInfo = PdfDocument.PageInfo.Builder(currentWidth, currentHeight, pageNum++).create()
                     val page = pdfDocument.startPage(pageInfo)
                     val canvas = page.canvas
 
-                    val margin = 36f // 0.5 inch margin
-                    val printableWidth = pageWidth - 2 * margin
-                    val printableHeight = pageHeight - 2 * margin
+                    val margin = if (pageSizeStr.equals("Original", ignoreCase = true)) 0f else 36f // No margin for original size
+                    val printableWidth = currentWidth - 2 * margin
+                    val printableHeight = currentHeight - 2 * margin
 
                     val scaleX = printableWidth / bmp.width
                     val scaleY = printableHeight / bmp.height

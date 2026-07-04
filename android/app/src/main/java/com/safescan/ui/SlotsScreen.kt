@@ -12,10 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -126,10 +123,11 @@ fun SlotsScreen(
                             CircleShape
                         )
                     ) {
-                        Text(
-                            text = if (flashOn) "⚡" else "💡",
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelSmall
+                        Icon(
+                            imageVector = if (flashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                            contentDescription = "Toggle Flash",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
@@ -255,7 +253,7 @@ fun SlotsScreen(
                             .background(Color.Black.copy(alpha = 0.5f), CircleShape)
                             .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape)
                     ) {
-                        Text(text = "🖼️", fontSize = 22.sp)
+                        Icon(Icons.Default.Image, contentDescription = "Import from Gallery", tint = Color.White)
                     }
 
                     // Center Action: Large Circular Shutter button
@@ -296,19 +294,42 @@ fun SlotsScreen(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            if (hasScans) {
-                                Text(text = "✓", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                Text(text = "($scannedCount)", color = Color.White, style = MaterialTheme.typography.labelSmall)
-                            } else {
+                        if (hasScans && uiState.lastCapturedThumbnail != null) {
+                            Image(
+                                bitmap = uiState.lastCapturedThumbnail!!.asImageBitmap(),
+                                contentDescription = "Last captured thumbnail",
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                            // Overlay count
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.3f)),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Text(
-                                    text = if (isBatchActive) "Batch\nON" else "Batch\nOFF",
+                                    text = "$scannedCount",
                                     color = Color.White,
-                                    fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    lineHeight = 12.sp,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    fontSize = 18.sp
                                 )
+                            }
+                        } else {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                if (hasScans) {
+                                    Text(text = "✓", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    Text(text = "($scannedCount)", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                                } else {
+                                    Text(
+                                        text = if (isBatchActive) "Batch\nON" else "Batch\nOFF",
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        lineHeight = 12.sp,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
+                                }
                             }
                         }
                     }
@@ -397,61 +418,61 @@ fun SlotsScreen(
                             verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             PopoverToggleRow(
-                                icon = "🌐",
+                                icon = Icons.Default.Grid4x4,
                                 label = "Grid Lines",
                                 checked = showGrid,
                                 onCheckedChange = { viewModel.toggleShowGrid(it) }
                             )
                             PopoverToggleRow(
-                                icon = "🔊",
+                                icon = Icons.Default.VolumeUp,
                                 label = "Shutter Sound",
                                 checked = clickSound,
                                 onCheckedChange = { viewModel.toggleClickSound(it) }
                             )
                             PopoverToggleRow(
-                                icon = "✂️",
+                                icon = Icons.Default.AutoFixHigh,
                                 label = "Auto Crop",
                                 checked = autoCrop,
                                 onCheckedChange = { viewModel.toggleAutoCrop(it) }
                             )
                             PopoverToggleRow(
-                                icon = "🔍",
+                                icon = Icons.Default.DocumentScanner,
                                 label = "Live Detect",
                                 checked = liveDetect,
                                 onCheckedChange = { viewModel.toggleLiveDetect(it) }
                             )
                             PopoverToggleRow(
-                                icon = "☀️",
+                                icon = Icons.Default.BrightnessMedium,
                                 label = "Shadow Remove",
                                 checked = shadowRemove,
                                 onCheckedChange = { viewModel.toggleShadowRemove(it) }
                             )
                             PopoverToggleRow(
-                                icon = "🎯",
+                                icon = Icons.Default.CenterFocusStrong,
                                 label = "Double Focus",
                                 checked = doubleFocus,
                                 onCheckedChange = { viewModel.toggleDoubleFocus(it) }
                             )
                             PopoverToggleRow(
-                                icon = "🔋",
+                                icon = Icons.Default.BatteryChargingFull,
                                 label = "Battery Saver",
                                 checked = batterySaver,
                                 onCheckedChange = { viewModel.toggleBatterySaver(it) }
                             )
                             PopoverToggleRow(
-                                icon = "📄",
+                                icon = Icons.Default.Layers,
                                 label = "Batch Scan",
                                 checked = batchScan,
                                 onCheckedChange = { viewModel.toggleBatchScan(it) }
                             )
                             PopoverToggleRow(
-                                icon = "🔄",
+                                icon = Icons.Default.ScreenRotation,
                                 label = "Auto Rotation",
                                 checked = autoRotation,
                                 onCheckedChange = { viewModel.toggleAutoRotation(it) }
                             )
                             PopoverToggleRow(
-                                icon = "📱",
+                                icon = Icons.Default.CameraAlt,
                                 label = "Phone Camera",
                                 checked = usePhoneCamera,
                                 onCheckedChange = { viewModel.toggleUsePhoneCamera(it) }
@@ -517,7 +538,7 @@ fun SlotsScreen(
 
 @Composable
 private fun PopoverToggleRow(
-    icon: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
@@ -534,7 +555,7 @@ private fun PopoverToggleRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(text = icon, fontSize = 16.sp)
+            Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,

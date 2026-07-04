@@ -13,6 +13,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -77,7 +79,7 @@ fun LibraryScreen(
                     IconButton(onClick = {
                         reloadFiles()
                     }) {
-                        Text("🔄", fontSize = 18.sp)
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -94,7 +96,7 @@ fun LibraryScreen(
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.padding(16.dp)
             ) {
-                Text("➕", fontSize = 16.sp, modifier = Modifier.padding(end = 8.dp))
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
                 Text(text = "New Scan", fontWeight = FontWeight.Bold)
             }
         }
@@ -328,7 +330,7 @@ fun OriginalDocumentCard(
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), shape = RoundedCornerShape(8.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("📁", fontSize = 24.sp)
+                Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             }
 
             Spacer(modifier = Modifier.width(16.dp))
@@ -373,12 +375,12 @@ fun OriginalDocumentCard(
 
             // Open/Edit button
             IconButton(onClick = onClick) {
-                Text("✏️", fontSize = 18.sp)
+                Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(20.dp))
             }
 
             // Delete button
             IconButton(onClick = onDelete) {
-                Text("🗑️", fontSize = 18.sp)
+                Icon(Icons.Default.Delete, contentDescription = "Delete", modifier = Modifier.size(20.dp))
             }
         }
     }
@@ -422,7 +424,7 @@ fun DocumentItemCard(
                     .background(Color.Red.copy(alpha = 0.1f), shape = RoundedCornerShape(8.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("📕", fontSize = 24.sp)
+                Icon(Icons.Default.PictureAsPdf, contentDescription = null, tint = Color.Red)
             }
 
             Spacer(modifier = Modifier.width(16.dp))
@@ -467,12 +469,12 @@ fun DocumentItemCard(
 
             // Share button
             IconButton(onClick = onShare) {
-                Text("📤", fontSize = 18.sp)
+                Icon(Icons.Default.Share, contentDescription = "Share", modifier = Modifier.size(20.dp))
             }
 
             // Delete button
             IconButton(onClick = onDelete) {
-                Text("🗑️", fontSize = 18.sp)
+                Icon(Icons.Default.Delete, contentDescription = "Delete", modifier = Modifier.size(20.dp))
             }
         }
     }

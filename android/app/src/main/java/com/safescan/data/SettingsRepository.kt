@@ -36,6 +36,8 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         val AUTO_ROTATION = booleanPreferencesKey("auto_rotation")
         val DEFAULT_FILTER = stringPreferencesKey("default_filter")
         val UI_LANGUAGE = stringPreferencesKey("ui_language")
+        val VIBRATE_ON_CAPTURE = booleanPreferencesKey("vibrate_on_capture")
+        val SAVE_TO_GALLERY = booleanPreferencesKey("save_to_gallery")
         val LIVE_DETECT = booleanPreferencesKey("live_detect")
         val BATTERY_SAVER = booleanPreferencesKey("battery_saver")
         val USE_PHONE_CAMERA = booleanPreferencesKey("use_phone_camera")
@@ -111,6 +113,12 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
 
     val uiLanguageFlow: Flow<String> = safeData
         .map { preferences -> preferences[PreferencesKeys.UI_LANGUAGE] ?: "en" }
+
+    val vibrateOnCaptureFlow: Flow<Boolean> = safeData
+        .map { preferences -> preferences[PreferencesKeys.VIBRATE_ON_CAPTURE] ?: true }
+
+    val saveToGalleryFlow: Flow<Boolean> = safeData
+        .map { preferences -> preferences[PreferencesKeys.SAVE_TO_GALLERY] ?: false }
 
     val liveDetectFlow: Flow<Boolean> = safeData
         .map { preferences -> preferences[PreferencesKeys.LIVE_DETECT] ?: true }
@@ -229,6 +237,18 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     suspend fun setUiLanguage(language: String) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.UI_LANGUAGE] = language
+        }
+    }
+
+    suspend fun setVibrateOnCapture(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.VIBRATE_ON_CAPTURE] = enabled
+        }
+    }
+
+    suspend fun setSaveToGallery(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.SAVE_TO_GALLERY] = enabled
         }
     }
 

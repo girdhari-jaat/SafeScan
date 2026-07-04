@@ -23,26 +23,57 @@ import com.safescan.scanner.ScannerViewModel
 import java.util.Locale
 import com.safescan.R
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(viewModel: ScannerViewModel) {
     val editorState by viewModel.editorState.collectAsState()
     val editingBitmap by viewModel.editingBitmapPreview.collectAsState()
+    val recognizedText by viewModel.recognizedText.collectAsState()
+    val isOcrRunning by viewModel.isOcrRunning.collectAsState()
+    val isBarcodeRunning by viewModel.isBarcodeRunning.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(id = R.string.edit_image)) },
+            CenterAlignedTopAppBar(
+                title = { 
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            stringResource(id = R.string.edit_image),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        editingBitmap?.let {
+                            Text(
+                                "${it.width} x ${it.height}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.closeEditor(save = false) }) {
-                        Icon(Icons.Default.ArrowBack, stringResource(id = R.string.cancel))
+                        Icon(Icons.Default.Close, stringResource(id = R.string.cancel))
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.closeEditor(save = true) }) {
-                        Icon(Icons.Default.Check, stringResource(id = R.string.save))
+                    TextButton(onClick = { viewModel.closeEditor(save = true) }) {
+                        Text(stringResource(id = R.string.save), fontWeight = FontWeight.Bold)
                     }
-                }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
             )
         }
     ) { padding ->
@@ -50,12 +81,13 @@ fun EditorScreen(viewModel: ScannerViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
+                .background(MaterialTheme.colorScheme.surface)
         ) {
+            // Immersive Image Preview
             Box(
                 modifier = Modifier
+                    .weight(1f)
                     .fillMaxWidth()
-                    .height(300.dp)
                     .background(Color.Black),
                 contentAlignment = Alignment.Center
             ) {
@@ -68,195 +100,198 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            val recognizedText by viewModel.recognizedText.collectAsState()
-            val isOcrRunning by viewModel.isOcrRunning.collectAsState()
-            val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
-            val context = androidx.compose.ui.platform.LocalContext.current
-
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = { viewModel.applyAutoEnhance() },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(stringResource(id = R.string.auto_enhance))
-                }
-
-                Button(
-                    onClick = { 
-                        // First save current edits to the state, then open crop
-                        val slotId = viewModel.editingSlotId.value
-                        val jpgIndex = viewModel.editingJpgIndex.value
-                        viewModel.closeEditor(save = true)
-                        if (slotId != null) {
-                            viewModel.openCrop(slotId)
-                        } else if (jpgIndex != null) {
-                            viewModel.openCropForJpg(jpgIndex)
-                        }
-                    },
-                    modifier = Modifier.weight(0.5f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.tertiary
-                    )
-                ) {
-                    Text("Crop")
-                }
-
-                Button(
-                    onClick = { viewModel.runOcrOnCurrentBitmap() },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondary
-                    ),
-                    enabled = !isOcrRunning
-                ) {
-                    if (isOcrRunning) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text("Text (OCR)")
-                    }
-                }
-            }
-
-            Row(
+            // Tools Section
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(vertical = 16.dp)
             ) {
-                val isBarcodeRunning by viewModel.isBarcodeRunning.collectAsState()
-                Button(
-                    onClick = { viewModel.runBarcodeOnCurrentBitmap() },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                    ),
-                    enabled = !isBarcodeRunning
+                // Filter Carousel
+                Text(
+                    "Filters",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    if (isBarcodeRunning) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text("Scan QR / Barcode")
-                    }
-                }
-            }
-
-            // Display OCR text results if available
-            recognizedText?.let { text ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    ),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Recognized Text (ML Kit OCR)",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                TextButton(
-                                    onClick = {
-                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(text))
-                                        android.widget.Toast.makeText(context, "Text copied", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
-                                ) {
-                                    Text("Copy", fontSize = 12.sp)
-                                }
-                                TextButton(
-                                    onClick = {
-                                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                            type = "text/plain"
-                                            putExtra(android.content.Intent.EXTRA_TEXT, text)
-                                        }
-                                        context.startActivity(android.content.Intent.createChooser(intent, "Share Text"))
-                                    }
-                                ) {
-                                    Text("Share", fontSize = 12.sp)
-                                }
-                            }
-                        }
-                        Divider(modifier = Modifier.padding(vertical = 4.dp))
-                        Text(
-                            text = text.ifEmpty { "No text recognized." },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 150.dp).verticalScroll(rememberScrollState())
+                    items(FilterType.values()) { filterType ->
+                        FilterItem(
+                            filterType = filterType,
+                            isSelected = editorState.filter == filterType,
+                            onClick = { viewModel.updateEditorState(editorState.copy(filter = filterType)) }
                         )
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                FilterType.values().forEach { filterType ->
-                    FilterChip(
-                        selected = editorState.filter == filterType,
-                        onClick = { viewModel.updateEditorState(editorState.copy(filter = filterType)) },
-                        label = { Text(filterType.name) }
+                // Action Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ActionChip(
+                        icon = Icons.Default.AutoFixHigh,
+                        label = "Auto",
+                        onClick = { viewModel.applyAutoEnhance() },
+                        modifier = Modifier.weight(1f)
+                    )
+                    ActionChip(
+                        icon = Icons.Default.Crop,
+                        label = "Crop",
+                        onClick = {
+                            val slotId = viewModel.editingSlotId.value
+                            val jpgIndex = viewModel.editingJpgIndex.value
+                            viewModel.closeEditor(save = true)
+                            if (slotId != null) viewModel.openCrop(slotId)
+                            else if (jpgIndex != null) viewModel.openCropForJpg(jpgIndex)
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    ActionChip(
+                        icon = Icons.Default.TextFields,
+                        label = "OCR",
+                        isLoading = isOcrRunning,
+                        onClick = { viewModel.runOcrOnCurrentBitmap() },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Adjustment Sliders (Collapsed or condensed)
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    AdjustmentSlider(
+                        label = stringResource(id = R.string.brightness),
+                        value = editorState.brightness,
+                        valueRange = -100f..100f,
+                        onValueChange = { viewModel.updateEditorState(editorState.copy(brightness = it)) }
+                    )
+                    AdjustmentSlider(
+                        label = stringResource(id = R.string.contrast),
+                        value = editorState.contrast,
+                        valueRange = 0.5f..3.0f,
+                        onValueChange = { viewModel.updateEditorState(editorState.copy(contrast = it)) }
                     )
                 }
             }
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                Text(stringResource(id = R.string.brightness) + ": ${editorState.brightness.toInt()}")
-                Slider(
-                    value = editorState.brightness,
-                    onValueChange = { viewModel.updateEditorState(editorState.copy(brightness = it)) },
-                    valueRange = -100f..100f
+@Composable
+fun FilterItem(
+    filterType: FilterType,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .width(70.dp)
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(60.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(
+                    if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surfaceVariant
                 )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(stringResource(id = R.string.contrast) + ": ${String.format(Locale.US, "%.1f", editorState.contrast)}")
-                Slider(
-                    value = editorState.contrast,
-                    onValueChange = { viewModel.updateEditorState(editorState.copy(contrast = it)) },
-                    valueRange = 0.5f..3.0f
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(stringResource(id = R.string.sharpness) + ": ${editorState.sharpness.toInt()}")
-                Slider(
-                    value = editorState.sharpness,
-                    onValueChange = { viewModel.updateEditorState(editorState.copy(sharpness = it)) },
-                    valueRange = 0f..10f
+                .padding(2.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.Gray.copy(alpha = 0.2f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = when(filterType) {
+                        FilterType.GRAYSCALE -> Icons.Default.InvertColors
+                        FilterType.BLACK_WHITE -> Icons.Default.GridGoldenratio
+                        FilterType.MAGIC_COLOR -> Icons.Default.AutoAwesome
+                        FilterType.COLOR -> Icons.Default.Palette
+                        else -> Icons.Default.Filter
+                    },
+                    contentDescription = null,
+                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            
-            Spacer(modifier = Modifier.height(16.dp))
         }
+        Text(
+            text = filterType.name.lowercase().replaceFirstChar { it.uppercase() },
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(top = 4.dp),
+            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+fun ActionChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    isLoading: Boolean = false
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(48.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            } else {
+                Icon(icon, null, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(label, style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
+}
+
+@Composable
+fun AdjustmentSlider(
+    label: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(label, style = MaterialTheme.typography.labelMedium)
+            Text(
+                text = if (valueRange.endInclusive > 10) value.toInt().toString() else String.format("%.1f", value),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            modifier = Modifier.height(32.dp)
+        )
     }
 }

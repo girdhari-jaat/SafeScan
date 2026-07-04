@@ -76,20 +76,31 @@ class ScannerFragment : Fragment() {
     }
 
     private val pickImageLauncher = registerForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.GetContent()
-    ) { uri: android.net.Uri? ->
-        uri?.let {
-            try {
-                val inputStream = requireContext().contentResolver.openInputStream(it)
-                val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
-                inputStream?.close()
-                if (bitmap != null) {
-                    viewModel.onCapture(bitmap)
-                    Toast.makeText(context, "Image imported successfully", Toast.LENGTH_SHORT).show()
+        androidx.activity.result.contract.ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<android.net.Uri>? ->
+        uris?.let { list ->
+            if (list.isEmpty()) return@let
+            
+            viewLifecycleOwner.lifecycleScope.launch {
+                var successCount = 0
+                for (uri in list) {
+                    try {
+                        val inputStream = requireContext().contentResolver.openInputStream(uri)
+                        val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                        inputStream?.close()
+                        if (bitmap != null) {
+                            viewModel.onCapture(bitmap)
+                            successCount++
+                        }
+                    } catch (e: Exception) {
+                        Log.e("ScannerFragment", "Error reading imported image", e)
+                    }
                 }
-            } catch (e: Exception) {
-                Log.e("ScannerFragment", "Error reading imported image", e)
-                Toast.makeText(context, "Failed to import image", Toast.LENGTH_SHORT).show()
+                if (successCount > 0) {
+                    Toast.makeText(context, "$successCount images imported successfully", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "Failed to import images", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
