@@ -17,6 +17,7 @@ import { globalRenderCountRef, addLog } from '../utils/renderStats';
 import { useSharedSettings } from '../lib/useSharedSettings';
 import { useTranslation, Language } from '../lib/i18n';
 import { BarcodeService } from '../services/BarcodeService';
+import { OCRService } from '../services/OCRService';
 
 interface EditorProps {
   document: ScanDocument;
@@ -433,10 +434,25 @@ function Editor({
         if (barcodeResult.success) {
           parsed = barcodeResult;
         } else {
-          parsed = { success: false, error: "No barcode found in the document" };
+          // Fall back to OCR
+          const ocrText = await OCRService.detectText(base64DataString);
+          if (ocrText && ocrText.trim().length > 0 && ocrText !== 'OCR is only supported on native Android/iOS devices.') {
+             parsed = {
+               success: true,
+               data: {
+                 documentType: "OCR Text",
+                 detectedLanguage: "Auto",
+                 summaryText: "Text extracted via ML Kit",
+                 extractedFields: [],
+                 fullTranscript: ocrText
+               }
+             };
+          } else {
+             parsed = { success: false, error: "No text or barcode found in the document" };
+          }
         }
-      } catch (err: any) {
-         parsed = { success: false, error: err.message || "Local Barcode scan failed" };
+      } catch (err: any) { 
+        parsed = { success: false, error: err.message || "Local Barcode scan failed" };
       }
 
       if (!parsed.success) {

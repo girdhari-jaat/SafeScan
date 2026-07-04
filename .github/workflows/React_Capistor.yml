@@ -21,7 +21,7 @@ jobs:
         run: |
           npm install --legacy-peer-deps
           npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
-          npm install @capacitor-community/media @capacitor/filesystem @capacitor/share @capacitor/toast @capacitor-mlkit/document-scanner @capacitor-mlkit/barcode-scanning
+          npm install @capacitor-community/media @capacitor/filesystem @capacitor/share @capacitor/toast @capacitor-mlkit/document-scanner @capacitor-mlkit/barcode-scanning @pantrist/capacitor-plugin-ml-kit-text-recognition
 
       - name: Build React Web App
         run: |
