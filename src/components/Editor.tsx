@@ -32,6 +32,7 @@ interface EditorProps {
   initialCroppingPageId?: string;
   onClearInitialCropping?: () => void;
   onRenameDocument?: (docId: string, newTitle: string) => void;
+  onScroll?: (e: React.UIEvent<HTMLDivElement>) => void;
 }
 
 const DeleteConfirmationModal = React.memo(({
@@ -359,6 +360,7 @@ function Editor({
   initialCroppingPageId,
   onClearInitialCropping,
   onRenameDocument,
+  onScroll,
 }: EditorProps) {
   const { settings } = useSharedSettings();
   const { t } = useTranslation(settings.uiLanguage as Language);
@@ -681,7 +683,11 @@ function Editor({
 
 
   return (
-    <div className="w-full flex flex-col gap-4" id="document-editor-root">
+    <div 
+      className="w-full h-full overflow-y-auto flex flex-col scroll-smooth" 
+      id="document-editor-root"
+      onScroll={onScroll}
+    >
       <DeleteConfirmationModal
         isOpen={deleteConfirmation.isOpen}
         onClose={() => setDeleteConfirmation({ ...deleteConfirmation, isOpen: false })}

@@ -929,6 +929,7 @@ export default function App() {
                   initialCroppingPageId={newlyCapturedPageId || undefined}
                   onClearInitialCropping={handleClearInitialCropping}
                   onRenameDocument={handleRenameDocument}
+                  onScroll={(e) => handleScrollEvent("editor-viewport", e.currentTarget.scrollTop)}
                 />
               )}
               {currentView === "settings" && (
