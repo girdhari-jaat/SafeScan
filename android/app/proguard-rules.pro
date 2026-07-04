@@ -1,40 +1,21 @@
-# ML Kit Text Recognition and Barcode Scanning
--keep class com.google.mlkit.** { *; }
--keep class com.google.android.gms.internal.mlkit_** { *; }
+# SafeScan Optimized Proguard/R8 Rules
 
-# CameraX
--keep class androidx.camera.core.** { *; }
--keep class androidx.camera.camera2.** { *; }
--keep class androidx.camera.lifecycle.** { *; }
--keep class androidx.camera.view.** { *; }
--dontwarn androidx.camera.core.**
--dontwarn androidx.camera.camera2.**
+# Preserve local data models and serialization classes
+-keep class com.safescan.data.** { *; }
+-keepclassmembers class com.safescan.data.** { *; }
 
-# Hilt & Dagger
--keep class dagger.** { *; }
--keep class hilt_aggregated_deps.** { *; }
--keep class dagger.hilt.** { *; }
--keep class javax.inject.** { *; }
--keep class * implements dagger.hilt.internal.GeneratedComponentManager { *; }
--keep class * implements dagger.hilt.internal.GeneratedComponent { *; }
--keep class * implements dagger.hilt.internal.EntryPoint { *; }
--keep @dagger.hilt.EntryPoint class * { *; }
--keep @dagger.hilt.android.lifecycle.HiltViewModel class * { *; }
+# OpenCV JNI and classes (accessed from native C++ code)
+-keep class org.opencv.** { *; }
+-keepclassmembers class org.opencv.** { *; }
+-dontwarn org.opencv.**
 
-# Jetpack Compose
--keep class androidx.compose.runtime.ParcelableSnapshotMutableState { *; }
--dontwarn androidx.compose.**
+# Let R8 utilize the bundled consumer rules for Hilt, CameraX, ML Kit, and Jetpack Compose.
+# Removing the over-broad wildcard "-keep" rules allows deep tree-shaking and significant APK size reduction.
 
-# DataStore Preferences
--keep class androidx.datastore.** { *; }
--keep class androidx.datastore.preferences.** { *; }
--dontwarn androidx.datastore.**
+# Keep any annotations required at runtime
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
 
-# Coroutines & Serialization
--keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
--keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
--keepclassmembernames class kotlinx.** {
-    volatile <fields>;
-}
--keep class kotlinx.coroutines.android.AndroidDispatcherFactory { *; }
--keep class kotlinx.coroutines.android.AndroidExceptionPreHandler { *; }
+# Suppress warnings from platform and third-party libraries where they are safe to ignore
+-dontwarn javax.annotation.**
+-dontwarn sun.misc.Unsafe
+
