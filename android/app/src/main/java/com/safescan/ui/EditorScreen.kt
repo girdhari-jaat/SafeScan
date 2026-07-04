@@ -1,35 +1,39 @@
 package com.safescan.ui
 
+import android.graphics.Bitmap
+import android.widget.Toast
+import androidx.compose.animation.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.safescan.data.FilterType
-import com.safescan.scanner.ScannerViewModel
-import java.util.Locale
 import com.safescan.R
-
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.filled.*
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
+import com.safescan.data.FilterType
+import com.safescan.data.ScannerMode
+import com.safescan.scanner.ScannerViewModel
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,37 +42,68 @@ fun EditorScreen(viewModel: ScannerViewModel) {
     val editingBitmap by viewModel.editingBitmapPreview.collectAsState()
     val recognizedText by viewModel.recognizedText.collectAsState()
     val isOcrRunning by viewModel.isOcrRunning.collectAsState()
-    val isBarcodeRunning by viewModel.isBarcodeRunning.collectAsState()
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    val context = LocalContext.current
+
+    // State for controlling panels
+    var activePanel by remember { mutableStateOf<String?>("filters") } // "filters", "adjustments", null
+    var showExportPopover by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
+    var exportFolderSelected by remember { mutableStateOf("Internal Storage / Documents / SafeScan") }
+
+    // Settings State
+    val currentMode by viewModel.currentMode.collectAsState()
+    val pageSize by viewModel.pageSize.collectAsState()
+
+    // Date/Time for TopBar
+    val formattedDateTime = remember {
+        val sdfDate = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+        val sdfTime = SimpleDateFormat("hh:mm:ss a", Locale.getDefault())
+        val now = Date()
+        Pair(sdfDate.format(now), sdfTime.format(now).uppercase())
+    }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { 
+                title = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            stringResource(id = R.string.edit_image),
+                            text = formattedDateTime.first,
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-                        editingBitmap?.let {
-                            Text(
-                                "${it.width} x ${it.height}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        Text(
+                            text = formattedDateTime.second,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.closeEditor(save = false) }) {
-                        Icon(Icons.Default.Close, stringResource(id = R.string.cancel))
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(id = R.string.cancel))
                     }
                 },
                 actions = {
-                    TextButton(onClick = { viewModel.closeEditor(save = true) }) {
-                        Text(stringResource(id = R.string.save), fontWeight = FontWeight.Bold)
+                    // PDF Icon to trigger Popover
+                    IconButton(onClick = { showExportPopover = !showExportPopover }) {
+                        Icon(
+                            imageVector = Icons.Default.PictureAsPdf,
+                            contentDescription = "PDF Export Options",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    // Delete Icon
+                    IconButton(onClick = {
+                        viewModel.closeEditor(save = false)
+                        Toast.makeText(context, "Page Deleted", Toast.LENGTH_SHORT).show()
+                    }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete Page")
+                    }
+                    // Save Button
+                    IconButton(onClick = { viewModel.closeEditor(save = true) }) {
+                        Icon(Icons.Default.Check, contentDescription = stringResource(id = R.string.save), tint = MaterialTheme.colorScheme.primary)
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -77,221 +112,478 @@ fun EditorScreen(viewModel: ScannerViewModel) {
             )
         }
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .background(MaterialTheme.colorScheme.surface)
         ) {
-            // Immersive Image Preview
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center
-            ) {
-                editingBitmap?.let { bmp ->
-                    com.safescan.ui.ZoomableImage(
-                        bitmap = bmp.asImageBitmap(),
-                        contentDescription = "Preview",
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
-
-            // Tools Section
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                    .background(MaterialTheme.colorScheme.surface)
-                    .padding(vertical = 16.dp)
-            ) {
-                // Filter Carousel
-                Text(
-                    "Filters",
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Image Canvas
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
                 ) {
-                    items(FilterType.values()) { filterType ->
-                        FilterItem(
-                            filterType = filterType,
-                            isSelected = editorState.filter == filterType,
-                            onClick = { viewModel.updateEditorState(editorState.copy(filter = filterType)) }
+                    editingBitmap?.let { bmp ->
+                        ZoomableImage(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = "Preview",
+                            modifier = Modifier.fillMaxSize()
                         )
+
+                        // Info Overlay
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(16.dp)
+                                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "${bmp.width} x ${bmp.height}",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Action Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // Sub-panels
+                AnimatedVisibility(
+                    visible = activePanel != null,
+                    enter = slideInVertically { it } + fadeIn(),
+                    exit = slideOutVertically { it } + fadeOut()
                 ) {
-                    ActionChip(
-                        icon = Icons.Default.AutoFixHigh,
-                        label = "Auto",
-                        onClick = { viewModel.applyAutoEnhance() },
-                        modifier = Modifier.weight(1f)
-                    )
-                    ActionChip(
-                        icon = Icons.Default.Crop,
-                        label = "Crop",
-                        onClick = {
-                            val slotId = viewModel.editingSlotId.value
-                            val jpgIndex = viewModel.editingJpgIndex.value
-                            viewModel.closeEditor(save = true)
-                            if (slotId != null) viewModel.openCrop(slotId)
-                            else if (jpgIndex != null) viewModel.openCropForJpg(jpgIndex)
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                    ActionChip(
-                        icon = Icons.Default.TextFields,
-                        label = "OCR",
-                        isLoading = isOcrRunning,
-                        onClick = { viewModel.runOcrOnCurrentBitmap() },
-                        modifier = Modifier.weight(1f)
-                    )
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        tonalElevation = 4.dp,
+                        shadowElevation = 4.dp
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            if (activePanel == "filters") {
+                                Text(
+                                    text = "Enhancement Filters",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                                LazyRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    items(FilterType.values()) { filterType ->
+                                        FilterItem(
+                                            filterType = filterType,
+                                            isSelected = editorState.filter == filterType,
+                                            onClick = { viewModel.updateEditorState(editorState.copy(filter = filterType)) }
+                                        )
+                                    }
+                                }
+                            } else if (activePanel == "adjustments") {
+                                Text(
+                                    text = "Manual Adjustments",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                                AdjustmentSlider(
+                                    label = stringResource(id = R.string.brightness),
+                                    value = editorState.brightness,
+                                    valueRange = -100f..100f,
+                                    onValueChange = { viewModel.updateEditorState(editorState.copy(brightness = it)) }
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                AdjustmentSlider(
+                                    label = stringResource(id = R.string.contrast),
+                                    value = editorState.contrast,
+                                    valueRange = 0.5f..3.0f,
+                                    onValueChange = { viewModel.updateEditorState(editorState.copy(contrast = it)) }
+                                )
+                            }
+                        }
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                // Bottom toolbar matching OSS design and capabilities
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    tonalElevation = 8.dp
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp, horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Crop
+                        BottomToolbarItem(
+                            icon = Icons.Default.Crop,
+                            label = "Crop",
+                            onClick = {
+                                val slotId = viewModel.editingSlotId.value
+                                val jpgIndex = viewModel.editingJpgIndex.value
+                                viewModel.closeEditor(save = true)
+                                if (slotId != null) viewModel.openCrop(slotId)
+                                else if (jpgIndex != null) viewModel.openCropForJpg(jpgIndex)
+                            }
+                        )
+                        // Rotate Left
+                        BottomToolbarItem(
+                            icon = Icons.Default.RotateLeft,
+                            label = "Rotate L",
+                            onClick = { viewModel.rotateEditingBitmap(-90f) }
+                        )
+                        // Rotate Right
+                        BottomToolbarItem(
+                            icon = Icons.Default.RotateRight,
+                            label = "Rotate R",
+                            onClick = { viewModel.rotateEditingBitmap(90f) }
+                        )
+                        // Magic / Filter
+                        BottomToolbarItem(
+                            icon = Icons.Default.AutoFixHigh,
+                            label = "Filter",
+                            selected = activePanel == "filters",
+                            onClick = { activePanel = if (activePanel == "filters") null else "filters" }
+                        )
+                        // Adjustments
+                        BottomToolbarItem(
+                            icon = Icons.Default.Tune,
+                            label = "Adjust",
+                            selected = activePanel == "adjustments",
+                            onClick = { activePanel = if (activePanel == "adjustments") null else "adjustments" }
+                        )
+                        // OCR / Text Recognizer
+                        BottomToolbarItem(
+                            icon = Icons.Default.TextFields,
+                            label = "OCR",
+                            onClick = { viewModel.runOcrOnCurrentBitmap() }
+                        )
+                    }
+                }
+            }
 
-                // Adjustment Sliders (Collapsed or condensed)
-                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    AdjustmentSlider(
-                        label = stringResource(id = R.string.brightness),
-                        value = editorState.brightness,
-                        valueRange = -100f..100f,
-                        onValueChange = { viewModel.updateEditorState(editorState.copy(brightness = it)) }
-                    )
-                    AdjustmentSlider(
-                        label = stringResource(id = R.string.contrast),
-                        value = editorState.contrast,
-                        valueRange = 0.5f..3.0f,
-                        onValueChange = { viewModel.updateEditorState(editorState.copy(contrast = it)) }
-                    )
+            // Floating Custom Popover Card (Styled exactly like the OSS Svelte screenshot!)
+            AnimatedVisibility(
+                visible = showExportPopover,
+                enter = fadeIn() + slideInVertically { -20 },
+                exit = fadeOut() + slideOutVertically { -20 },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 8.dp, end = 8.dp)
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 16.dp),
+                    modifier = Modifier
+                        .width(280.dp)
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(16.dp)
+                        ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        // Header
+                        Text(
+                            text = "PDF export",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Export folder section
+                        Text(
+                            text = "Export folder",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = exportFolderSelected,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = {
+                                Toast.makeText(context, "Scanning local directories...", Toast.LENGTH_SHORT).show()
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Change Directory",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Menu items
+                        PopoverMenuItem(
+                            icon = Icons.Default.Settings,
+                            text = "PDF export settings",
+                            onClick = {
+                                showExportPopover = false
+                                showSettingsDialog = true
+                            }
+                        )
+                        PopoverMenuItem(
+                            icon = Icons.Default.Visibility,
+                            text = "Open",
+                            onClick = {
+                                showExportPopover = false
+                                viewModel.exportPdf(context) { file ->
+                                    if (file != null) {
+                                        try {
+                                            val uri = androidx.core.content.FileProvider.getUriForFile(
+                                                context,
+                                                "${context.packageName}.fileprovider",
+                                                file
+                                            )
+                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                                setDataAndType(uri, "application/pdf")
+                                                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "No PDF viewer found", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                        PopoverMenuItem(
+                            icon = Icons.Default.Share,
+                            text = "Share",
+                            onClick = {
+                                showExportPopover = false
+                                viewModel.exportPdf(context) { file ->
+                                    if (file != null) {
+                                        try {
+                                            val uri = androidx.core.content.FileProvider.getUriForFile(
+                                                context,
+                                                "${context.packageName}.fileprovider",
+                                                file
+                                            )
+                                            val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                type = "application/pdf"
+                                                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(android.content.Intent.createChooser(intent, "Share Document PDF"))
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Error sharing file", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                        PopoverMenuItem(
+                            icon = Icons.Default.ExitToApp,
+                            text = "Export",
+                            onClick = {
+                                showExportPopover = false
+                                viewModel.exportPdf(context) { file ->
+                                    if (file != null) {
+                                        Toast.makeText(context, "PDF Exported successfully to Documents!", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        Toast.makeText(context, "Export Failed", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        )
+                        PopoverMenuItem(
+                            icon = Icons.Default.Print,
+                            text = "Print",
+                            onClick = {
+                                showExportPopover = false
+                                viewModel.exportPdf(context) { file ->
+                                    if (file != null) {
+                                        val printManager = context.getSystemService(android.content.Context.PRINT_SERVICE) as? android.print.PrintManager
+                                        if (printManager != null) {
+                                            val jobName = "${file.name} Document"
+                                            val printAdapter = object : android.print.PrintDocumentAdapter() {
+                                                override fun onLayout(
+                                                    oldAttributes: android.print.PrintAttributes?,
+                                                    newAttributes: android.print.PrintAttributes,
+                                                    cancellationSignal: android.os.CancellationSignal?,
+                                                    callback: LayoutResultCallback,
+                                                    extras: android.os.Bundle?
+                                                ) {
+                                                    if (cancellationSignal?.isCanceled == true) {
+                                                        callback.onLayoutCancelled()
+                                                        return
+                                                    }
+                                                    val info = android.print.PrintDocumentInfo.Builder(jobName)
+                                                        .setContentType(android.print.PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                                                        .build()
+                                                    callback.onLayoutFinished(info, true)
+                                                }
+
+                                                override fun onWrite(
+                                                    pages: Array<out android.print.PageRange>?,
+                                                    destination: android.os.ParcelFileDescriptor?,
+                                                    cancellationSignal: android.os.CancellationSignal?,
+                                                    callback: WriteResultCallback?
+                                                ) {
+                                                    try {
+                                                        val input = java.io.FileInputStream(file)
+                                                        val output = java.io.FileOutputStream(destination?.fileDescriptor)
+                                                        input.copyTo(output)
+                                                        input.close()
+                                                        output.close()
+                                                        callback?.onWriteFinished(arrayOf(android.print.PageRange.ALL_PAGES))
+                                                    } catch (e: Exception) {
+                                                        callback?.onWriteFailed(e.message)
+                                                    }
+                                                }
+                                            }
+                                            printManager.print(jobName, printAdapter, null)
+                                        } else {
+                                            Toast.makeText(context, "Print service not available", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                        PopoverMenuItem(
+                            icon = Icons.Default.PictureInPicture,
+                            text = "Preview",
+                            onClick = {
+                                showExportPopover = false
+                                Toast.makeText(context, "Generating Document Preview...", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
                 }
             }
         }
     }
-}
 
-@Composable
-fun FilterItem(
-    filterType: FilterType,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .width(70.dp)
-            .clickable(onClick = onClick)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(60.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(
-                    if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                    else MaterialTheme.colorScheme.surfaceVariant
-                )
-                .padding(2.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color.Gray.copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = when(filterType) {
-                        FilterType.GRAYSCALE -> Icons.Default.InvertColors
-                        FilterType.BLACK_WHITE -> Icons.Default.GridGoldenratio
-                        FilterType.MAGIC_COLOR -> Icons.Default.AutoAwesome
-                        FilterType.COLOR -> Icons.Default.Palette
-                        else -> Icons.Default.Filter
-                    },
-                    contentDescription = null,
-                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+    // Modal Dialog for PDF Settings
+    if (showSettingsDialog) {
+        AlertDialog(
+            onDismissRequest = { showSettingsDialog = false },
+            title = { Text("PDF export settings", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Select PDF configuration preferences:")
+                    OutlinedTextField(
+                        value = pageSize,
+                        onValueChange = { viewModel.setPageSize(it) },
+                        label = { Text("Page Size (e.g. A4, Letter)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = currentMode.name,
+                        onValueChange = { },
+                        enabled = false,
+                        label = { Text("Scanner Mode (Read-only)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSettingsDialog = false }) {
+                    Text("Ok")
+                }
             }
-        }
-        Text(
-            text = filterType.name.lowercase().replaceFirstChar { it.uppercase() },
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(top = 4.dp),
-            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+
+    // Recognized OCR Text Dialog
+    recognizedText?.let { text ->
+        AlertDialog(
+            onDismissRequest = { viewModel.recognizedText.value = null },
+            title = { Text("Recognized Text (OCR)") },
+            text = {
+                Box(
+                    modifier = Modifier
+                        .maxHeight(300.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(text)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.recognizedText.value = null }) {
+                    Text("Dismiss")
+                }
+            }
         )
     }
 }
 
 @Composable
-fun ActionChip(
+fun BottomToolbarItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    isLoading: Boolean = false
+    selected: Boolean = false,
+    onClick: () -> Unit
 ) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier.height(48.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(4.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (isLoading) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else {
-                Icon(icon, null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(label, style = MaterialTheme.typography.labelLarge)
-            }
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
 @Composable
-fun AdjustmentSlider(
-    label: String,
-    value: Float,
-    valueRange: ClosedFloatingPointRange<Float>,
-    onValueChange: (Float) -> Unit
+fun PopoverMenuItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    onClick: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(label, style = MaterialTheme.typography.labelMedium)
-            Text(
-                text = if (valueRange.endInclusive > 10) value.toInt().toString() else String.format("%.1f", value),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange,
-            modifier = Modifier.height(32.dp)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(
+            text = text,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

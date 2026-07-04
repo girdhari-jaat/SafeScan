@@ -49,6 +49,7 @@ class ScannerFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val viewModel: ScannerViewModel by viewModels()
+    private val liveEdgeDetectionEngine = com.safescan.scanner.LiveEdgeDetectionEngine()
 
     private lateinit var cameraExecutor: ExecutorService
     private var imageCapture: ImageCapture? = null
@@ -342,6 +343,49 @@ class ScannerFragment : Fragment() {
         }
     }
 
+    private fun mapPointsToPreviewView(
+        points: List<com.safescan.android.scanner.Point>,
+        bitmapWidth: Int,
+        bitmapHeight: Int,
+        rotationDegrees: Int
+    ): List<android.graphics.PointF> {
+        val binding = _binding ?: return emptyList()
+        val viewWidth = binding.previewView.width.toFloat()
+        val viewHeight = binding.previewView.height.toFloat()
+        if (viewWidth == 0f || viewHeight == 0f) return emptyList()
+
+        return points.map { pt ->
+            // 1. First, normalize coordinates relative to the bitmap (0.0 to 1.0)
+            val normX = pt.x.toFloat() / bitmapWidth
+            val normY = pt.y.toFloat() / bitmapHeight
+
+            // 2. Rotate the normalized coordinates if the sensor is rotated (usually 90 or 270 on Android)
+            val rotatedX: Float
+            val rotatedY: Float
+            when (rotationDegrees) {
+                90 -> {
+                    rotatedX = 1f - normY
+                    rotatedY = normX
+                }
+                180 -> {
+                    rotatedX = 1f - normX
+                    rotatedY = 1f - normY
+                }
+                270 -> {
+                    rotatedX = normY
+                    rotatedY = 1f - normX
+                }
+                else -> {
+                    rotatedX = normX
+                    rotatedY = normY
+                }
+            }
+
+            // 3. Map normalized rotated coordinates to the PreviewView screen coordinates
+            android.graphics.PointF(rotatedX * viewWidth, rotatedY * viewHeight)
+        }
+    }
+
     private fun startCamera() {
         if (!isAdded) return
         val currentContext = context ?: return
@@ -378,19 +422,54 @@ class ScannerFragment : Fragment() {
 
                 imageCapture = ImageCapture.Builder()
                     .setCaptureMode(captureMode)
-                    .setFlashMode(if (flashEnabled) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF)
+                    .setFlashMode(if (viewModel.flashOn.value) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF)
                     .build()
+
+                // Initialize ImageAnalysis for live edge detection overlay
+                val imageAnalysis = androidx.camera.core.ImageAnalysis.Builder()
+                    .setBackpressureStrategy(androidx.camera.core.ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build()
+
+                imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
+                    val isLiveDetectOn = viewModel.liveDetect.value
+                    val isBatterySaverOn = viewModel.batterySaver.value
+                    if (isLiveDetectOn && !isBatterySaverOn) {
+                        try {
+                            val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+                            val width = imageProxy.width
+                            val height = imageProxy.height
+                            
+                            liveEdgeDetectionEngine.process(imageProxy) { corners ->
+                                val mappedPoints = mapPointsToPreviewView(corners, width, height, rotationDegrees)
+                                activity?.runOnUiThread {
+                                    _binding?.overlayView?.updateCorners(mappedPoints)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("ScannerFragment", "Live detection error", e)
+                            imageProxy.close()
+                        }
+                    } else {
+                        imageProxy.close()
+                        activity?.runOnUiThread {
+                            _binding?.overlayView?.updateCorners(null)
+                        }
+                    }
+                }
 
                 val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
                 cameraProvider.unbindAll()
 
                 val camera = cameraProvider.bindToLifecycle(
-                    viewLifecycleOwner, cameraSelector, preview, imageCapture
+                    viewLifecycleOwner, cameraSelector, preview, imageCapture, imageAnalysis
                 )
 
                 cameraControl = camera.cameraControl
                 cameraInfo = camera.cameraInfo
+
+                // Enable torch according to current saved preference
+                cameraControl?.enableTorch(viewModel.flashOn.value)
 
             } catch (exc: Exception) {
                 Log.e("ScannerFragment", "CameraX initialization or binding failed", exc)
@@ -417,7 +496,7 @@ class ScannerFragment : Fragment() {
     }
 
     private fun takePhoto() {
-        if (viewModel.useNativeScanner.value) {
+        if (viewModel.useNativeScanner.value || viewModel.usePhoneCamera.value) {
             val options = com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions.Builder()
                 .setGalleryImportAllowed(true)
                 .setPageLimit(1)
@@ -446,12 +525,26 @@ class ScannerFragment : Fragment() {
 
         binding.progressBar.visibility = View.VISIBLE
 
+        // Play shutter sound if enabled
+        if (viewModel.clickSound.value) {
+            try {
+                val sound = android.media.MediaActionSound()
+                sound.play(android.media.MediaActionSound.SHUTTER_CLICK)
+            } catch (e: Exception) {
+                Log.e("ScannerFragment", "Failed to play shutter sound", e)
+            }
+        }
+
         imageCapture.takePicture(
             ContextCompat.getMainExecutor(currentContext),
             object : ImageCapture.OnImageCapturedCallback() {
                 override fun onCaptureSuccess(imageProxy: ImageProxy) {
                     val rawBitmap = imageProxy.toBitmap()
-                    val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+                    val rotationDegrees = if (viewModel.autoRotation.value) {
+                        imageProxy.imageInfo.rotationDegrees
+                    } else {
+                        0
+                    }
                     val bitmap = if (rotationDegrees != 0) {
                         val matrix = android.graphics.Matrix().apply { postRotate(rotationDegrees.toFloat()) }
                         val rotated = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
@@ -476,15 +569,7 @@ class ScannerFragment : Fragment() {
     }
 
     private fun toggleFlash() {
-        flashEnabled = !flashEnabled
-        cameraControl?.enableTorch(flashEnabled)
-        imageCapture?.flashMode = if (flashEnabled) {
-            ImageCapture.FLASH_MODE_ON
-        } else {
-            ImageCapture.FLASH_MODE_OFF
-        }
-        
-        _binding?.btnFlash?.alpha = if (flashEnabled) 1.0f else 0.5f
+        viewModel.toggleFlash(!viewModel.flashOn.value)
     }
 
     private fun setupObservers() {
@@ -512,12 +597,32 @@ class ScannerFragment : Fragment() {
             }
         }
 
-        // Auto restart camera to align with new mood attributes on mode switch
+        // Observe flash/torch state to update physical camera on-the-fly without restart
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.currentMode.collect { mode ->
-                    if (currentViewMode == FragmentViewMode.SCANNER) {
-                        startCamera()
+                viewModel.flashOn.collect { enabled ->
+                    flashEnabled = enabled
+                    try {
+                        cameraControl?.enableTorch(enabled)
+                    } catch (e: Exception) {
+                        Log.e("ScannerFragment", "Failed to update torch", e)
+                    }
+                    imageCapture?.flashMode = if (enabled) {
+                        ImageCapture.FLASH_MODE_ON
+                    } else {
+                        ImageCapture.FLASH_MODE_OFF
+                    }
+                    _binding?.btnFlash?.alpha = if (enabled) 1.0f else 0.5f
+                }
+            }
+        }
+
+        // Observe liveDetect state to clear corners overlay when disabled
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.liveDetect.collect { enabled ->
+                    if (!enabled) {
+                        _binding?.overlayView?.updateCorners(null)
                     }
                 }
             }

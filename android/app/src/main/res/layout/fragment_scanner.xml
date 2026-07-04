@@ -12,6 +12,11 @@
         android:layout_height="match_parent"
         app:scaleType="fillCenter" />
 
+    <com.safescan.OverlayView
+        android:id="@+id/overlayView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
     <ImageView
         android:id="@+id/resultImageView"
         android:layout_width="match_parent"

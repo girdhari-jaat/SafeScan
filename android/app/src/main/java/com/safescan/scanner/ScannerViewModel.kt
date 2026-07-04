@@ -680,10 +680,21 @@ class ScannerViewModel @Inject constructor(
                 )
             } else bitmap
 
-            if (isNativeScanned) {
+            var processedBitmap = if (shadowRemove.value) {
+                try {
+                    com.safescan.domain.ImageProcessor.autoEnhance(resizedBitmap)
+                } catch (e: Exception) {
+                    resizedBitmap
+                }
+            } else {
+                resizedBitmap
+            }
+
+            val isAutoCropOff = !autoCrop.value
+            if (isNativeScanned || isAutoCropOff) {
                 val slotId = selectedSlotId.value ?: slots.value.firstOrNull { it.bitmap == null }?.id
                 if (slotId != null) {
-                    captureToSlot(resizedBitmap, slotId)
+                    captureToSlot(processedBitmap, slotId)
                     selectedSlotId.value = null
                 }
                 
@@ -691,7 +702,7 @@ class ScannerViewModel @Inject constructor(
                     it.copy(
                         isLoading = false,
                         scannedBitmap = null,
-                        lastCapturedThumbnail = resizedBitmap,
+                        lastCapturedThumbnail = processedBitmap,
                         capturedCount = it.capturedCount + 1,
                         error = null
                     )
@@ -703,7 +714,7 @@ class ScannerViewModel @Inject constructor(
                     }
                 }
             } else {
-                when (val result = scannerEngine.scanDocument(resizedBitmap)) {
+                when (val result = scannerEngine.scanDocument(processedBitmap)) {
                     is com.safescan.core.AppResult.Success -> {
                         val slotId = selectedSlotId.value ?: slots.value.firstOrNull { it.bitmap == null }?.id
                         if (slotId != null) {
@@ -743,5 +754,13 @@ class ScannerViewModel @Inject constructor(
     fun toggleEngine(type: ScannerEngineType) {
         scannerEngine.engineType = type
         _uiState.update { it.copy(currentEngine = type) }
+    }
+
+    fun rotateEditingBitmap(degrees: Float) {
+        val original = editingBitmapOriginal.value ?: return
+        val matrix = android.graphics.Matrix().apply { postRotate(degrees) }
+        val rotated = Bitmap.createBitmap(original, 0, 0, original.width, original.height, matrix, true)
+        editingBitmapOriginal.value = rotated
+        applyEdits()
     }
 }
