@@ -629,7 +629,7 @@ fun FilterItem(
 fun AdjustmentSlider(
     label: String,
     value: Float,
-    valueRange: ClosedRange<Float>,
+    valueRange: ClosedFloatingPointRange<Float>,
     onValueChange: (Float) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
