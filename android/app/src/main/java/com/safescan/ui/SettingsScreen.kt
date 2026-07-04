@@ -268,6 +268,15 @@ fun SettingsScreen(
                         checked = batterySaver,
                         onCheckedChange = { viewModel.toggleBatterySaver(it) }
                     )
+
+                    val useNativeScanner by viewModel.useNativeScanner.collectAsState()
+                    SettingsToggleItem(
+                        icon = Icons.Default.DocumentScanner,
+                        title = "Native Scanner",
+                        description = "Use ML Kit Document Scanner API if available",
+                        checked = useNativeScanner,
+                        onCheckedChange = { viewModel.toggleUseNativeScanner(it) }
+                    )
                 }
             }
 

@@ -41,6 +41,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         val LIVE_DETECT = booleanPreferencesKey("live_detect")
         val BATTERY_SAVER = booleanPreferencesKey("battery_saver")
         val USE_PHONE_CAMERA = booleanPreferencesKey("use_phone_camera")
+        val USE_NATIVE_SCANNER = booleanPreferencesKey("use_native_scanner")
         val HD_MODE = stringPreferencesKey("hd_mode")
     }
 
@@ -128,6 +129,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
 
     val usePhoneCameraFlow: Flow<Boolean> = safeData
         .map { preferences -> preferences[PreferencesKeys.USE_PHONE_CAMERA] ?: false }
+
+    val useNativeScannerFlow: Flow<Boolean> = safeData
+        .map { preferences -> preferences[PreferencesKeys.USE_NATIVE_SCANNER] ?: false }
 
     val hdModeFlow: Flow<String> = safeData
         .map { preferences -> preferences[PreferencesKeys.HD_MODE] ?: "Standard" }
@@ -267,6 +271,12 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     suspend fun setUsePhoneCamera(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.USE_PHONE_CAMERA] = enabled
+        }
+    }
+
+    suspend fun setUseNativeScanner(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.USE_NATIVE_SCANNER] = enabled
         }
     }
 

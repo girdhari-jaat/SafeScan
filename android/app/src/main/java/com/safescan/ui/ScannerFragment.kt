@@ -105,6 +105,27 @@ class ScannerFragment : Fragment() {
         }
     }
 
+    private val documentScannerLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val scanResult = com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult.fromActivityResultIntent(result.data)
+            scanResult?.pages?.forEach { page ->
+                val imageUri = page.imageUri
+                try {
+                    val inputStream = requireContext().contentResolver.openInputStream(imageUri)
+                    val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                    inputStream?.close()
+                    if (bitmap != null) {
+                        viewModel.onCapture(bitmap, true)
+                    }
+                } catch (e: Exception) {
+                    Log.e("ScannerFragment", "Error reading scanned image", e)
+                }
+            }
+        }
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -396,6 +417,29 @@ class ScannerFragment : Fragment() {
     }
 
     private fun takePhoto() {
+        if (viewModel.useNativeScanner.value) {
+            val options = com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions.Builder()
+                .setGalleryImportAllowed(true)
+                .setPageLimit(1)
+                .setResultFormats(
+                    com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions.RESULT_FORMAT_JPEG,
+                    com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions.RESULT_FORMAT_PDF
+                )
+                .setScannerMode(com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions.SCANNER_MODE_FULL)
+                .build()
+
+            com.google.mlkit.vision.documentscanner.GmsDocumentScanning.getClient(options)
+                .getStartScanIntent(requireActivity())
+                .addOnSuccessListener { intentSender ->
+                    documentScannerLauncher.launch(androidx.activity.result.IntentSenderRequest.Builder(intentSender).build())
+                }
+                .addOnFailureListener { e ->
+                    Log.e("ScannerFragment", "Failed to start native scanner", e)
+                    Toast.makeText(context, "Native scanner not available. Try another engine.", Toast.LENGTH_SHORT).show()
+                }
+            return
+        }
+
         val imageCapture = imageCapture ?: return
         val currentContext = context ?: return
         val binding = _binding ?: return

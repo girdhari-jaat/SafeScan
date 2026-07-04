@@ -61,18 +61,36 @@ object ImageProcessor {
                     Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
                 }
                 FilterType.MAGIC_COLOR -> {
-                    // Convert to LAB color space to enhance color without blowing out whites
-                    val lab = Mat()
-                    Imgproc.cvtColor(src, lab, Imgproc.COLOR_BGR2Lab)
-                    val channels = mutableListOf<Mat>()
-                    Core.split(lab, channels)
+                    // Implement whiteboard/magic color enhance inspired by OSS-DocumentScanner
+                    // 1. Difference of Gaussians (DoG)
+                    val blurred1 = Mat()
+                    val blurred2 = Mat()
+                    Imgproc.GaussianBlur(src, blurred1, Size(15.0, 15.0), 10.0)
+                    Imgproc.GaussianBlur(src, blurred2, Size(15.0, 15.0), 2.0)
                     
-                    // Apply CLAHE to the Luminance channel
-                    val clahe = Imgproc.createCLAHE(2.0, Size(8.0, 8.0))
-                    clahe.apply(channels[0], channels[0])
+                    val dog = Mat()
+                    Core.subtract(blurred1, blurred2, dog)
                     
-                    Core.merge(channels, lab)
-                    Imgproc.cvtColor(lab, outMat, Imgproc.COLOR_Lab2RGBA)
+                    // 2. Negate
+                    Core.bitwise_not(dog, dog)
+                    
+                    // 3. Contrast stretch (approximate by auto-leveling each channel)
+                    val channels = ArrayList<Mat>()
+                    Core.split(dog, channels)
+                    for (i in channels.indices) {
+                        Core.normalize(channels[i], channels[i], 0.0, 255.0, Core.NORM_MINMAX)
+                    }
+                    Core.merge(channels, outMat)
+                    
+                    // 4. Color balance (increase saturation and recover true colors slightly)
+                    val hsv = Mat()
+                    Imgproc.cvtColor(outMat, hsv, Imgproc.COLOR_BGR2HSV)
+                    val hsvChannels = ArrayList<Mat>()
+                    Core.split(hsv, hsvChannels)
+                    hsvChannels[1].convertTo(hsvChannels[1], -1, 1.5, 0.0) // Boost saturation
+                    Core.merge(hsvChannels, hsv)
+                    
+                    Imgproc.cvtColor(hsv, outMat, Imgproc.COLOR_HSV2RGBA)
                 }
                 FilterType.PHOTO -> {
                     // Increase saturation for "Vibrant" look

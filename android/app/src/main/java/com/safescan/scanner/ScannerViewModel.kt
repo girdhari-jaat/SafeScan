@@ -103,6 +103,9 @@ class ScannerViewModel @Inject constructor(
     val usePhoneCamera: StateFlow<Boolean> = settingsRepository.usePhoneCameraFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val useNativeScanner: StateFlow<Boolean> = settingsRepository.useNativeScannerFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val hdMode: StateFlow<String> = settingsRepository.hdModeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Standard")
 
@@ -291,6 +294,12 @@ class ScannerViewModel @Inject constructor(
     fun toggleUsePhoneCamera(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setUsePhoneCamera(enabled)
+        }
+    }
+
+    fun toggleUseNativeScanner(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setUseNativeScanner(enabled)
         }
     }
 
@@ -644,7 +653,7 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    fun onCapture(bitmap: Bitmap) {
+    fun onCapture(bitmap: Bitmap, isNativeScanned: Boolean = false) {
         _uiState.update { it.copy(isLoading = true, error = null) }
         
         // Save the raw captured JPG immediately to Scans folder if saveJpg is ON
@@ -668,36 +677,60 @@ class ScannerViewModel @Inject constructor(
                 )
             } else bitmap
 
-            when (val result = scannerEngine.scanDocument(resizedBitmap)) {
-                is com.safescan.core.AppResult.Success -> {
-                    val slotId = selectedSlotId.value ?: slots.value.firstOrNull { it.bitmap == null }?.id
-                    if (slotId != null) {
-                        captureToSlot(result.data, slotId)
-                        selectedSlotId.value = null
-                    }
-                    
-                    _uiState.update { 
-                        it.copy(
-                            isLoading = false,
-                            scannedBitmap = null,
-                            lastCapturedThumbnail = result.data,
-                            capturedCount = it.capturedCount + 1,
-                            error = null
-                        )
-                    }
+            if (isNativeScanned) {
+                val slotId = selectedSlotId.value ?: slots.value.firstOrNull { it.bitmap == null }?.id
+                if (slotId != null) {
+                    captureToSlot(resizedBitmap, slotId)
+                    selectedSlotId.value = null
+                }
+                
+                _uiState.update { 
+                    it.copy(
+                        isLoading = false,
+                        scannedBitmap = null,
+                        lastCapturedThumbnail = resizedBitmap,
+                        capturedCount = it.capturedCount + 1,
+                        error = null
+                    )
+                }
 
-                    if (!batchScan.value && slotId != null) {
-                        withContext(Dispatchers.Main) {
-                            openEditor(slotId)
-                        }
+                if (!batchScan.value && slotId != null) {
+                    withContext(Dispatchers.Main) {
+                        openEditor(slotId)
                     }
                 }
-                is com.safescan.core.AppResult.Error -> {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            error = result.message
-                        )
+            } else {
+                when (val result = scannerEngine.scanDocument(resizedBitmap)) {
+                    is com.safescan.core.AppResult.Success -> {
+                        val slotId = selectedSlotId.value ?: slots.value.firstOrNull { it.bitmap == null }?.id
+                        if (slotId != null) {
+                            captureToSlot(result.data, slotId)
+                            selectedSlotId.value = null
+                        }
+                        
+                        _uiState.update { 
+                            it.copy(
+                                isLoading = false,
+                                scannedBitmap = null,
+                                lastCapturedThumbnail = result.data,
+                                capturedCount = it.capturedCount + 1,
+                                error = null
+                            )
+                        }
+
+                        if (!batchScan.value && slotId != null) {
+                            withContext(Dispatchers.Main) {
+                                openEditor(slotId)
+                            }
+                        }
+                    }
+                    is com.safescan.core.AppResult.Error -> {
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                error = result.message
+                            )
+                        }
                     }
                 }
             }
