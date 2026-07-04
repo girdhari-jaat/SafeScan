@@ -23,6 +23,7 @@ import javax.inject.Inject
 @HiltViewModel
 class ScannerViewModel @Inject constructor(
     // IMPROVEMENT: Injecting all engines and repositories via Hilt DI
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val scannerEngine: DocumentScannerEngine,
     private val settingsRepository: SettingsRepository,
     private val edgeDetectionEngine: com.safescan.scanner.EdgeDetectionEngine,
@@ -121,7 +122,7 @@ class ScannerViewModel @Inject constructor(
     val editorState: MutableStateFlow<com.safescan.data.EditorState> = MutableStateFlow(com.safescan.data.EditorState())
 
     // OCR & Text Recognition States
-    private val ocrEngine = com.safescan.ocr.OcrEngine()
+    private val ocrEngine = com.safescan.ocr.OcrEngine(context)
     val recognizedText: MutableStateFlow<String?> = MutableStateFlow(null)
     val isOcrRunning: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val isBarcodeRunning: MutableStateFlow<Boolean> = MutableStateFlow(false)

@@ -85,6 +85,27 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"
     }
+
+    packaging {
+        jniLibs {
+            excludes.add("**/armeabi-v7a/**")
+            excludes.add("**/x86/**")
+            excludes.add("**/x86_64/**")
+            excludes.add("**/arm64-v8a/libopencv_calib3d.so")
+            excludes.add("**/arm64-v8a/libopencv_dnn.so")
+            excludes.add("**/arm64-v8a/libopencv_features2d.so")
+            excludes.add("**/arm64-v8a/libopencv_flann.so")
+            excludes.add("**/arm64-v8a/libopencv_gapi.so")
+            excludes.add("**/arm64-v8a/libopencv_highgui.so")
+            excludes.add("**/arm64-v8a/libopencv_img_hash.so")
+            excludes.add("**/arm64-v8a/libopencv_ml.so")
+            excludes.add("**/arm64-v8a/libopencv_objdetect.so")
+            excludes.add("**/arm64-v8a/libopencv_photo.so")
+            excludes.add("**/arm64-v8a/libopencv_stitching.so")
+            excludes.add("**/arm64-v8a/libopencv_video.so")
+            excludes.add("**/arm64-v8a/libopencv_videoio.so")
+        }
+    }
 }
 
 dependencies {
@@ -101,10 +122,11 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$camerax_version")
     implementation("androidx.camera:camera-view:$camerax_version")
 
-    // ML Kit
-    implementation("com.google.mlkit:text-recognition:16.0.0")
-    implementation("com.google.mlkit:barcode-scanning:17.2.0")
+    // ML Kit (Play Services Thin / Dynamic On-Demand Delivery)
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:16.0.1")
+    implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1")
     implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
+    implementation("com.google.android.gms:play-services-base:18.5.0")
 
     // OpenCV
     implementation("org.opencv:opencv:4.10.0")
