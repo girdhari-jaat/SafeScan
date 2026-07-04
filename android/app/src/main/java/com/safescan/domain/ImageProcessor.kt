@@ -90,7 +90,8 @@ object ImageProcessor {
                     hsvChannels[1].convertTo(hsvChannels[1], -1, 1.5, 0.0) // Boost saturation
                     Core.merge(hsvChannels, hsv)
                     
-                    Imgproc.cvtColor(hsv, outMat, Imgproc.COLOR_HSV2RGBA)
+                    Imgproc.cvtColor(hsv, outMat, Imgproc.COLOR_HSV2BGR)
+                    Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_BGR2RGBA)
                 }
                 FilterType.PHOTO -> {
                     // Increase saturation for "Vibrant" look
@@ -103,7 +104,8 @@ object ImageProcessor {
                     channels[1].convertTo(channels[1], -1, 1.2, 0.0)
                     
                     Core.merge(channels, hsv)
-                    Imgproc.cvtColor(hsv, outMat, Imgproc.COLOR_HSV2RGBA)
+                    Imgproc.cvtColor(hsv, outMat, Imgproc.COLOR_HSV2BGR)
+                    Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_BGR2RGBA)
                 }
                 FilterType.COLOR -> {
                     Imgproc.cvtColor(src, outMat, Imgproc.COLOR_BGR2RGBA)
