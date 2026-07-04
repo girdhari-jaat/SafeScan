@@ -633,6 +633,9 @@ class ScannerViewModel @Inject constructor(
                 settingsRepository.setScannerMode(mode)
                 // Let collect trigger but instantly override slots with actual persistent files
                 slots.value = loadedSlots
+                if (loadedSlots.isNotEmpty()) {
+                    openEditor(loadedSlots.first().id)
+                }
             }
         }
     }
