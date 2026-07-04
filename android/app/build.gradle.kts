@@ -123,8 +123,8 @@ dependencies {
     implementation("androidx.camera:camera-view:$camerax_version")
 
     // ML Kit (Play Services Thin / Dynamic On-Demand Delivery)
-    implementation("com.google.android.gms:play-services-mlkit-text-recognition:16.0.1")
-    implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:16.0.0")
+    implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.0")
     implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
     implementation("com.google.android.gms:play-services-base:18.5.0")
 
