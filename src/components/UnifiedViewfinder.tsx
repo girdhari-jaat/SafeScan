@@ -31,6 +31,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useCamera } from "../contexts/CameraContext";
+import { triggerVibration } from "../utils/feedback";
 import { PAPER_RATIOS, CARD_RATIOS } from "../constants";
 import { DocumentScannerService } from "../services/DocumentScannerService";
 
@@ -148,19 +149,7 @@ export const UnifiedViewfinder = React.memo(
 
       const isGridActive = showGrid !== undefined ? showGrid : !!settings?.showGrid;
 
-      // Maintain refs of fast-changing values for the high-frequency animation loop
-      const detectedCornersRef = useRef(detectedCorners);
-      const autoDetectEnabledRef = useRef(settings?.autoDetectEnabled);
-
-      useEffect(() => {
-        detectedCornersRef.current = detectedCorners;
-      }, [detectedCorners]);
-
-      useEffect(() => {
-        autoDetectEnabledRef.current = settings?.autoDetectEnabled;
-      }, [settings?.autoDetectEnabled]);
-
-      // Active live boundary overlay drawing loop inside UnifiedViewfinder
+      // Active live boundary overlay drawing loop inside UnifiedViewfinder - fully optimized and reactive to detectedCorners
       const liveOverlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
       useEffect(() => {
@@ -169,8 +158,6 @@ export const UnifiedViewfinder = React.memo(
 
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
-
-        let animFrameId: number;
         
         // Cache layout size so we don't query getBoundingClientRect on every frame
         let dtw = canvas.clientWidth || 300;
@@ -181,22 +168,7 @@ export const UnifiedViewfinder = React.memo(
           canvas.height = dth;
         }
 
-        const resizeObserver = new ResizeObserver((entries) => {
-          for (let entry of entries) {
-            const rect = entry.contentRect;
-            const w = Math.round(rect.width || canvas.clientWidth || 300);
-            const h = Math.round(rect.height || canvas.clientHeight || 150);
-            dtw = w;
-            dth = h;
-            if (canvas.width !== w || canvas.height !== h) {
-              canvas.width = w;
-              canvas.height = h;
-            }
-          }
-        });
-        resizeObserver.observe(canvas);
-
-        // Cache computed color outside the high-frequency loop to prevent style recalculation thrashing
+        // Cache computed color outside the loop to prevent style recalculation thrashing
         const primaryColor =
           getComputedStyle(document.documentElement)
             .getPropertyValue("--primary")
@@ -205,31 +177,30 @@ export const UnifiedViewfinder = React.memo(
         const drawOverlay = () => {
           ctx.clearRect(0, 0, dtw, dth);
 
-          const currentCorners = detectedCornersRef.current;
-          const isAutoDetectActive = autoDetectEnabledRef.current !== false;
+          const isAutoDetectActive = settings?.autoDetectEnabled !== false;
 
           // Only draw if auto-detect setting is active and corners are locked
           if (
-            currentCorners &&
-            currentCorners.tl &&
+            detectedCorners &&
+            detectedCorners.tl &&
             isAutoDetectActive
           ) {
             const video = videoRef.current;
             let p0 = {
-              x: (currentCorners.tl.x / 100) * dtw,
-              y: (currentCorners.tl.y / 100) * dth,
+              x: (detectedCorners.tl.x / 100) * dtw,
+              y: (detectedCorners.tl.y / 100) * dth,
             };
             let p1 = {
-              x: (currentCorners.tr.x / 100) * dtw,
-              y: (currentCorners.tr.y / 100) * dth,
+              x: (detectedCorners.tr.x / 100) * dtw,
+              y: (detectedCorners.tr.y / 100) * dth,
             };
             let p2 = {
-              x: (currentCorners.br.x / 100) * dtw,
-              y: (currentCorners.br.y / 100) * dth,
+              x: (detectedCorners.br.x / 100) * dtw,
+              y: (detectedCorners.br.y / 100) * dth,
             };
             let p3 = {
-              x: (currentCorners.bl.x / 100) * dtw,
-              y: (currentCorners.bl.y / 100) * dth,
+              x: (detectedCorners.bl.x / 100) * dtw,
+              y: (detectedCorners.bl.y / 100) * dth,
             };
 
             if (video && video.videoWidth && video.videoHeight) {
@@ -260,10 +231,10 @@ export const UnifiedViewfinder = React.memo(
                 };
               };
 
-              p0 = mapPoint(currentCorners.tl);
-              p1 = mapPoint(currentCorners.tr);
-              p2 = mapPoint(currentCorners.br);
-              p3 = mapPoint(currentCorners.bl);
+              p0 = mapPoint(detectedCorners.tl);
+              p1 = mapPoint(detectedCorners.tr);
+              p2 = mapPoint(detectedCorners.br);
+              p3 = mapPoint(detectedCorners.bl);
             }
 
             ctx.beginPath();
@@ -295,16 +266,30 @@ export const UnifiedViewfinder = React.memo(
               ctx.stroke();
             });
           }
-
-          animFrameId = requestAnimationFrame(drawOverlay);
         };
 
-        animFrameId = requestAnimationFrame(drawOverlay);
+        const resizeObserver = new ResizeObserver((entries) => {
+          for (let entry of entries) {
+            const rect = entry.contentRect;
+            const w = Math.round(rect.width || canvas.clientWidth || 300);
+            const h = Math.round(rect.height || canvas.clientHeight || 150);
+            dtw = w;
+            dth = h;
+            if (canvas.width !== w || canvas.height !== h) {
+              canvas.width = w;
+              canvas.height = h;
+            }
+            drawOverlay();
+          }
+        });
+        resizeObserver.observe(canvas);
+
+        drawOverlay();
+
         return () => {
-          cancelAnimationFrame(animFrameId);
           resizeObserver.disconnect();
         };
-      }, [videoRef]);
+      }, [detectedCorners, settings?.autoDetectEnabled, videoRef]);
 
       // Master watchdog to synchronize and monitor media stream playback on the video element
       useEffect(() => {
@@ -369,9 +354,7 @@ export const UnifiedViewfinder = React.memo(
 
         longPressTimeoutRef.current = setTimeout(() => {
           setIsShutterDraggable(true);
-          if (navigator.vibrate) {
-            navigator.vibrate(60);
-          }
+          triggerVibration(60);
           addLog("[UnifiedViewfinder] Shutter button unlocked for position adjustment!");
           if (pointerDownEventRef.current) {
             dragControls.start(pointerDownEventRef.current);

@@ -35,6 +35,7 @@ import { useTranslation, Language } from '../lib/i18n';
 import { clearDisplayCache } from '../utils/db';
 import { globalImageCache } from '../utils/globalImageCache';
 import { DocumentScannerService } from '../services/DocumentScannerService';
+import { requestNotificationPermissions } from '../utils/feedback';
 
 interface SettingsProps {
   onClose: () => void;
@@ -497,7 +498,13 @@ const Settings: React.FC<SettingsProps> = ({ onClose, onCloseToDefault, onInstal
                   label={t.haptic || "Haptic & Sound Alerts"} 
                   description={(t as any).hapticAndSoundAlertsDesc || "Confirm successful actions with haptic and click responses"} 
                   value={settings.clickSound} 
-                  onToggle={() => updateSetting('clickSound', !settings.clickSound)}
+                  onToggle={async () => {
+                    const nextVal = !settings.clickSound;
+                    updateSetting('clickSound', nextVal);
+                    if (nextVal) {
+                      await requestNotificationPermissions();
+                    }
+                  }}
                   icon={Activity}
                 />
                 <Toggle 

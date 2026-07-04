@@ -825,22 +825,16 @@ function Crop({
                       <Sparkles className="w-3.5 h-3.5 fill-purple-500/10 animate-pulse" /> ML Kit Vision
                     </span>
                     <span className="text-[9px] text-[var(--text-secondary)] leading-normal max-w-[240px]">
-                      {settings.offlineMode 
-                        ? "AI edge detection is unavailable in Offline-Only mode." 
-                        : "Detect borders, correct perspectives, and crop with extreme precision."}
+                      Detect borders, correct perspectives, and crop with extreme precision.
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleAutoDetect(true)}
                     id="editor-ai-detect-btn"
-                    disabled={isAutoDetecting || settings.offlineMode}
-                    className={`px-4 py-2 text-white font-bold text-[10px] uppercase tracking-wider rounded-xl cursor-pointer hover:opacity-95 active:scale-[0.97] transition-all flex items-center justify-center gap-1.5 shadow-md min-h-[38px] ${
-                      settings.offlineMode 
-                        ? 'bg-zinc-700 pointer-events-none opacity-40 border border-zinc-650' 
-                        : 'bg-gradient-to-r from-purple-600 to-pink-600 border border-purple-500/30'
-                    }`}
-                    title={settings.offlineMode ? "AI detection is disabled in Offline-Only mode" : "Automatically detect page corners using ML Kit"}
+                    disabled={isAutoDetecting}
+                    className="px-4 py-2 text-white font-bold text-[10px] uppercase tracking-wider rounded-xl cursor-pointer hover:opacity-95 active:scale-[0.97] transition-all flex items-center justify-center gap-1.5 shadow-md min-h-[38px] bg-gradient-to-r from-purple-600 to-pink-600 border border-purple-500/30"
+                    title="Automatically detect page corners using ML Kit"
                   >
                     {isAutoDetecting ? (
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />

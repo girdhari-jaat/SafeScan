@@ -125,6 +125,13 @@ export function CameraProvider({ children }: { children: ReactNode }) {
 
     const runNextDetection = async () => {
       if (!active) return;
+
+      // If app is in background, postpone detection to conserve battery/CPU
+      if (document.hidden) {
+        setTimeout(runNextDetection, 1000);
+        return;
+      }
+
       const video = videoRef.current;
       if (video && video.readyState === 4 && workerAPI && shouldBeRunningRef.current) {
         const dw = 320;
@@ -191,11 +198,13 @@ export function CameraProvider({ children }: { children: ReactNode }) {
       }
       
       if (active) {
+        // Battery Saver or Capacitor: increase interval to reduce CPU load
+        const delay = settings.batterySaverEnabled ? 1500 : 350;
         setTimeout(() => {
           if (active) {
             requestAnimationFrame(runNextDetection);
           }
-        }, 350);
+        }, delay);
       }
     };
 
@@ -203,7 +212,7 @@ export function CameraProvider({ children }: { children: ReactNode }) {
       active = false;
       setDetectedCorners(null);
     };
-  }, [settings.autoDetectEnabled, isReady, cameraError, settings.scannerSubTab]);
+  }, [settings.autoDetectEnabled, isReady, cameraError, settings.scannerSubTab, settings.batterySaverEnabled]);
 
   const torchStateRef = useRef<boolean | null>(null);
   const isCapturingInternalRef = useRef(false);

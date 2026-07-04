@@ -406,10 +406,20 @@ function Editor({
     setAiResult(null);
 
     try {
-      // 1. Fetch original image binary blob
-      const response = await fetch(aiPage.imgUrl);
-      if (!response.ok) throw new Error("Could not retrieve original image content from the URL cache.");
-      const blob = await response.blob();
+      // 1. Fetch original image binary blob (checks IndexedDB first for maximum reliability)
+      let blob: Blob | null = null;
+      if (aiPage.page?.originalImageId) {
+        try {
+          blob = await getImageBlob(aiPage.page.originalImageId);
+        } catch (e) {
+          console.warn("[Editor] Could not get original image from IndexedDB, falling back to fetch", e);
+        }
+      }
+      if (!blob) {
+        const response = await fetch(aiPage.imgUrl);
+        if (!response.ok) throw new Error("Could not retrieve original image content from the URL cache.");
+        blob = await response.blob();
+      }
 
       // 2. Read as array buffer to extract base64 cleanly
       const base64Data = await new Promise<string>((resolve, reject) => {
@@ -425,34 +435,78 @@ function Editor({
         reader.readAsDataURL(blob);
       });
 
-      // 3. Synchronize with our secure offline-ready ML Kit services
       const base64DataString = base64Data.split(',')[1] || base64Data;
       let parsed;
-      try {
-        // Try barcode first
-        const barcodeResult = await BarcodeService.processImage(base64DataString);
-        if (barcodeResult.success) {
-          parsed = barcodeResult;
-        } else {
-          // Fall back to OCR
-          const ocrText = await OCRService.detectText(base64DataString);
-          if (ocrText && ocrText.trim().length > 0 && ocrText !== 'OCR is only supported on native Android/iOS devices.') {
-             parsed = {
-               success: true,
-               data: {
-                 documentType: "OCR Text",
-                 detectedLanguage: "Auto",
-                 summaryText: "Text extracted via ML Kit",
-                 extractedFields: [],
-                 fullTranscript: ocrText
-               }
-             };
-          } else {
-             parsed = { success: false, error: "No text or barcode found in the document" };
+
+      const isCapacitor = typeof window !== 'undefined' && !!(window as any).Capacitor;
+      // Online check: offlineMode is OFF, browser reports onLine, and we are NOT running inside a Capacitor/APK native container
+      const isOnline = !isCapacitor && !settings.offlineMode && (typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+      if (isOnline) {
+        try {
+          addLog("[DocAI] Offline mode is OFF, calling online Gemini API /api/gemini/analyze");
+          const apiRes = await fetch("/api/gemini/analyze", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              base64Data: base64DataString,
+              mimeType: blob.type || "image/jpeg",
+              documentTitle: activeDocument.title,
+              targetLanguage: targetLanguage || "English",
+              appName: settings.customAppName || "SafeScan",
+            }),
+          });
+
+          if (!apiRes.ok) {
+            const errData = await apiRes.json().catch(() => ({}));
+            throw new Error(errData.error || `Online Gemini API error (status ${apiRes.status})`);
           }
+
+          const apiJson = await apiRes.json();
+          if (apiJson.success && apiJson.data) {
+            parsed = { success: true, data: apiJson.data };
+          } else {
+            throw new Error(apiJson.error || "Online Gemini API did not return valid data.");
+          }
+        } catch (onlineErr: any) {
+          console.warn("[DocAI] Online Gemini API failed, falling back to local OCR:", onlineErr);
+          // Fallback to local
+          parsed = await runLocalOCR(base64DataString);
         }
-      } catch (err: any) { 
-        parsed = { success: false, error: err.message || "Local Barcode scan failed" };
+      } else {
+        // Run local OCR
+        parsed = await runLocalOCR(base64DataString);
+      }
+
+      async function runLocalOCR(b64: string) {
+        try {
+          // Try barcode first
+          const barcodeResult = await BarcodeService.processImage(b64);
+          if (barcodeResult.success) {
+            return barcodeResult;
+          } else {
+            // Fall back to OCR
+            const ocrText = await OCRService.detectText(b64);
+            if (ocrText && ocrText.trim().length > 0 && ocrText !== 'OCR is only supported on native Android/iOS devices.') {
+               return {
+                 success: true,
+                 data: {
+                   documentType: "OCR Text",
+                   detectedLanguage: "Auto",
+                   summaryText: "Text extracted via ML Kit",
+                   extractedFields: [],
+                   fullTranscript: ocrText
+                 }
+               };
+            } else {
+               return { success: false, error: "No text or barcode found in the document" };
+            }
+          }
+        } catch (err: any) { 
+          return { success: false, error: err.message || "Local Barcode scan failed" };
+        }
       }
 
       if (!parsed.success) {
@@ -466,7 +520,7 @@ function Editor({
     } finally {
       setAiLoading(false);
     }
-  }, [aiPage, activeDocument.title, targetLanguage, settings.customAppName]);
+  }, [aiPage, activeDocument.title, targetLanguage, settings.customAppName, settings.offlineMode]);
 
   const handleFinishRename = useCallback(() => {
     const trimmed = editTitleValue.trim();
@@ -940,55 +994,62 @@ function Editor({
       {aiPage && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-[50] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
           <div className="bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            {/* Header */}
-            <div className="p-5 border-b border-[var(--border-color)] bg-[var(--bg-card)] flex justify-between items-center">
+            {/* Header - Thinner */}
+            <div className="py-3 px-5 border-b border-[var(--border-color)] bg-[var(--bg-card)] flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2 text-amber-500">
-                <Sparkles className="w-5 h-5 fill-amber-500/20" />
-                <h3 className="font-black text-sm uppercase tracking-widest text-[var(--text-primary)]">
-                  {settings.customAppName || "SafeScan"} {t.extractText}
+                <Sparkles className="w-4 h-4 fill-amber-500/10 animate-pulse" />
+                <h3 className="font-extrabold text-xs uppercase tracking-wider text-[var(--text-primary)]">
+                  AI Extract
                 </h3>
               </div>
               <button
                 onClick={() => setAiPage(null)}
-                className="p-1 px-2 border border-[var(--border-color)] rounded-full text-xs font-mono font-extrabold text-[var(--text-secondary)] hover:text-rose-500 hover:border-rose-500/50 transition-all cursor-pointer active:scale-95"
+                className="w-8 h-8 rounded-full border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-rose-500 hover:border-rose-500/50 transition-all cursor-pointer active:scale-95 flex items-center justify-center shrink-0 bg-[var(--bg-primary)]"
+                aria-label="Close"
               >
-                Close • ✕
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
             {/* Scrollable Container */}
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
-              {/* Image Thumbnail and Option bar */}
-              <div className="flex items-center gap-4 bg-[var(--bg-card)] p-4 rounded-3xl border border-[var(--border-color)]">
-                <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 border border-[var(--border-color)] bg-gray-100">
-                  <img src={aiPage.imgUrl} className="w-full h-full object-cover" alt="Active Scan" />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <span className="text-[10px] font-black uppercase text-[var(--text-secondary)] font-mono tracking-wider">
-                    Target Document Page {aiPage.index + 1}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <Languages className="w-3.5 h-3.5 text-[var(--primary)]" />
-                    <span className="text-xs text-[var(--text-primary)] font-bold">
-                      Translation Input:
+              {/* Image Thumbnail and Option bar - Pro Level Non-Overlapping Layout */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-[var(--bg-card)] p-4 rounded-3xl border border-[var(--border-color)]">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 border border-[var(--border-color)] bg-zinc-900 shadow-inner">
+                    <img src={aiPage.imgUrl} className="w-full h-full object-cover" alt="Active Scan" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[10px] font-black uppercase text-[var(--text-secondary)] font-mono tracking-wider block">
+                      Target Page
+                    </span>
+                    <span className="text-xs text-[var(--text-primary)] font-bold truncate block">
+                      Document Page {aiPage.index + 1}
                     </span>
                   </div>
                 </div>
-                {/* Language Picker */}
-                <select
-                  value={targetLanguage}
-                  onChange={(e) => setTargetLanguage(e.target.value)}
-                  disabled={aiLoading}
-                  className="bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl py-1 px-2.5 text-xs font-bold text-[var(--text-primary)] outline-none cursor-pointer focus:border-[var(--primary)] text-right"
-                >
-                  <option value="English">None (English)</option>
-                  <option value="Urdu">Urdu (اردو)</option>
-                  <option value="Spanish">Spanish (Español)</option>
-                  <option value="Arabic">Arabic (العربية)</option>
-                  <option value="French">French (Français)</option>
-                  <option value="German">German (Deutsch)</option>
-                  <option value="Hindi">Hindi (हिन्दी)</option>
-                </select>
+                
+                {/* Language Selector container to avoid overlapping */}
+                <div className="flex flex-col gap-1.5 min-w-[150px] pt-3 sm:pt-0 border-t sm:border-t-0 border-[var(--border-color)]">
+                  <label className="text-[10px] font-black uppercase text-[var(--text-secondary)] font-mono tracking-wider flex items-center gap-1">
+                    <Languages className="w-3.5 h-3.5 text-[var(--primary)]" />
+                    Translate To
+                  </label>
+                  <select
+                    value={targetLanguage}
+                    onChange={(e) => setTargetLanguage(e.target.value)}
+                    disabled={aiLoading}
+                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl py-2 px-3 text-xs font-bold text-[var(--text-primary)] outline-none cursor-pointer focus:border-[var(--primary)] transition-all"
+                  >
+                    <option value="English">None (English)</option>
+                    <option value="Urdu">Urdu (اردو)</option>
+                    <option value="Spanish">Spanish (Español)</option>
+                    <option value="Arabic">Arabic (العربية)</option>
+                    <option value="French">French (Français)</option>
+                    <option value="German">German (Deutsch)</option>
+                    <option value="Hindi">Hindi (हिन्दी)</option>
+                  </select>
+                </div>
               </div>
 
               {/* Action Button trigger */}
@@ -997,22 +1058,11 @@ function Editor({
                   <button
                     type="button"
                     onClick={handleRunDocumentAI}
-                    disabled={isOffline}
-                    className={`w-full text-white font-extrabold text-xs uppercase tracking-wider py-4 rounded-2xl cursor-pointer hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-md min-h-[48px] ${
-                      isOffline ? 'bg-zinc-700 pointer-events-none opacity-50' : 'bg-[var(--primary)]'
-                    }`}
+                    className="w-full text-white font-extrabold text-xs uppercase tracking-wider py-4 rounded-2xl cursor-pointer hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-md min-h-[48px] bg-[var(--primary)]"
                   >
                     <Cpu className="w-4 h-4" />
                     {aiLoading ? t.analyzing : t.runAnalysis}
                   </button>
-                  {isOffline && (
-                    <div className="flex items-center gap-2 justify-center py-2 px-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-                      <ZapOff className="w-3.5 h-3.5 text-amber-600" />
-                      <span className="text-[10px] font-bold text-amber-700 uppercase tracking-tight">
-                        {t.onlineRequired}
-                      </span>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -1139,13 +1189,13 @@ function Editor({
             </div>
 
             {/* Footer sync stats */}
-            <div className="p-4 border-t border-[var(--border-color)] bg-[var(--bg-card)] text-center font-mono flex items-center justify-between">
-              <span className="text-[9px] text-[var(--text-secondary)] font-bold">
+            <div className="py-2.5 px-5 border-t border-[var(--border-color)] bg-[var(--bg-card)] text-center font-mono flex items-center justify-between shrink-0">
+              <span className="text-[9px] text-[var(--text-secondary)] font-bold uppercase tracking-wider">
                 SECURE ENDPOINT • LOCAL BLOB
               </span>
               <button
                 onClick={() => setAiPage(null)}
-                className="bg-zinc-800 text-white font-extrabold text-[10px] uppercase py-1.5 px-3.5 rounded-lg border border-zinc-700 hover:bg-zinc-700 transition-all cursor-pointer"
+                className="bg-zinc-800 hover:bg-zinc-700 text-white font-extrabold text-[10px] uppercase py-1.5 px-4 rounded-xl border border-zinc-700/80 active:scale-95 transition-all cursor-pointer"
               >
                 Done
               </button>

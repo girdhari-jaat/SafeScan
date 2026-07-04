@@ -10,6 +10,7 @@ import { CARD_RATIOS } from "../constants";
 import { orderPoints } from "../utils/edge/geometry";
 import { addLog } from "../utils/renderStats";
 import { useSharedSettings } from "../lib/useSharedSettings";
+import { triggerVibration } from "../utils/feedback";
 
 interface UseCropHookProps {
   imageSrc: string | Blob;
@@ -529,16 +530,14 @@ export function useCropHook({
   ]);
 
   const handleAutoDetect = async (useMLKit: boolean = false) => {
-    // Force 100% offline edge detection
-    useMLKit = false;
-    
-    if (settings.offlineMode) {
-      useMLKit = false;
-    }
     if (isAutoDetecting) return;
     setIsAutoDetecting(true);
+
+    const isCapacitor = typeof window !== "undefined" && (window as any).Capacitor;
+    const isOnline = !settings.offlineMode && (typeof navigator !== 'undefined' ? navigator.onLine : true) && !isCapacitor;
+
     triggerLocalToast(
-      useMLKit ? "AI detecting borders..." : "Analyzing image bounds...",
+      isOnline ? "AI detecting borders..." : "Analyzing image bounds...",
     );
 
     await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -552,6 +551,58 @@ export function useCropHook({
         const response = await fetch(imgUrl);
         blob = await response.blob();
       }
+
+      if (isOnline) {
+        try {
+          addLog("[CropHook] Offline mode is OFF, calling online Gemini API /api/gemini/detect-edges");
+          const base64Data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              if (typeof reader.result === 'string') {
+                resolve(reader.result.split(',')[1]);
+              } else {
+                reject(new Error("Failed to read image as Base64"));
+              }
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+
+          const apiRes = await fetch("/api/gemini/detect-edges", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              imageBase64: base64Data,
+            }),
+          });
+
+          if (apiRes.ok) {
+            const apiJson = await apiRes.json();
+            if (apiJson.points && apiJson.points.length === 4) {
+              const orderedRel = orderPoints(apiJson.points);
+              setCorners({
+                tl: { x: orderedRel[0].x * 100, y: orderedRel[0].y * 100 },
+                tr: { x: orderedRel[1].x * 100, y: orderedRel[1].y * 100 },
+                br: { x: orderedRel[2].x * 100, y: orderedRel[2].y * 100 },
+                bl: { x: orderedRel[3].x * 100, y: orderedRel[3].y * 100 },
+              });
+              triggerLocalToast("Gemini AI detected borders!");
+              setShowFlash(true);
+              setTimeout(() => setShowFlash(false), 1200);
+              setIsAutoDetecting(false);
+              return;
+            }
+          }
+        } catch (onlineErr) {
+          console.warn("[CropHook] Online Gemini edge detection failed, falling back to local:", onlineErr);
+        }
+      }
+
+      // Force 100% offline edge detection fallback
+      useMLKit = false;
+
       const bitmapData = await createImageBitmap(blob);
       addLog(
         useMLKit
@@ -777,32 +828,22 @@ export function useCropHook({
 
     // Trigger a 50ms haptic feedback/vibration on mobile for corner dragging
     if (
-      typeof window !== "undefined" &&
-      window.navigator &&
-      window.navigator.vibrate
+      [
+        "tl",
+        "tr",
+        "br",
+        "bl",
+        "tl_half",
+        "tr_half",
+        "bl_half",
+        "br_half",
+        "lt_half",
+        "lb_half",
+        "rt_half",
+        "rb_half",
+      ].includes(corner)
     ) {
-      if (
-        [
-          "tl",
-          "tr",
-          "br",
-          "bl",
-          "tl_half",
-          "tr_half",
-          "bl_half",
-          "br_half",
-          "lt_half",
-          "lb_half",
-          "rt_half",
-          "rb_half",
-        ].includes(corner)
-      ) {
-        try {
-          window.navigator.vibrate(50);
-        } catch (_err) {
-          // ignore potential block on sandboxed iframe contexts
-        }
-      }
+      triggerVibration(50);
     }
   };
 

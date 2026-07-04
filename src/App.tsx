@@ -23,6 +23,7 @@ import { useAppHook } from "./AppHook";
 import { useSharedSettings } from "./lib/useSharedSettings";
 import { useTranslation, Language } from "./lib/i18n";
 import { useCamera } from "./contexts/CameraContext";
+import { requestNotificationPermissions } from "./utils/feedback";
 
 import DocumentGridStatic from "./components/DocumentGrid";
 import EditorStatic from "./components/Editor";
@@ -82,6 +83,10 @@ export default function App() {
 
   React.useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 2000);
+    // Explicitly prompt for Notification Permissions on Capacitor/Android launch to enable haptics and sounds
+    requestNotificationPermissions().catch((err) => {
+      console.warn("[App] Failed to request notification permissions:", err);
+    });
     return () => clearTimeout(timer);
   }, []);
 
@@ -799,11 +804,9 @@ export default function App() {
 
         {/* Dynamic Nav View Sheets router */}
         <div
-          className={`flex-1 overflow-y-auto flex flex-col ${
-            currentView === "camera" || currentView === "home"
+          className={`flex-1 overflow-hidden flex flex-col ${
+            currentView === "camera" || currentView === "home" || currentView === "library" || currentView === "settings" || currentView === "pdf" || currentView === "editor"
               ? "p-0 gap-0 h-full"
-              : currentView === "editor"
-              ? "p-0 gap-0"
               : "px-4 py-5 gap-6"
           }`}
           id="app-viewport"
@@ -896,7 +899,7 @@ export default function App() {
               )}
 
               {currentView === "pdf" && (
-                <div className="flex-1 flex flex-col justify-start py-2 h-full gap-4">
+                <div className="flex-1 flex flex-col h-full">
                   <ViewPDFReader
                     batterySaverEnabled={settings.batterySaverEnabled}
                     ref={pdfReaderRef}
@@ -929,7 +932,7 @@ export default function App() {
                 />
               )}
               {currentView === "settings" && (
-                <div className="flex-1 flex flex-col justify-start py-2 h-full gap-4">
+                <div className="flex-1 flex flex-col h-full">
                   <ViewSettings
                     documentsCount={documents.length}
                     onClose={() => setCurrentView("library")}
