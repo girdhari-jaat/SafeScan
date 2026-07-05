@@ -34,15 +34,6 @@ jobs:
           gradle-version: "8.5"
           build-root-directory: android
 
-      # YE NAYA TARIQA HAI - 100% WORK KAREGA
-      - name: Download OpenCV from Maven and extract .so
-        run: |
-          mkdir -p app/src/main/jniLibs/arm64-v8a
-          wget https://repo1.maven.org/maven2/org/opencv/opencv/4.10.0/opencv-4.10.0.jar
-          jar xf opencv-4.10.0.jar nu/pattern/opencv/android/arm64/libopencv_java4.so
-          mv nu/pattern/opencv/android/arm64/libopencv_java4.so app/src/main/jniLibs/arm64-v8a/
-          rm -rf opencv-4.10.0.jar nu
-
       - name: Build Release APK
         run: |
           gradle assembleRelease --no-daemon
@@ -58,3 +49,16 @@ jobs:
           name: app-release-apk
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
+
+#    - name: Run Instrumentation Tests on Android Emulator
+#      uses: reactivecircus/android-emulator-runner@v2
+#      with:
+#        api-level: 34
+#        target: google_apis
+#        arch: x86_64
+#        profile: Nexus 6
+#        disable-animations: true
+#        working-directory: android
+#        emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-audio -no-boot-anim -camera-back none -camera-front none -memory 2048
+#        script: |
+#          gradle connectedAndroidTest --no-daemon --stacktrace

@@ -13,6 +13,8 @@ android {
     compileSdk = 36
     buildToolsVersion = "36.0.0"
 
+
+
     defaultConfig {
         applicationId = "com.safescan"
         minSdk = 26
@@ -98,11 +100,6 @@ android {
             excludes.add("META-INF/LICENSE")
             excludes.add("META-INF/NOTICE")
         }
-        jniLibs {
-            excludes.add("**/armeabi-v7a/**")
-            excludes.add("**/x86/**")
-            excludes.add("**/x86_64/**")
-        }
     }
 }
 
@@ -120,8 +117,10 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$camerax_version")
     implementation("androidx.camera:camera-view:$camerax_version")
 
-    // OpenCV - REMOVED MAVEN DEPENDENCY. We use .so from Github Actions now
-    implementation("org.opencv:opencv:4.10.0") // YE WAPIS LAGA DO
+
+
+    // OpenCV
+    implementation("org.opencv:opencv-android:4.9.0")
 
     // Lifecycle/ViewModel/Coroutines
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
