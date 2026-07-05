@@ -62,6 +62,7 @@
         <service
             android:name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService"
             android:exported="false"
+            android:splitName=""
             tools:replace="android:splitName" />
     </application>
 
