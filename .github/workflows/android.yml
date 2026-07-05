@@ -37,10 +37,10 @@ jobs:
       - name: Download and setup OpenCV native library
         run: |
           mkdir -p app/src/main/jniLibs/arm64-v8a
-          wget https://github.com/opencv/releases/download/4.10.0/opencv-4.10.0-android-sdk.zip
-          unzip opencv-4.10.0-android-sdk.zip "sdk/native/libs/arm64-v8a/libopencv_java4.so"
-          mv sdk/native/libs/arm64-v8a/libopencv_java4.so app/src/main/jniLibs/arm64-v8a/
-          rm -rf sdk opencv-4.10.0-android-sdk.zip
+          wget https://sourceforge.net/projects/opencvlibrary/files/4.10.0/android/opencv-4.10.0-android-sdk.zip/download -O opencv-4.10.0-android-sdk.zip
+          unzip opencv-4.10.0-android-sdk.zip "OpenCV-android-sdk/sdk/native/libs/arm64-v8a/libopencv_java4.so"
+          mv OpenCV-android-sdk/sdk/native/libs/arm64-v8a/libopencv_java4.so app/src/main/jniLibs/arm64-v8a/
+          rm -rf OpenCV-android-sdk opencv-4.10.0-android-sdk.zip
 
       - name: Build Release APK
         run: |
