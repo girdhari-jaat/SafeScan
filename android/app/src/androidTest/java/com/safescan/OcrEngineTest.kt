@@ -16,7 +16,8 @@ class OcrEngineTest {
 
     @Before
     fun setup() {
-        ocrEngine = OcrEngine()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        ocrEngine = OcrEngine(context)
     }
 
     @Test

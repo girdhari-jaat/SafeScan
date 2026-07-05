@@ -31,4 +31,6 @@
     <string name="auto_crop_failed">Auto Crop Failed</string>
     <string name="pdf_saved">PDF Saved Successfully</string>
     <string name="no_document_found">No Document Found</string>
+    <string name="title_mlkit_ocr">ML Kit OCR Module</string>
+    <string name="title_mlkit_barcode">ML Kit Barcode Module</string>
 </resources>
