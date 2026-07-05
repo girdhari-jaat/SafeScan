@@ -120,7 +120,7 @@ dependencies {
 
 
     // OpenCV
-    implementation("org.openpnp:opencv:4.5.1-2")
+    implementation("com.quickbirdstudios:opencv-android-arm64:4.5.3.0")
 
     // Lifecycle/ViewModel/Coroutines
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")

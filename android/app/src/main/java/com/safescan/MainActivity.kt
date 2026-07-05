@@ -12,7 +12,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        if (!OpenCVLoader.initLocal()) {
+        if (!OpenCVLoader.initDebug()) {
             Toast.makeText(this, "OpenCV init failed!", Toast.LENGTH_LONG).show()
         }
         
