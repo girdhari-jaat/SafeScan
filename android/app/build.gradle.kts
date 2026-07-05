@@ -25,6 +25,9 @@ android {
         ndk {
             abiFilters.add("arm64-v8a")
         }
+
+        // Keep only English, Urdu, and Hindi resources to significantly reduce app size
+        resourceConfigurations.addAll(listOf("en", "ur", "hi"))
     }
 
     signingConfigs {
@@ -105,6 +108,14 @@ android {
             excludes.add("**/arm64-v8a/libopencv_video.so")
             excludes.add("**/arm64-v8a/libopencv_videoio.so")
         }
+        resources {
+            excludes.add("META-INF/*.kotlin_module")
+            excludes.add("META-INF/LICENSE*")
+            excludes.add("META-INF/NOTICE*")
+            excludes.add("META-INF/ASL2.0")
+            excludes.add("META-INF/LICENSE")
+            excludes.add("META-INF/NOTICE")
+        }
     }
 }
 
@@ -126,7 +137,6 @@ dependencies {
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.0")
     implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.0")
     implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
-    implementation("com.google.android.gms:play-services-base:18.5.0")
 
     // OpenCV
     implementation("org.opencv:opencv:4.10.0")
