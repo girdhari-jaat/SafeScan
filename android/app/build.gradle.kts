@@ -13,8 +13,6 @@ android {
     compileSdk = 36
     buildToolsVersion = "36.0.0"
 
-
-
     defaultConfig {
         applicationId = "com.safescan"
         minSdk = 26
@@ -122,10 +120,8 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$camerax_version")
     implementation("androidx.camera:camera-view:$camerax_version")
 
-
-
-    // OpenCV
-    implementation("com.github.jeziellago:OpenCV-Android:4.1.0")
+    // OpenCV - REMOVED MAVEN DEPENDENCY. We use .so from Github Actions now
+    // implementation("com.github.jeziellago:OpenCV-Android:4.1.0")
 
     // Lifecycle/ViewModel/Coroutines
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
