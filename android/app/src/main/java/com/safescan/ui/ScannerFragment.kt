@@ -613,7 +613,7 @@ class ScannerFragment : Fragment() {
 
     private fun takePhoto() {
         if (viewModel.useNativeScanner.value || viewModel.usePhoneCamera.value) {
-            val maxPages = when (viewModel.uiState.value.currentMode) {
+            val maxPages = when (viewModel.currentMode.value) {
                 com.safescan.data.ScannerMode.CARD -> 2
                 com.safescan.data.ScannerMode.GRID -> 8
                 else -> 50
