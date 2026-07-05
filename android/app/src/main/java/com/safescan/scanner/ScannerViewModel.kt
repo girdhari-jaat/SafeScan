@@ -116,6 +116,7 @@ class ScannerViewModel @Inject constructor(
     val selectedSlotId: MutableStateFlow<String?> = MutableStateFlow(null)
 
     val isEditing: MutableStateFlow<Boolean> = MutableStateFlow(false)
+    var isDocumentOpenedFromLibrary: Boolean = false
     val editingSlotId: MutableStateFlow<String?> = MutableStateFlow(null)
     val editingBitmapOriginal: MutableStateFlow<Bitmap?> = MutableStateFlow(null)
     val editingBitmapPreview: MutableStateFlow<Bitmap?> = MutableStateFlow(null)
@@ -620,6 +621,7 @@ class ScannerViewModel @Inject constructor(
     }
 
     fun loadDocumentIntoSlots(doc: com.safescan.data.DocumentMetadata) {
+        isDocumentOpenedFromLibrary = true
         viewModelScope.launch(Dispatchers.IO) {
             val loadedSlots = doc.pages.map { page ->
                 val bmp = documentRepository.loadOriginalBitmap(doc.id, page.id)

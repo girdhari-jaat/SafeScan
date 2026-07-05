@@ -29,7 +29,7 @@ object ScannerModule {
     @Singleton
     fun provideDocumentScannerEngine(mlScannerEngine: MLScannerEngine): DocumentScannerEngine {
         return com.safescan.ocr.MLScannerEngine(mlEngine = mlScannerEngine).apply {
-            engineType = com.safescan.scanner.ScannerEngineType.MLKIT
+            engineType = com.safescan.scanner.ScannerEngineType.LOCAL_ML
         }
     }
 }

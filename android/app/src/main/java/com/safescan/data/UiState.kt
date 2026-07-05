@@ -10,7 +10,7 @@ data class ScannerUiState(
     val scannedBitmap: Bitmap? = null,
     val lastCapturedThumbnail: Bitmap? = null,
     val capturedCount: Int = 0,
-    val currentEngine: com.safescan.scanner.ScannerEngineType = com.safescan.scanner.ScannerEngineType.MLKIT
+    val currentEngine: com.safescan.scanner.ScannerEngineType = com.safescan.scanner.ScannerEngineType.LOCAL_ML
 ) {
     // IMPROVEMENT: Added compatibility property for legacy code that looks for errorMessage
     val errorMessage: String? get() = error

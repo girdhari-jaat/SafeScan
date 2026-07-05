@@ -24,7 +24,7 @@ interface MLScannerEngine {
 }
 
 open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) {
-    var engineType: ScannerEngineType = ScannerEngineType.MLKIT
+    var engineType: ScannerEngineType = ScannerEngineType.LOCAL_ML
 
     open suspend fun scanDocument(bitmap: Bitmap): AppResult<Bitmap> = withContext(Dispatchers.Default) {
         try {

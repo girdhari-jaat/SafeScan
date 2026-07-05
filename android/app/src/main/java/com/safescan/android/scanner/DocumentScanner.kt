@@ -17,7 +17,7 @@ enum class ScannerEngineType {
 class DocumentScanner(
     private val localMLEngine: LocalMLEngine = LocalMLEngine()
 ) {
-    var currentEngine: ScannerEngineType = ScannerEngineType.MLKIT
+    var currentEngine: ScannerEngineType = ScannerEngineType.LOCAL_ML
 
     fun detectDocument(bitmap: Bitmap): Quadrilateral? {
         return when (currentEngine) {

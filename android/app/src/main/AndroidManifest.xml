@@ -53,17 +53,7 @@
             android:foregroundServiceType="camera"
             android:exported="false" />
 
-        <!-- Declare DEPENDENCIES globally to avoid merging conflicts across dynamic modules -->
-        <meta-data
-            android:name="com.google.mlkit.vision.DEPENDENCIES"
-            android:value="ocr,barcode" />
 
-        <!-- Force MlKitComponentDiscoveryService to be merged into the base APK to resolve splitName conflicts -->
-        <service
-            android:name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService"
-            android:exported="false"
-            android:splitName=""
-            tools:replace="android:splitName" />
     </application>
 
 </manifest>

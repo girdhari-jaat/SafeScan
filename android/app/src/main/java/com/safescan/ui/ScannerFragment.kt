@@ -1,7 +1,10 @@
 package com.safescan.ui
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.util.Range
@@ -106,24 +109,131 @@ class ScannerFragment : Fragment() {
         }
     }
 
-    private val documentScannerLauncher = registerForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()
+    private val systemDocumentScannerLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
-            val scanResult = com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult.fromActivityResultIntent(result.data)
-            scanResult?.pages?.forEach { page ->
-                val imageUri = page.imageUri
+            val data = result.data
+            val uris = ArrayList<android.net.Uri>()
+            
+            // Check clipData first (multi-select)
+            val clipData = data?.clipData
+            if (clipData != null) {
+                for (i in 0 until clipData.itemCount) {
+                    clipData.getItemAt(i).uri?.let { uris.add(it) }
+                }
+            } else {
+                // Check direct data
+                data?.data?.let { uris.add(it) }
+                // Also check parcelable array list of extra "android.provider.extra.SCAN_RESULT"
                 try {
-                    val inputStream = requireContext().contentResolver.openInputStream(imageUri)
-                    val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
-                    inputStream?.close()
-                    if (bitmap != null) {
-                        viewModel.onCapture(bitmap, true)
+                    val list = data?.getParcelableArrayListExtra<android.net.Uri>("android.provider.extra.SCAN_RESULT")
+                    if (list != null) {
+                        for (uri in list) {
+                            if (!uris.contains(uri)) {
+                                uris.add(uri)
+                            }
+                        }
                     }
                 } catch (e: Exception) {
-                    Log.e("ScannerFragment", "Error reading scanned image", e)
+                    Log.e("ScannerFragment", "Error reading extra SCAN_RESULT", e)
                 }
             }
+
+            if (uris.isNotEmpty()) {
+                viewLifecycleOwner.lifecycleScope.launch {
+                    for (uri in uris) {
+                        try {
+                            val inputStream = requireContext().contentResolver.openInputStream(uri)
+                            val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                            inputStream?.close()
+                            if (bitmap != null) {
+                                viewModel.onCapture(bitmap, true)
+                            }
+                        } catch (e: Exception) {
+                            Log.e("ScannerFragment", "Error reading scanned image Uri: $uri", e)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private val ocrScannerLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val data = result.data
+            val scannedText = data?.getStringExtra("label")
+                ?: data?.getStringExtra("text")
+                ?: data?.getStringExtra("com.google.android.gms.actions.extra.TEXT")
+                ?: data?.getStringExtra("com.google.android.gms.actions.extra.OCR_TEXT")
+                ?: data?.getStringExtra("OCR_TEXT")
+                ?: ""
+            
+            if (scannedText.isNotEmpty()) {
+                viewModel.recognizedText.value = scannedText
+                Toast.makeText(context, "Text captured successfully!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "No text detected", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private val qrCodeScannerLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val data = result.data
+            val scannedQr = data?.getStringExtra("android.provider.extra.SCAN_QR_CODE_RESULT")
+                ?: data?.getStringExtra("SCAN_RESULT")
+                ?: data?.data?.toString()
+                ?: ""
+            
+            if (scannedQr.isNotEmpty()) {
+                viewModel.recognizedText.value = scannedQr
+                Toast.makeText(context, "QR Scanned: $scannedQr", Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(context, "No QR data found", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun openDocumentScanner(maxPages: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            try {
+                val intent = Intent("android.provider.action.SCAN_DOCUMENT")
+                intent.putExtra("android.provider.extra.MAX_DOCUMENTS", maxPages)
+                systemDocumentScannerLauncher.launch(intent)
+            } catch (e: Exception) {
+                Log.e("ScannerFragment", "Failed to start system document scanner", e)
+                Toast.makeText(context, "System document scanner not available.", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(context, "Requires Android 13+", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun openOcrScanner() {
+        val intent = Intent("com.google.android.gms.actions.OCR_CAPTURE")
+        try {
+            ocrScannerLauncher.launch(intent)
+        } catch (e: Exception) {
+            Toast.makeText(requireContext(), "Install Google Lens", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun openQrScanner() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            try {
+                val intent = Intent("android.provider.action.SCAN_QR_CODE")
+                qrCodeScannerLauncher.launch(intent)
+            } catch (e: Exception) {
+                Log.e("ScannerFragment", "Failed to start system QR scanner", e)
+                Toast.makeText(context, "System QR scanner not available.", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(requireContext(), "Requires Android 14+", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -210,6 +320,7 @@ class ScannerFragment : Fragment() {
                         LibraryScreen(
                             viewModel = viewModel,
                             onStartScan = {
+                                viewModel.isDocumentOpenedFromLibrary = false
                                 checkPermissionAndStartScanner()
                             },
                             onOpenDocument = { doc ->
@@ -248,22 +359,28 @@ class ScannerFragment : Fragment() {
                         } else if (isEditing) {
                             com.safescan.ui.EditorScreen(viewModel = viewModel)
                         } else {
-                            SlotsScreen(
-                                viewModel = viewModel,
-                                onCaptureClick = { takePhoto() },
-                                onClose = { updateViewMode(FragmentViewMode.LIBRARY) },
-                                onFlashToggle = { toggleFlash() },
-                                onGalleryClick = { pickImageLauncher.launch("image/*") },
-                                onSlotClick = { slotId ->
-                                    viewModel.onSlotClick(slotId)
-                                    // return to preview view and result image gone
-                                    binding.resultImageView.visibility = View.GONE
-                                    binding.previewView.visibility = View.VISIBLE
-                                },
-                                onSlotLongClick = { slotId ->
-                                    viewModel.openEditor(slotId)
-                                }
-                            )
+                            if (viewModel.isDocumentOpenedFromLibrary) {
+                                androidx.compose.foundation.layout.Box(
+                                    modifier = androidx.compose.ui.Modifier.fillMaxSize()
+                                )
+                            } else {
+                                SlotsScreen(
+                                    viewModel = viewModel,
+                                    onCaptureClick = { takePhoto() },
+                                    onClose = { updateViewMode(FragmentViewMode.LIBRARY) },
+                                    onFlashToggle = { toggleFlash() },
+                                    onGalleryClick = { pickImageLauncher.launch("image/*") },
+                                    onSlotClick = { slotId ->
+                                        viewModel.onSlotClick(slotId)
+                                        // return to preview view and result image gone
+                                        binding.resultImageView.visibility = View.GONE
+                                        binding.previewView.visibility = View.VISIBLE
+                                    },
+                                    onSlotLongClick = { slotId ->
+                                        viewModel.openEditor(slotId)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -497,25 +614,7 @@ class ScannerFragment : Fragment() {
 
     private fun takePhoto() {
         if (viewModel.useNativeScanner.value || viewModel.usePhoneCamera.value) {
-            val options = com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions.Builder()
-                .setGalleryImportAllowed(true)
-                .setPageLimit(1)
-                .setResultFormats(
-                    com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions.RESULT_FORMAT_JPEG,
-                    com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions.RESULT_FORMAT_PDF
-                )
-                .setScannerMode(com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions.SCANNER_MODE_FULL)
-                .build()
-
-            com.google.mlkit.vision.documentscanner.GmsDocumentScanning.getClient(options)
-                .getStartScanIntent(requireActivity())
-                .addOnSuccessListener { intentSender ->
-                    documentScannerLauncher.launch(androidx.activity.result.IntentSenderRequest.Builder(intentSender).build())
-                }
-                .addOnFailureListener { e ->
-                    Log.e("ScannerFragment", "Failed to start native scanner", e)
-                    Toast.makeText(context, "Native scanner not available. Try another engine.", Toast.LENGTH_SHORT).show()
-                }
+            openDocumentScanner(20)
             return
         }
 
@@ -623,6 +722,18 @@ class ScannerFragment : Fragment() {
                 viewModel.liveDetect.collect { enabled ->
                     if (!enabled) {
                         _binding?.overlayView?.updateCorners(null)
+                    }
+                }
+            }
+        }
+
+        // Observe isEditing state to handle returning to Library when editor closes for a library-opened document
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.isEditing.collect { isEditing ->
+                    if (!isEditing && viewModel.isDocumentOpenedFromLibrary) {
+                        viewModel.isDocumentOpenedFromLibrary = false
+                        updateViewMode(FragmentViewMode.LIBRARY)
                     }
                 }
             }

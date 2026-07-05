@@ -16,4 +16,4 @@ dependencyResolutionManagement {
     }
 }
 
-include(":app", ":mlkit_ocr", ":mlkit_barcode")
+include(":app")
