@@ -122,6 +122,9 @@ dependencies {
 
     // ML Kit (Play Services Thin / Dynamic On-Demand Delivery)
     implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
+    implementation("com.google.mlkit:vision-common:17.3.0")
+    implementation("com.google.mlkit:vision-interfaces:16.3.0")
+    implementation("com.google.android.odml:image:1.0.0-beta1")
 
     // OpenCV
     implementation("org.openpnp:opencv:4.5.1-2")
