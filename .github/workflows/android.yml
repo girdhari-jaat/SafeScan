@@ -34,13 +34,14 @@ jobs:
           gradle-version: "8.5"
           build-root-directory: android
 
+      # YE STEP UPDATE KIYA HAI - QuickBird ki 5MB wali so
       - name: Download and setup OpenCV native library
         run: |
           mkdir -p app/src/main/jniLibs/arm64-v8a
-          wget https://github.com/opencv/releases/download/4.10.0/opencv-4.10.0-android-sdk.zip
-          unzip opencv-4.10.0-android-sdk.zip "sdk/native/libs/arm64-v8a/libopencv_java4.so"
-          mv sdk/native/libs/arm64-v8a/libopencv_java4.so app/src/main/jniLibs/arm64-v8a/
-          rm -rf sdk opencv-4.10.0-android-sdk.zip
+          wget https://github.com/QuickBirdEng/opencv-android/releases/download/4.5.5/opencv-android-4.5.5.aar
+          unzip opencv-android-4.5.5.aar jni/arm64-v8a/libopencv_java4.so
+          mv jni/arm64-v8a/libopencv_java4.so app/src/main/jniLibs/arm64-v8a/
+          rm -rf opencv-android-4.5.5.aar jni
 
       - name: Build Release APK
         run: |
