@@ -52,7 +52,6 @@
 ### React Capacitor Compose
 Use the dedicated CI/CD workflow defined in `.github/workflow/react_capistor.yml`.
 
-
 ### Native Kotlin/Compose
 Use the dedicated CI/CD workflow defined in `.github/workflow/android.yml`.
 
