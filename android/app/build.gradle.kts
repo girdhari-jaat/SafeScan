@@ -121,7 +121,7 @@ dependencies {
     implementation("androidx.camera:camera-view:$camerax_version")
 
     // OpenCV - REMOVED MAVEN DEPENDENCY. We use .so from Github Actions now
-    // implementation("com.github.jeziellago:OpenCV-Android:4.1.0")
+    implementation("org.opencv:opencv:4.10.0") // YE WAPIS LAGA DO
 
     // Lifecycle/ViewModel/Coroutines
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
