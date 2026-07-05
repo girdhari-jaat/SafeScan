@@ -39,6 +39,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import com.safescan.ui.SlotsScreen
 import com.safescan.ui.theme.SafeScanTheme
 import java.util.concurrent.ExecutorService
@@ -360,8 +363,8 @@ class ScannerFragment : Fragment() {
                             com.safescan.ui.EditorScreen(viewModel = viewModel)
                         } else {
                             if (viewModel.isDocumentOpenedFromLibrary) {
-                                androidx.compose.foundation.layout.Box(
-                                    modifier = androidx.compose.ui.Modifier.fillMaxSize()
+                                Box(
+                                    modifier = Modifier.fillMaxSize()
                                 )
                             } else {
                                 SlotsScreen(
