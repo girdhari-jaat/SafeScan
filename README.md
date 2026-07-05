@@ -14,7 +14,6 @@ It was created in Google AI Studio and converts documents into PDF/JPG.
 - Export Scans to PDF and JPG
 - Import Images from Gallery
 - Fast and Offline ML Kit Scanning
-- Native Android Build
 
 ## 🛠️ Tech Stack
 - **Frontend**: React + Vite + CSS
@@ -41,6 +40,16 @@ It was created in Google AI Studio and converts documents into PDF/JPG.
 3. Open in Android Studio:
    npx cap open android
 4. In Android Studio go to `Build > Generate Signed Bundle / APK`
+   
+On Github run workflow
+.github/workflow/react_capistor.yml
+
+## 📱 Build Android Kotlin APK
+
+On Github run workflow
+.github/workflow/android.yml
+
+
 
 ## 🔑 Keywords
 safe-scan, safescan, react, vite, capacitor, android-app, 
