@@ -50,10 +50,10 @@
 3. `npx cap open android`
 
 ### React Capacitor Compose
-Use the dedicated CI/CD workflow defined in `.github/workflow/react_capistor.yml`.
+Use the dedicated CI/CD workflow defined in `.github/workflows/react_capacitor.yml`.
 
 ### Native Kotlin/Compose
-Use the dedicated CI/CD workflow defined in `.github/workflow/android.yml`.
+Use the dedicated CI/CD workflow defined in `.github/workflows/android.yml`.
 
 ## 📄 License
 Built with Google AI Studio.
