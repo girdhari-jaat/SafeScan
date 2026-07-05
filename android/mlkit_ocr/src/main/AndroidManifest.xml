@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:dist="http://schemas.android.com/apk/distribution"
-    package="com.safescan.mlkit_ocr">
+    xmlns:dist="http://schemas.android.com/apk/distribution">
 
     <dist:module
         dist:instant="false"
@@ -13,8 +12,5 @@
     </dist:module>
 
     <application>
-        <meta-data
-            android:name="com.google.mlkit.vision.DEPENDENCIES"
-            android:value="ocr" />
     </application>
 </manifest>
