@@ -124,7 +124,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
 
     // OpenCV
-    implementation("com.github.quickbirdstudios:opencv:4.5.5")
+    implementation("org.openpnp:opencv:4.5.1-2")
 
     // Lifecycle/ViewModel/Coroutines
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
