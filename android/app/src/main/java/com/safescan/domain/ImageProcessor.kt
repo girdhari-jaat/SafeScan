@@ -56,8 +56,8 @@ object ImageProcessor {
                 FilterType.BLACK_WHITE_2 -> {
                     val gray = Mat()
                     Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY)
-                    // Adaptive threshold for cleaner photocopy-like scans
-                    Imgproc.adaptiveThreshold(gray, outMat, 255.0, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY, 11, 2.0)
+                    // Adaptive threshold for cleaner photocopy-like scans - Increased block size and C for cleaner white background
+                    Imgproc.adaptiveThreshold(gray, outMat, 255.0, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY, 31, 15.0)
                     Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
                 }
                 FilterType.MAGIC_COLOR -> {

@@ -11,7 +11,7 @@ import kotlin.math.sqrt
 
 enum class ScannerEngineType {
     LOCAL_ML,
-    MLKIT
+    OPENCV
 }
 
 class DocumentScanner(
@@ -22,7 +22,7 @@ class DocumentScanner(
     fun detectDocument(bitmap: Bitmap): Quadrilateral? {
         return when (currentEngine) {
             ScannerEngineType.LOCAL_ML -> localMLEngine.detectCorners(bitmap)
-            ScannerEngineType.MLKIT -> {
+            ScannerEngineType.OPENCV -> {
                 // Return fallback quad representing 90% bounding box in pure Kotlin
                 val w = bitmap.width.toDouble()
                 val h = bitmap.height.toDouble()

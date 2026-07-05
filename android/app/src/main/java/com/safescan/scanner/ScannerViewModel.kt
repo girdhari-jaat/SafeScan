@@ -123,7 +123,7 @@ class ScannerViewModel @Inject constructor(
     val editorState: MutableStateFlow<com.safescan.data.EditorState> = MutableStateFlow(com.safescan.data.EditorState())
 
     // OCR & Text Recognition States
-    private val ocrEngine = com.safescan.ocr.OcrEngine(context)
+    private val ocrEngine = com.safescan.scanner.OcrEngine(context)
     val recognizedText: MutableStateFlow<String?> = MutableStateFlow(null)
     val isOcrRunning: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val isBarcodeRunning: MutableStateFlow<Boolean> = MutableStateFlow(false)

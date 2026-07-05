@@ -145,6 +145,7 @@ dependencies {
     implementation("androidx.compose.runtime:runtime-livedata")
 
     // Hilt
+    implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
     implementation("com.google.dagger:hilt-android:2.52")
     kapt("com.google.dagger:hilt-android-compiler:2.52")
 

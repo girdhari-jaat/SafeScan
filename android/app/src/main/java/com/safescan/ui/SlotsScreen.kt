@@ -589,7 +589,6 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean, modifier: Modifier =
 
         when (mode) {
             ScannerMode.CARD -> {
-                // Card aspect ratio: 1.586 (standard ID-1 card size)
                 val preferredWidth = width * 0.85f
                 val preferredHeight = preferredWidth / 1.586f
                 if (preferredHeight > height * 0.6f) {
@@ -601,7 +600,6 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean, modifier: Modifier =
                 }
             }
             ScannerMode.DOCUMENT -> {
-                // Document aspect ratio: A4 (approx. 1.414)
                 val preferredHeight = height * 0.65f
                 val preferredWidth = preferredHeight / 1.414f
                 if (preferredWidth > width * 0.85f) {
@@ -613,34 +611,34 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean, modifier: Modifier =
                 }
             }
             ScannerMode.GRID -> {
-                rectWidth = 0f
-                rectHeight = 0f
+                rectWidth = width * 0.9f
+                rectHeight = height * 0.75f
             }
         }
 
         if (rectWidth > 0f && rectHeight > 0f) {
             val left = (width - rectWidth) / 2f
-            val top = (height - rectHeight) / 2f
+            val top = ((height - rectHeight) / 2f) - 60.dp.toPx() // Shifted up so it doesn't overlap with thumbnails
 
             // 1. Draw outer darkened scrim rectangles
             drawRect(
                 color = Color.Black.copy(alpha = 0.55f),
                 topLeft = Offset(0f, 0f),
-                size = Size(width, top)
+                size = Size(width, maxOf(0f, top))
             )
             drawRect(
                 color = Color.Black.copy(alpha = 0.55f),
                 topLeft = Offset(0f, top + rectHeight),
-                size = Size(width, height - (top + rectHeight))
+                size = Size(width, maxOf(0f, height - (top + rectHeight)))
             )
             drawRect(
                 color = Color.Black.copy(alpha = 0.55f),
-                topLeft = Offset(0f, top),
+                topLeft = Offset(0f, maxOf(0f, top)),
                 size = Size(left, rectHeight)
             )
             drawRect(
                 color = Color.Black.copy(alpha = 0.55f),
-                topLeft = Offset(left + rectWidth, top),
+                topLeft = Offset(left + rectWidth, maxOf(0f, top)),
                 size = Size(width - (left + rectWidth), rectHeight)
             )
 
@@ -653,48 +651,37 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean, modifier: Modifier =
                 style = Stroke(width = 2.5.dp.toPx())
             )
 
-            // 3. Draw book-divider spine if in dual book mode
-            if (isBookMode) {
+            // 3. Draw grid if requested
+            if (showGrid || mode == ScannerMode.GRID) {
+                // Draw standard 3x3 alignment grids inside the container
                 drawLine(
-                    color = Color.Yellow,
-                    start = Offset(width / 2f, top),
-                    end = Offset(width / 2f, top + rectHeight),
-                    strokeWidth = 2.dp.toPx(),
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(15f, 15f), 0f)
+                    color = Color.White.copy(alpha = 0.35f),
+                    start = Offset(left + rectWidth / 3f, top),
+                    end = Offset(left + rectWidth / 3f, top + rectHeight),
+                    strokeWidth = 1.dp.toPx()
+                )
+                drawLine(
+                    color = Color.White.copy(alpha = 0.35f),
+                    start = Offset(left + rectWidth * 2f / 3f, top),
+                    end = Offset(left + rectWidth * 2f / 3f, top + rectHeight),
+                    strokeWidth = 1.dp.toPx()
+                )
+                drawLine(
+                    color = Color.White.copy(alpha = 0.35f),
+                    start = Offset(left, top + rectHeight / 3f),
+                    end = Offset(left + rectWidth, top + rectHeight / 3f),
+                    strokeWidth = 1.dp.toPx()
+                )
+                drawLine(
+                    color = Color.White.copy(alpha = 0.35f),
+                    start = Offset(left, top + rectHeight * 2f / 3f),
+                    end = Offset(left + rectWidth, top + rectHeight * 2f / 3f),
+                    strokeWidth = 1.dp.toPx()
                 )
             }
         }
-        
-        if (showGrid || mode == ScannerMode.GRID) {
-            // Draw standard 3x3 alignment grids
-            drawLine(
-                color = Color.White.copy(alpha = 0.35f),
-                start = Offset(width / 3f, 0f),
-                end = Offset(width / 3f, height),
-                strokeWidth = 1.dp.toPx()
-            )
-            drawLine(
-                color = Color.White.copy(alpha = 0.35f),
-                start = Offset(width * 2f / 3f, 0f),
-                end = Offset(width * 2f / 3f, height),
-                strokeWidth = 1.dp.toPx()
-            )
-            drawLine(
-                color = Color.White.copy(alpha = 0.35f),
-                start = Offset(0f, height / 3f),
-                end = Offset(width, height / 3f),
-                strokeWidth = 1.dp.toPx()
-            )
-            drawLine(
-                color = Color.White.copy(alpha = 0.35f),
-                start = Offset(0f, height * 2f / 3f),
-                end = Offset(width, height * 2f / 3f),
-                strokeWidth = 1.dp.toPx()
-            )
-        }
     }
 }
-
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun SlotItem(slot: Slot, onClick: () -> Unit, onLongClick: () -> Unit, onClear: () -> Unit) {

@@ -2,6 +2,11 @@ package com.safescan.ui
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import androidx.activity.result.IntentSenderRequest
+import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
+
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
@@ -113,40 +118,15 @@ class ScannerFragment : Fragment() {
     }
 
     private val systemDocumentScannerLauncher = registerForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+        androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
-            val data = result.data
-            val uris = ArrayList<android.net.Uri>()
-            
-            // Check clipData first (multi-select)
-            val clipData = data?.clipData
-            if (clipData != null) {
-                for (i in 0 until clipData.itemCount) {
-                    clipData.getItemAt(i).uri?.let { uris.add(it) }
-                }
-            } else {
-                // Check direct data
-                data?.data?.let { uris.add(it) }
-                // Also check parcelable array list of extra "android.provider.extra.SCAN_RESULT"
-                try {
-                    val list = data?.getParcelableArrayListExtra<android.net.Uri>("android.provider.extra.SCAN_RESULT")
-                    if (list != null) {
-                        for (uri in list) {
-                            if (!uris.contains(uri)) {
-                                uris.add(uri)
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e("ScannerFragment", "Error reading extra SCAN_RESULT", e)
-                }
-            }
-
-            if (uris.isNotEmpty()) {
+            val scanResult = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
+            scanResult?.pages?.let { pages ->
                 viewLifecycleOwner.lifecycleScope.launch {
-                    for (uri in uris) {
+                    for (page in pages) {
                         try {
+                            val uri = page.imageUri
                             val inputStream = requireContext().contentResolver.openInputStream(uri)
                             val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
                             inputStream?.close()
@@ -154,7 +134,7 @@ class ScannerFragment : Fragment() {
                                 viewModel.onCapture(bitmap, true)
                             }
                         } catch (e: Exception) {
-                            Log.e("ScannerFragment", "Error reading scanned image Uri: $uri", e)
+                            Log.e("ScannerFragment", "Error processing scanned image", e)
                         }
                     }
                 }
@@ -203,26 +183,42 @@ class ScannerFragment : Fragment() {
     }
 
     fun openDocumentScanner(maxPages: Int) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            try {
-                val intent = Intent("android.provider.action.SCAN_DOCUMENT")
-                intent.putExtra("android.provider.extra.MAX_DOCUMENTS", maxPages)
-                systemDocumentScannerLauncher.launch(intent)
-            } catch (e: Exception) {
-                Log.e("ScannerFragment", "Failed to start system document scanner", e)
-                Toast.makeText(context, "System document scanner not available.", Toast.LENGTH_SHORT).show()
-            }
-        } else {
-            Toast.makeText(context, "Requires Android 13+", Toast.LENGTH_SHORT).show()
+        try {
+            val options = GmsDocumentScannerOptions.Builder()
+                .setGalleryImportAllowed(true)
+                .setPageLimit(maxPages)
+                .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG, GmsDocumentScannerOptions.RESULT_FORMAT_PDF)
+                .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
+                .build()
+                
+            val scanner = GmsDocumentScanning.getClient(options)
+            scanner.getStartScanIntent(requireActivity())
+                .addOnSuccessListener { intentSender ->
+                    systemDocumentScannerLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
+                }
+                .addOnFailureListener { e ->
+                    Log.e("ScannerFragment", "Failed to start system document scanner", e)
+                    Toast.makeText(context, "System document scanner not available.", Toast.LENGTH_SHORT).show()
+                }
+        } catch (e: Exception) {
+            Log.e("ScannerFragment", "Failed to start system document scanner", e)
+            Toast.makeText(context, "System document scanner not available.", Toast.LENGTH_SHORT).show()
         }
     }
 
     fun openOcrScanner() {
-        val intent = Intent("com.google.android.gms.actions.OCR_CAPTURE")
+        val intent = Intent(Intent.ACTION_VIEW)
+        intent.data = android.net.Uri.parse("googleapp://lens")
         try {
-            ocrScannerLauncher.launch(intent)
+            startActivity(intent)
         } catch (e: Exception) {
-            Toast.makeText(requireContext(), "Install Google Lens", Toast.LENGTH_SHORT).show()
+            try {
+                val fallbackIntent = Intent(Intent.ACTION_VIEW)
+                fallbackIntent.data = android.net.Uri.parse("https://lens.google.com/")
+                startActivity(fallbackIntent)
+            } catch (e2: Exception) {
+                Toast.makeText(requireContext(), "Install Google Lens", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -424,10 +420,10 @@ class ScannerFragment : Fragment() {
 
         binding.btnSwitchEngine.setOnClickListener {
             val current = viewModel.uiState.value.currentEngine
-            val next = if (current == ScannerEngineType.MLKIT) {
+            val next = if (current == ScannerEngineType.OPENCV) {
                 ScannerEngineType.LOCAL_ML
             } else {
-                ScannerEngineType.MLKIT
+                ScannerEngineType.OPENCV
             }
             viewModel.toggleEngine(next)
             context?.let { ctx ->
@@ -617,7 +613,12 @@ class ScannerFragment : Fragment() {
 
     private fun takePhoto() {
         if (viewModel.useNativeScanner.value || viewModel.usePhoneCamera.value) {
-            openDocumentScanner(20)
+            val maxPages = when (viewModel.uiState.value.currentMode) {
+                com.safescan.data.ScannerMode.CARD -> 2
+                com.safescan.data.ScannerMode.GRID -> 8
+                else -> 50
+            }
+            openDocumentScanner(maxPages)
             return
         }
 

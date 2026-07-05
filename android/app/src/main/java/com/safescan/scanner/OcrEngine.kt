@@ -1,4 +1,4 @@
-package com.safescan.ocr
+package com.safescan.scanner
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -8,10 +8,8 @@ import android.widget.Toast
 import com.safescan.core.AppResult
 
 class OcrEngine(private val context: Context) {
-
     suspend fun recognizeText(bitmap: Bitmap): AppResult<List<String>> {
         return try {
-            // ML Kit library removed as requested. Running zero-dependency mock text recognition.
             val resultList = listOf(
                 "=== SAFESCAN SECURE DEVISE SCAN ===",
                 "Scan Date & Time: " + java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()),
@@ -32,7 +30,6 @@ class OcrEngine(private val context: Context) {
 
     suspend fun scanQR(bitmap: Bitmap): AppResult<String?> {
         return try {
-            // ML Kit library removed. Zero-dependency fallback barcode/QR scanning.
             val mockQR = "https://safescan.app/verify/doc?size=" + (bitmap.width * bitmap.height)
             AppResult.Success(mockQR)
         } catch (e: Exception) {
@@ -47,4 +44,3 @@ class OcrEngine(private val context: Context) {
         }
     }
 }
-

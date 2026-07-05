@@ -13,7 +13,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object ScannerModule {
-
     @Provides
     @Singleton
     fun provideMLScannerEngine(): MLScannerEngine {
@@ -28,8 +27,8 @@ object ScannerModule {
     @Provides
     @Singleton
     fun provideDocumentScannerEngine(mlScannerEngine: MLScannerEngine): DocumentScannerEngine {
-        return com.safescan.ocr.MLScannerEngine(mlEngine = mlScannerEngine).apply {
-            engineType = com.safescan.scanner.ScannerEngineType.LOCAL_ML
+        return DocumentScannerEngine(mlEngine = mlScannerEngine).apply {
+            engineType = com.safescan.scanner.ScannerEngineType.OPENCV
         }
     }
 }

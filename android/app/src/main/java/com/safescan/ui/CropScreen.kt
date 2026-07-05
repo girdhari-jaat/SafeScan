@@ -51,7 +51,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
     // Initialize corners once image size is known
     LaunchedEffect(imageSize) {
         if (imageSize.width > 0 && imageSize.height > 0) {
-            val padding = 50f
+            val padding = minOf(imageSize.width, imageSize.height) * 0.1f // 10% padding
             tl = Offset(padding, padding)
             tr = Offset(imageSize.width - padding, padding)
             br = Offset(imageSize.width - padding, imageSize.height - padding)
