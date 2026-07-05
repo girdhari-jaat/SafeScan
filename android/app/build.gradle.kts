@@ -100,6 +100,11 @@ android {
             excludes.add("META-INF/LICENSE")
             excludes.add("META-INF/NOTICE")
         }
+        jniLibs {
+            excludes.add("**/armeabi-v7a/**")
+            excludes.add("**/x86/**")
+            excludes.add("**/x86_64/**")
+        }
     }
 }
 
