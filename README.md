@@ -7,7 +7,7 @@
 **SafeScan** is a Document Scanner Mobile App built with React + Vite + Capacitor.  
 It was created in Google AI Studio and converts documents into PDF/JPG.
 
-**Live Preview in AI Studio**: https://ai.studio/apps/dfe92363-fe54-4020-ab75-68a91eec7ed5
+**Live Preview in AI Studio**: https://safescan-361361801174.asia-southeast1.run.app
 
 ## 🚀 Features
 - Auto Document Detection and Crop
