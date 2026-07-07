@@ -33,14 +33,31 @@ class LocalMLEngine(private val context: Context) {
             val declaredLength = assetFileDescriptor.declaredLength
             val tfliteModel = fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
 
-            val options = Interpreter.Options()
-            gpuDelegate = GpuDelegate()
-            options.addDelegate(gpuDelegate)
-            
-            interpreter = Interpreter(tfliteModel, options)
-            Log.d("LocalMLEngine", "TFLite model loaded successfully")
+            try {
+                // Try initializing with GPU Delegate
+                val options = Interpreter.Options()
+                gpuDelegate = GpuDelegate()
+                options.addDelegate(gpuDelegate)
+                interpreter = Interpreter(tfliteModel, options)
+                Log.d("LocalMLEngine", "TFLite model loaded successfully with GPU acceleration")
+            } catch (gpuEx: Exception) {
+                Log.w("LocalMLEngine", "GPU acceleration not supported. Falling back to CPU.", gpuEx)
+                // Clean up GPU delegate if it was created
+                try {
+                    gpuDelegate?.close()
+                } catch (closeEx: Exception) {
+                    Log.e("LocalMLEngine", "Failed to close gpuDelegate", closeEx)
+                }
+                gpuDelegate = null
+                
+                // Load interpreter with standard CPU options
+                val options = Interpreter.Options()
+                options.setNumThreads(4) // Use 4 CPU threads for high performance
+                interpreter = Interpreter(tfliteModel, options)
+                Log.d("LocalMLEngine", "TFLite model loaded successfully with CPU (4 threads)")
+            }
         } catch (e: Exception) {
-            Log.e("LocalMLEngine", "Error loading TFLite model", e)
+            Log.e("LocalMLEngine", "Fatal error loading TFLite model", e)
         }
     }
 
