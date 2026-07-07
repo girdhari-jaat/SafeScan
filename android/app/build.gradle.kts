@@ -164,29 +164,4 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 }
 
-val modelVersion = "v1.2.0"
-val modelFileName = "fairscan-segmentation-model.tflite"
-val modelUrl = "https://github.com/pynicolas/fairscan-segmentation-model/releases/download/$modelVersion/$modelFileName"
-
-val assetsDir = file("src/main/assets")
-val modelFile = file("src/main/assets/$modelFileName")
-
-tasks.register("downloadTFLiteModel") {
-    outputs.file(modelFile)
-    doLast {
-        if (!assetsDir.exists()) assetsDir.mkdirs()
-        if (!modelFile.exists()) {
-            println("Downloading $modelFileName...")
-            java.net.URL(modelUrl).openStream().use { input ->
-                modelFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-            println("Downloaded $modelFileName.")
-        }
-    }
-}
-
-tasks.named("preBuild") {
-    dependsOn("downloadTFLiteModel")
-}
+apply(from = "download-tflite.gradle.kts")
