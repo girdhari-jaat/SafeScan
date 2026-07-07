@@ -80,4 +80,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: opencv-5.0.0-arm64-v8a-16kb
-          path: install/lib/*.so
+          path: |
+            build/**/*.so
