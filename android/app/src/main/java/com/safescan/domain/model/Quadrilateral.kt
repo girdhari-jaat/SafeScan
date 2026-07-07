@@ -1,4 +1,4 @@
-package com.safescan.android.scanner
+package com.safescan.domain.model
 
 data class Point(val x: Double, val y: Double) {
     constructor() : this(0.0, 0.0)

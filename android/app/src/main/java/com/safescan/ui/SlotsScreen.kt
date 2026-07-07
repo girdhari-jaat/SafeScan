@@ -169,37 +169,38 @@ fun SlotsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 // I. Horizontal Slots Carousel Card List
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(115.dp)
-                        .background(Color.Black.copy(alpha = 0.4f), shape = RoundedCornerShape(12.dp))
-                        .padding(8.dp)
-                ) {
-                    if (slots.isEmpty()) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(text = "No Slots Available", color = Color.Gray)
-                        }
-                    } else {
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            items(slots) { slot ->
-                                Box(modifier = Modifier.width(85.dp)) {
-                                    SlotItem(
-                                        slot = slot,
-                                        onClick = { onSlotClick(slot.id) },
-                                        onLongClick = { onSlotLongClick(slot.id) },
-                                        onClear = { viewModel.clearSlot(slot.id) }
-                                    )
+                if (currentMode != ScannerMode.DOCUMENT) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(115.dp)
+                            .background(Color.Black.copy(alpha = 0.4f), shape = RoundedCornerShape(12.dp))
+                            .padding(8.dp)
+                    ) {
+                        if (slots.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(text = "No Slots Available", color = Color.Gray)
+                            }
+                        } else {
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(slots) { slot ->
+                                    Box(modifier = Modifier.width(85.dp)) {
+                                        SlotItem(
+                                            slot = slot,
+                                            onClick = { onSlotClick(slot.id) },
+                                            onLongClick = { onSlotLongClick(slot.id) },
+                                            onClear = { viewModel.clearSlot(slot.id) }
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
 
                 // II. Selector Segmented Tab bar for modes ("Paper", "Card", "Grid")
                 Row(

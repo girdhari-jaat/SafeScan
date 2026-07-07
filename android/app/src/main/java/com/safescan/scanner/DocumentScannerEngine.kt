@@ -2,7 +2,7 @@ package com.safescan.scanner
 
 import android.graphics.Bitmap
 import com.safescan.core.AppResult
-import com.safescan.android.scanner.Point
+import com.safescan.domain.model.Point
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.opencv.android.Utils

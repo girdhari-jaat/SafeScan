@@ -1,6 +1,6 @@
 package com.safescan.data
 
-import com.safescan.android.scanner.Point
+import com.safescan.domain.model.Point
 
 data class PageMetadata(
     val id: String,

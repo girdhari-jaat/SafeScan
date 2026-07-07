@@ -26,8 +26,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.safescan.scanner.ScannerViewModel
-import com.safescan.android.scanner.Point
-import com.safescan.android.scanner.Quadrilateral
+import com.safescan.domain.model.Point
+import com.safescan.domain.model.Quadrilateral
 import kotlinx.coroutines.launch
 import com.safescan.R
 

@@ -1,41 +1,21 @@
-package com.safescan.android.scanner
+package com.safescan.scanner
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
-import com.safescan.android.ml.local.LocalMLEngine
+import com.safescan.domain.model.Point
+import com.safescan.domain.model.Quadrilateral
+import com.safescan.scanner.ml.LocalMLEngine
 import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.sqrt
 
-enum class ScannerEngineType {
-    LOCAL_ML,
-    OPENCV
-}
-
 class DocumentScanner(
-    private val localMLEngine: LocalMLEngine = LocalMLEngine()
+    private val localMLEngine: LocalMLEngine
 ) {
-    var currentEngine: ScannerEngineType = ScannerEngineType.LOCAL_ML
-
     fun detectDocument(bitmap: Bitmap): Quadrilateral? {
-        return when (currentEngine) {
-            ScannerEngineType.LOCAL_ML -> localMLEngine.detectCorners(bitmap)
-            ScannerEngineType.OPENCV -> {
-                // Return fallback quad representing 90% bounding box in pure Kotlin
-                val w = bitmap.width.toDouble()
-                val h = bitmap.height.toDouble()
-                val paddingX = w * 0.05
-                val paddingY = h * 0.05
-                Quadrilateral(
-                    Point(paddingX, paddingY),
-                    Point(w - paddingX, paddingY),
-                    Point(w - paddingX, h - paddingY),
-                    Point(paddingX, h - paddingY)
-                )
-            }
-        }
+        return localMLEngine.detectCorners(bitmap)
     }
 
     fun cropAndTransform(bitmap: Bitmap, quad: Quadrilateral, mode: String = "DOCUMENT"): Bitmap {
@@ -52,19 +32,15 @@ class DocumentScanner(
         val heightB = sqrt((tl.x - bl.x).pow(2) + (tl.y - bl.y).pow(2))
         var maxHeight = max(heightA, heightB).toInt().coerceAtLeast(1)
 
-        // For GRID mode, enforce A4 aspect ratio (~1.414)
         if (mode == "GRID") {
             val targetRatio = 1.4142f // A4 Height/Width
             if (maxHeight > maxWidth) {
-                // Portrait
                 maxHeight = (maxWidth * targetRatio).toInt()
             } else {
-                // Landscape
                 maxWidth = (maxHeight * targetRatio).toInt()
             }
         } else if (mode == "CARD") {
-            // ID Card ratio (~1.586)
-            val targetRatio = 1.586f
+            val targetRatio = 1.586f // ID Card
             if (maxWidth > maxHeight) {
                 maxHeight = (maxWidth / targetRatio).toInt()
             } else {

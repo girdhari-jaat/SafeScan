@@ -38,6 +38,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.safescan.databinding.FragmentScannerBinding
 import com.safescan.scanner.ScannerEngineType
 import com.safescan.scanner.ScannerViewModel
+import com.safescan.domain.model.Point
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import androidx.compose.material3.MaterialTheme
@@ -101,7 +102,7 @@ class ScannerFragment : Fragment() {
                         val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
                         inputStream?.close()
                         if (bitmap != null) {
-                            viewModel.onCapture(bitmap)
+                            viewModel.onCapture(bitmap, forceSkipEditor = list.size > 1)
                             successCount++
                         }
                     } catch (e: Exception) {
@@ -112,6 +113,32 @@ class ScannerFragment : Fragment() {
                     Toast.makeText(context, "$successCount images imported successfully", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(context, "Failed to import images", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private var photoUri: android.net.Uri? = null
+
+    private val takePictureLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            photoUri?.let { uri ->
+                try {
+                    val bitmap = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                        android.graphics.ImageDecoder.decodeBitmap(
+                            android.graphics.ImageDecoder.createSource(requireContext().contentResolver, uri)
+                        )
+                    } else {
+                        @Suppress("DEPRECATION")
+                        android.provider.MediaStore.Images.Media.getBitmap(requireContext().contentResolver, uri)
+                    }
+                    // It returns a hardware bitmap on P+. We might need to copy it to a software bitmap to process it.
+                    val softwareBitmap = bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
+                    viewModel.onCapture(softwareBitmap, isNativeScanned = true)
+                } catch (e: Exception) {
+                    Log.e("ScannerFragment", "Failed to process captured image", e)
                 }
             }
         }
@@ -131,7 +158,7 @@ class ScannerFragment : Fragment() {
                             val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
                             inputStream?.close()
                             if (bitmap != null) {
-                                viewModel.onCapture(bitmap, true)
+                                viewModel.onCapture(bitmap, isNativeScanned = true, forceSkipEditor = true)
                             }
                         } catch (e: Exception) {
                             Log.e("ScannerFragment", "Error processing scanned image", e)
@@ -359,8 +386,12 @@ class ScannerFragment : Fragment() {
                             com.safescan.ui.EditorScreen(viewModel = viewModel)
                         } else {
                             if (viewModel.isDocumentOpenedFromLibrary) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize()
+                                com.safescan.ui.DocumentGridView(
+                                    viewModel = viewModel,
+                                    onDismiss = {
+                                        viewModel.isDocumentOpenedFromLibrary = false
+                                        updateViewMode(FragmentViewMode.LIBRARY)
+                                    }
                                 )
                             } else {
                                 SlotsScreen(
@@ -460,7 +491,7 @@ class ScannerFragment : Fragment() {
     }
 
     private fun mapPointsToPreviewView(
-        points: List<com.safescan.android.scanner.Point>,
+        points: List<Point>,
         bitmapWidth: Int,
         bitmapHeight: Int,
         rotationDegrees: Int
@@ -516,6 +547,15 @@ class ScannerFragment : Fragment() {
                 val fragmentContext = context ?: return@addListener
                 val binding = _binding ?: return@addListener
                 val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
+
+                if (viewModel.useNativeScanner.value || viewModel.usePhoneCamera.value) {
+                    cameraProvider.unbindAll()
+                    binding.previewView.visibility = View.INVISIBLE
+                    return@addListener
+                } else {
+                    binding.previewView.visibility = View.VISIBLE
+                }
+
                 val mode = viewModel.currentMode.value
 
                 // 1. Dynamic Hardware Negotiation & Mood Alignment (from gemini.md rules)
@@ -611,12 +651,27 @@ class ScannerFragment : Fragment() {
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
+    private fun openPhoneCamera() {
+        val context = requireContext()
+        val photoFile = java.io.File(context.externalCacheDir, "temp_camera_${System.currentTimeMillis()}.jpg")
+        photoUri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            photoFile
+        )
+        takePictureLauncher.launch(photoUri)
+    }
+
     private fun takePhoto() {
-        if (viewModel.useNativeScanner.value || viewModel.usePhoneCamera.value) {
+        if (viewModel.usePhoneCamera.value) {
+            openPhoneCamera()
+            return
+        }
+        if (viewModel.useNativeScanner.value) {
             val maxPages = when (viewModel.currentMode.value) {
                 com.safescan.data.ScannerMode.CARD -> 2
                 com.safescan.data.ScannerMode.GRID -> 8
-                else -> 50
+                else -> 150
             }
             openDocumentScanner(maxPages)
             return
@@ -731,13 +786,13 @@ class ScannerFragment : Fragment() {
             }
         }
 
-        // Observe isEditing state to handle returning to Library when editor closes for a library-opened document
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.isEditing.collect { isEditing ->
-                    if (!isEditing && viewModel.isDocumentOpenedFromLibrary) {
-                        viewModel.isDocumentOpenedFromLibrary = false
-                        updateViewMode(FragmentViewMode.LIBRARY)
+                kotlinx.coroutines.flow.combine(viewModel.usePhoneCamera, viewModel.useNativeScanner) { a, b ->
+                    Pair(a, b)
+                }.collect {
+                    if (currentViewMode == FragmentViewMode.SCANNER) {
+                        startCamera()
                     }
                 }
             }

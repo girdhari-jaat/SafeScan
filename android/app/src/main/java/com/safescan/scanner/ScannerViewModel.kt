@@ -9,6 +9,8 @@ import com.safescan.data.ScannerMode
 import com.safescan.data.Slot
 import com.safescan.data.SettingsRepository
 import com.safescan.data.ScannerUiState
+import com.safescan.domain.model.Point
+import com.safescan.domain.model.Quadrilateral
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,22 +20,25 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
 @HiltViewModel
 class ScannerViewModel @Inject constructor(
-    // IMPROVEMENT: Injecting all engines and repositories via Hilt DI
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val scannerEngine: DocumentScannerEngine,
     private val settingsRepository: SettingsRepository,
     private val edgeDetectionEngine: com.safescan.scanner.EdgeDetectionEngine,
     private val pdfExporter: com.safescan.domain.PdfExporter,
-    private val documentRepository: com.safescan.data.DocumentRepository
+    private val documentRepository: com.safescan.data.DocumentRepository,
+    private val documentScanner: DocumentScanner
 ) : ViewModel() {
 
-    // IMPROVEMENT: Using com.safescan.data.ScannerUiState with isAutoRunning
+    // IMPROVEMENT: Using ScannerUiState with isAutoRunning
     private val _uiState = MutableStateFlow(ScannerUiState())
     val uiState: StateFlow<ScannerUiState> = _uiState.asStateFlow()
+
+    private val captureMutex = kotlinx.coroutines.sync.Mutex()
 
     val currentMode: StateFlow<ScannerMode> = settingsRepository.scannerModeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ScannerMode.CARD)
@@ -148,12 +153,7 @@ class ScannerViewModel @Inject constructor(
                         Slot("front", "Front"),
                         Slot("back", "Back")
                     )
-                    ScannerMode.DOCUMENT -> listOf(
-                        Slot("p1", "Page 1"),
-                        Slot("p2", "Page 2"),
-                        Slot("p3", "Page 3"),
-                        Slot("p4", "Page 4")
-                    )
+                    ScannerMode.DOCUMENT -> emptyList()
                     ScannerMode.GRID -> (1..8).map {
                         Slot(it.toString(), "Slot $it")
                     }
@@ -174,7 +174,7 @@ class ScannerViewModel @Inject constructor(
     }
 
     // IMPROVEMENT: Added async detectEdges runner updating isAutoRunning state Flow
-    fun detectEdges(bitmap: Bitmap, onResult: (List<com.safescan.android.scanner.Point>?) -> Unit) {
+    fun detectEdges(bitmap: Bitmap, onResult: (List<Point>?) -> Unit) {
         _uiState.update { it.copy(isAutoRunning = true) }
         viewModelScope.launch(Dispatchers.IO) {
             val points = edgeDetectionEngine.detectEdges(bitmap)
@@ -427,11 +427,10 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    fun applyCrop(quad: com.safescan.android.scanner.Quadrilateral) {
+    fun applyCrop(quad: Quadrilateral) {
         viewModelScope.launch(Dispatchers.IO) {
             croppingBitmap.value?.let { bmp ->
-                val scanner = com.safescan.android.scanner.DocumentScanner()
-                val cropped = scanner.cropAndTransform(bmp, quad, currentMode.value.name)
+                val cropped = documentScanner.cropAndTransform(bmp, quad, currentMode.value.name)
 
                 croppingSlotId.value?.let { slotId ->
                     captureToSlot(cropped, slotId)
@@ -622,6 +621,7 @@ class ScannerViewModel @Inject constructor(
 
     fun loadDocumentIntoSlots(doc: com.safescan.data.DocumentMetadata) {
         isDocumentOpenedFromLibrary = true
+        capturedJpgFiles.clear()
         viewModelScope.launch(Dispatchers.IO) {
             val loadedSlots = doc.pages.map { page ->
                 val bmp = documentRepository.loadOriginalBitmap(doc.id, page.id)
@@ -636,9 +636,6 @@ class ScannerViewModel @Inject constructor(
                 settingsRepository.setScannerMode(mode)
                 // Let collect trigger but instantly override slots with actual persistent files
                 slots.value = loadedSlots
-                if (loadedSlots.isNotEmpty()) {
-                    openEditor(loadedSlots.first().id)
-                }
             }
         }
     }
@@ -659,7 +656,7 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    fun onCapture(bitmap: Bitmap, isNativeScanned: Boolean = false) {
+    fun onCapture(bitmap: Bitmap, isNativeScanned: Boolean = false, forceSkipEditor: Boolean = false) {
         _uiState.update { it.copy(isLoading = true, error = null) }
         
         // Save the raw captured JPG immediately to Scans folder if saveJpg is ON
@@ -694,59 +691,66 @@ class ScannerViewModel @Inject constructor(
             }
 
             val isAutoCropOff = !autoCrop.value
-            if (isNativeScanned || isAutoCropOff) {
-                val slotId = selectedSlotId.value ?: slots.value.firstOrNull { it.bitmap == null }?.id
-                if (slotId != null) {
-                    captureToSlot(processedBitmap, slotId)
-                    selectedSlotId.value = null
-                }
-                
-                _uiState.update { 
-                    it.copy(
-                        isLoading = false,
-                        scannedBitmap = null,
-                        lastCapturedThumbnail = processedBitmap,
-                        capturedCount = it.capturedCount + 1,
-                        error = null
-                    )
+            captureMutex.withLock {
+                var slotId = selectedSlotId.value ?: slots.value.firstOrNull { it.bitmap == null }?.id
+                if (slotId == null && currentMode.value == ScannerMode.DOCUMENT) {
+                    val newId = "p${slots.value.size + 1}"
+                    slots.value = slots.value + Slot(newId, "Page ${slots.value.size + 1}")
+                    slotId = newId
                 }
 
-                if (!batchScan.value && slotId != null) {
-                    withContext(Dispatchers.Main) {
-                        openEditor(slotId)
+                if (isNativeScanned || isAutoCropOff) {
+                    if (slotId != null) {
+                        captureToSlot(processedBitmap, slotId)
+                        selectedSlotId.value = null
                     }
-                }
-            } else {
-                when (val result = scannerEngine.scanDocument(processedBitmap)) {
-                    is com.safescan.core.AppResult.Success -> {
-                        val slotId = selectedSlotId.value ?: slots.value.firstOrNull { it.bitmap == null }?.id
-                        if (slotId != null) {
-                            captureToSlot(result.data, slotId)
-                            selectedSlotId.value = null
-                        }
-                        
-                        _uiState.update { 
-                            it.copy(
-                                isLoading = false,
-                                scannedBitmap = null,
-                                lastCapturedThumbnail = result.data,
-                                capturedCount = it.capturedCount + 1,
-                                error = null
-                            )
-                        }
+                    
+                    _uiState.update { 
+                        it.copy(
+                            isLoading = false,
+                            scannedBitmap = null,
+                            lastCapturedThumbnail = processedBitmap,
+                            capturedCount = it.capturedCount + 1,
+                            error = null
+                        )
+                    }
 
-                        if (!batchScan.value && slotId != null) {
-                            withContext(Dispatchers.Main) {
-                                openEditor(slotId)
+                    if (!forceSkipEditor && !batchScan.value && slotId != null) {
+                        withContext(Dispatchers.Main) {
+                            openEditor(slotId)
+                        }
+                    }
+                } else {
+                    when (val result = scannerEngine.scanDocument(processedBitmap)) {
+                        is com.safescan.core.AppResult.Success -> {
+                            if (slotId != null) {
+                                captureToSlot(result.data, slotId)
+                                selectedSlotId.value = null
+                            }
+                            
+                            _uiState.update { 
+                                it.copy(
+                                    isLoading = false,
+                                    scannedBitmap = null,
+                                    lastCapturedThumbnail = result.data,
+                                    capturedCount = it.capturedCount + 1,
+                                    error = null
+                                )
+                            }
+
+                            if (!forceSkipEditor && !batchScan.value && slotId != null) {
+                                withContext(Dispatchers.Main) {
+                                    openEditor(slotId)
+                                }
                             }
                         }
-                    }
-                    is com.safescan.core.AppResult.Error -> {
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                error = result.message
-                            )
+                        is com.safescan.core.AppResult.Error -> {
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false,
+                                    error = result.message
+                                )
+                            }
                         }
                     }
                 }
