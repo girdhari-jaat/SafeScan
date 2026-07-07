@@ -37,6 +37,11 @@ jobs:
         with:
           python-version: "3.10"
 
+      - name: Fix DNS
+        run: |
+          echo "140.82.114.4 github.com" | sudo tee -a /etc/hosts
+          echo "185.199.108.133 github.com" | sudo tee -a /etc/hosts
+
       - name: Download OpenCV Source 5.0.0
         run: |
           wget https://github.com/opencv/opencv/archive/refs/tags/5.0.0.zip
@@ -46,50 +51,21 @@ jobs:
       - name: Configure CMake
         run: |
           cmake -S opencv -B build \
-            -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
+            -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake \
-            -DANDROID_ABI=arm64-v8a \
-            -DANDROID_PLATFORM=android-21 \
-            -DANDROID_SDK_ROOT=$ANDROID_SDK_ROOT \
-            -DANDROID_NDK=$ANDROID_NDK_ROOT \
-            -DBUILD_SHARED_LIBS=ON \
-            -DBUILD_LIST=core,imgproc,java \
-            -DBUILD_JAVA=ON \
-            -DBUILD_TESTS=OFF \
-            -DBUILD_PERF_TESTS=OFF \
-            -DBUILD_EXAMPLES=OFF \
-            -DBUILD_ANDROID_EXAMPLES=OFF \
-            -DBUILD_ANDROID_PROJECTS=OFF \
-            -DANDROID_STL=c++_static \
-            -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
-            -DBUILD_opencv_world=OFF \
-            -DENABLE_PIC=OFF \
-            -DWITH_PROTOBUF=OFF \
-            -DWITH_FFMPEG=OFF \
-            -DBUILD_opencv_video=OFF \
-            -DBUILD_opencv_img_hash=OFF \
-            -DWITH_JPEG=OFF \
-            -DWITH_PNG=OFF \
-            -DWITH_TIFF=OFF \
-            -DWITH_WEBP=OFF \
-            -DWITH_OPENEXR=OFF \
-            -DWITH_JASPER=OFF \
-            -DBUILD_ZLIB=OFF \
-            -DCMAKE_INSTALL_PREFIX=install
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 \
+            -DANDROID_SDK_ROOT=$ANDROID_SDK_ROOT -DANDROID_NDK=$ANDROID_NDK_ROOT \
+            -DBUILD_SHARED_LIBS=ON -DBUILD_LIST=core,imgproc,imgcodecs,java \
+            -DBUILD_JAVA=ON -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_EXAMPLES=OFF \
+            -DBUILD_ANDROID_EXAMPLES=OFF -DBUILD_ANDROID_PROJECTS=OFF \
+            -DANDROID_STL=c++_shared -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON
 
       - name: Build OpenCV
         run: cmake --build build --parallel $(nproc)
 
-      - name: Install
-        run: cmake --install build
-
-      - name: Find libopencv_java5.so
-        run: find install -name "libopencv_java5.so"
-
       - name: Upload libopencv_java5.so
         uses: actions/upload-artifact@v4
         with:
-          name: opencv-5.0.0-arm64-v8a-5mb
-          path: install/lib/libopencv_java5.so
-          if-no-files-found: error
+          name: opencv-5.0.0-arm64-v8a-16kb
+          path: |
+            build/**/*.so

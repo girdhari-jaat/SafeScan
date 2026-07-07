@@ -552,7 +552,7 @@ export function useCropHook({
         blob = await response.blob();
       }
 
-      if (isOnline) {
+      if (isOnline && useMLKit) {
         try {
           addLog("[CropHook] Offline mode is OFF, calling online Gemini API /api/gemini/detect-edges");
           const base64Data = await new Promise<string>((resolve, reject) => {

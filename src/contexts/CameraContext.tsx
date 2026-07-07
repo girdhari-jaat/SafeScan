@@ -107,6 +107,8 @@ export function CameraProvider({ children }: { children: ReactNode }) {
   const isDarkRef = useRef(false);
 
   // Real-time custom document edge detection loop
+  const prevCornersRef = useRef<any>(null);
+
   useEffect(() => {
     if (!settings.autoDetectEnabled || !isReady || cameraError) {
       setDetectedCorners(null);
@@ -179,11 +181,28 @@ export function CameraProvider({ children }: { children: ReactNode }) {
                   bl: { x: (corners[3].x / finalW) * 100, y: (corners[3].y / finalH) * 100 }
                 };
               }
+              
               if (active) {
+                if (prevCornersRef.current) {
+                  // Apply EMA (Exponential Moving Average) smoothing for professional feel
+                  const alpha = 0.35; // Smoothing factor
+                  const smoothPt = (oldP: any, newP: any) => ({
+                    x: oldP.x * (1 - alpha) + newP.x * alpha,
+                    y: oldP.y * (1 - alpha) + newP.y * alpha
+                  });
+                  cornersPct = {
+                    tl: smoothPt(prevCornersRef.current.tl, cornersPct.tl),
+                    tr: smoothPt(prevCornersRef.current.tr, cornersPct.tr),
+                    br: smoothPt(prevCornersRef.current.br, cornersPct.br),
+                    bl: smoothPt(prevCornersRef.current.bl, cornersPct.bl)
+                  };
+                }
+                prevCornersRef.current = cornersPct;
                 setDetectedCorners(cornersPct);
               }
             } else {
               if (active) {
+                prevCornersRef.current = null;
                 setDetectedCorners(null);
               }
             }
@@ -192,6 +211,7 @@ export function CameraProvider({ children }: { children: ReactNode }) {
           }
         } catch (err) {
           if (active) {
+            prevCornersRef.current = null;
             setDetectedCorners(null);
           }
         }

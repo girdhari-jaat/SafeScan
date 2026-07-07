@@ -32,9 +32,8 @@ import PDFReaderStatic from "./components/PDFReader";
 const DocumentGrid = React.lazy(() => import("./components/DocumentGrid"));
 const Editor = React.lazy(() => import("./components/Editor"));
 const PDFReader = React.lazy(() => import("./components/PDFReader"));
-
-import UnifiedScanner from "./components/UnifiedScanner";
-import ViewSettings from "./components/Settings";
+const UnifiedScanner = React.lazy(() => import("./components/UnifiedScanner"));
+const ViewSettings = React.lazy(() => import("./components/Settings"));
 
 const ViewDocumentGrid = ({ batterySaverEnabled, ...props }: any) => {
   return batterySaverEnabled ? (
@@ -82,7 +81,18 @@ export default function App() {
   }, [settings?.customAppName]);
 
   React.useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 2000);
+    const timer = setTimeout(async () => {
+      setShowSplash(false);
+      const isCapacitor = typeof window !== 'undefined' && (window as any).Capacitor;
+      if (isCapacitor) {
+        try {
+          const { SplashScreen } = await import('@capacitor/splash-screen');
+          await SplashScreen.hide();
+        } catch (e) {
+          console.error("Failed to hide splash screen", e);
+        }
+      }
+    }, 2000);
     // Explicitly prompt for Notification Permissions on Capacitor/Android launch to enable haptics and sounds
     requestNotificationPermissions().catch((err) => {
       console.warn("[App] Failed to request notification permissions:", err);

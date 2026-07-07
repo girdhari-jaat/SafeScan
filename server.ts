@@ -117,7 +117,7 @@ async function startServer() {
 
   app.post("/api/gemini/analyze", async (req, res) => {
     try {
-      const { base64Data, mimeType, documentTitle, targetLanguage, appName } = req.body;
+      const { base64Data, mimeType, documentTitle, targetLanguage, appName, analysisType } = req.body;
       if (!base64Data) {
         return res.status(400).json({ success: false, error: "Missing base64Data" });
       }
@@ -135,6 +135,63 @@ async function startServer() {
         }
       });
 
+      let textPrompt = "";
+      let responseSchema = {};
+
+      if (analysisType === "qr") {
+        textPrompt = `Analyze this image and extract any QR code or Barcode data present. Return the extracted data in raw text format. Also indicate if the data seems to be a URL, text, or some other structured format.`;
+        responseSchema = {
+          type: Type.OBJECT,
+          properties: {
+            extractedData: {
+              type: Type.STRING,
+              description: "The verbatim text data extracted from the QR code or Barcode. If multiple, separate them by newline."
+            },
+            dataType: {
+              type: Type.STRING,
+              description: "The type of data extracted, e.g. URL, Email, Phone, Plain Text, VCARD, WIFI, etc."
+            }
+          },
+          required: ["extractedData", "dataType"]
+        };
+      } else {
+        textPrompt = `Analyze this scanned document image for the application "${appName || 'SafeScan'}". The document title is: "${documentTitle || 'Untitled'}". Perform high-quality OCR to extract all text, identify the document type, determine the language, write a professional summary of the document contents translated into "${targetLanguage || 'English'}", and extract any key field/value pairs (like names, dates, amounts, invoice numbers, reference numbers, etc.).`;
+        responseSchema = {
+          type: Type.OBJECT,
+          properties: {
+            documentType: {
+              type: Type.STRING,
+              description: "Type of document, e.g. Invoice, Receipt, ID Card, Letter, Book Page, etc."
+            },
+            detectedLanguage: {
+              type: Type.STRING,
+              description: "The primary language detected in the document text."
+            },
+            summaryText: {
+              type: Type.STRING,
+              description: `A concise professional summary of the document, completely translated into ${targetLanguage || 'English'}.`
+            },
+            extractedFields: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  label: { type: Type.STRING, description: "Label or key of the field (e.g. Total, Invoice Date, Sender Name)." },
+                  value: { type: Type.STRING, description: "Extracted value corresponding to the label." }
+                },
+                required: ["label", "value"]
+              },
+              description: "A list of relevant key-value pairs extracted from the document."
+            },
+            fullTranscript: {
+              type: Type.STRING,
+              description: "The complete verbatim OCR transcription of all readable text in the document."
+            }
+          },
+          required: ["documentType", "detectedLanguage", "summaryText", "extractedFields", "fullTranscript"]
+        };
+      }
+
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: [
@@ -142,7 +199,7 @@ async function startServer() {
             role: "user",
             parts: [
               {
-                text: `Analyze this scanned document image for the application "${appName || 'SafeScan'}". The document title is: "${documentTitle || 'Untitled'}". Perform high-quality OCR to extract all text, identify the document type, determine the language, write a professional summary of the document contents translated into "${targetLanguage || 'English'}", and extract any key field/value pairs (like names, dates, amounts, invoice numbers, reference numbers, etc.).`
+                text: textPrompt
               },
               {
                 inlineData: {
@@ -156,40 +213,7 @@ async function startServer() {
         config: {
           temperature: 0.2,
           responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              documentType: {
-                type: Type.STRING,
-                description: "Type of document, e.g. Invoice, Receipt, ID Card, Letter, Book Page, etc."
-              },
-              detectedLanguage: {
-                type: Type.STRING,
-                description: "The primary language detected in the document text."
-              },
-              summaryText: {
-                type: Type.STRING,
-                description: `A concise professional summary of the document, completely translated into ${targetLanguage || 'English'}.`
-              },
-              extractedFields: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    label: { type: Type.STRING, description: "Label or key of the field (e.g. Total, Invoice Date, Sender Name)." },
-                    value: { type: Type.STRING, description: "Extracted value corresponding to the label." }
-                  },
-                  required: ["label", "value"]
-                },
-                description: "A list of relevant key-value pairs extracted from the document."
-              },
-              fullTranscript: {
-                type: Type.STRING,
-                description: "The complete verbatim OCR transcription of all readable text in the document."
-              }
-            },
-            required: ["documentType", "detectedLanguage", "summaryText", "extractedFields", "fullTranscript"]
-          }
+          responseSchema: responseSchema
         }
       });
 

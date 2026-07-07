@@ -129,31 +129,31 @@ export function getCSSFilterString(filter: string, adjustments: any, _ignoreTemp
   let presetCSS = '';
   switch (filter) {
     case 'pro-scan':
-      presetCSS = 'contrast(115%) grayscale(100%)';
+      presetCSS = 'contrast(150%) grayscale(100%) brightness(115%)';
       break;
     case 'magic':
-      presetCSS = 'contrast(125%) saturate(135%) brightness(105%)';
+      presetCSS = 'contrast(130%) saturate(150%) brightness(110%)';
       break;
     case 'auto-enhance':
-      presetCSS = 'contrast(110%) brightness(105%)';
+      presetCSS = 'contrast(120%) saturate(110%) brightness(110%)';
       break;
     case 'bw':
-      presetCSS = 'grayscale(100%) contrast(160%) brightness(110%)';
+      presetCSS = 'grayscale(100%) contrast(250%) brightness(120%)';
       break;
     case 'grayscale':
-      presetCSS = 'grayscale(100%)';
+      presetCSS = 'grayscale(100%) contrast(110%) brightness(105%)';
       break;
     case 'noir':
-      presetCSS = 'grayscale(100%) contrast(210%) brightness(85%)';
+      presetCSS = 'grayscale(100%) contrast(250%) brightness(85%)';
       break;
     case 'paper':
-      presetCSS = 'contrast(115%) brightness(108%) saturate(90%)';
+      presetCSS = 'contrast(115%) brightness(110%) saturate(95%) sepia(5%)';
       break;
     case 'document':
-      presetCSS = 'grayscale(100%) contrast(185%) brightness(95%)';
+      presetCSS = 'grayscale(100%) contrast(170%) brightness(110%)';
       break;
     case 'cnic':
-      presetCSS = 'grayscale(100%) contrast(140%) sepia(12%) hue-rotate(180deg) saturate(180%)';
+      presetCSS = 'contrast(125%) saturate(125%) brightness(105%)';
       break;
     case 'original':
     default:
@@ -203,21 +203,10 @@ export function applyFilter(imageData: ImageData, filterName: string): ImageData
       const r = data[i];
       const g = data[i+1];
       const b = data[i+2];
-      const cr = (r - 128) * 1.3 + 128;
-      const cg = (g - 128) * 1.3 + 128;
-      const cb = (b - 128) * 1.3 + 128;
-      const brightness = 0.299 * cr + 0.587 * cg + 0.114 * cb;
-      if (brightness > 190) {
-        data[i] = 255;
-        data[i+1] = 255;
-        data[i+2] = 255;
-      } else {
-        const gray = Math.min(255, (0.299 * r + 0.587 * g + 0.114 * b) + 32);
-        const gClamped = gray < 0 ? 0 : gray;
-        data[i] = gClamped;
-        data[i+1] = gClamped;
-        data[i+2] = gClamped;
-      }
+      const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+      let val = (gray - 128) * 1.6 + 128 + 15;
+      val = val > 210 ? 255 : (val < 40 ? 0 : val);
+      data[i] = data[i+1] = data[i+2] = Math.max(0, Math.min(255, val));
     }
     return imageData;
   }
@@ -234,40 +223,38 @@ export function applyFilter(imageData: ImageData, filterName: string): ImageData
     const gray = 0.299 * r + 0.587 * g + 0.114 * b;
     
     if (filterName === 'grayscale') {
-      r = g = b = gray;
+      r = g = b = Math.max(0, Math.min(255, (gray - 128) * 1.1 + 128 + 10));
     } else if (filterName === 'bw') {
-      r = g = b = gray >= otsu ? 255 : 0;
+      r = g = b = gray >= (otsu * 0.9) ? 255 : 0;
     } else if (filterName === 'noir') {
-      const v = (gray - 75) * (255 / 120);
+      const v = (gray - 100) * 2.5;
       r = g = b = Math.max(0, Math.min(255, v));
     } else if (filterName === 'paper') {
-      if (r > 130) r = Math.min(255, r + (255 - r) * 0.48);
-      if (g > 130) g = Math.min(255, g + (255 - g) * 0.48);
-      if (b > 130) b = Math.min(255, b + (255 - b) * 0.48);
+      r = Math.min(255, r * 1.05 + 10);
+      g = Math.min(255, g * 1.05 + 10);
+      b = Math.min(255, b * 1.05 + 5);
+      const avg = (r + g + b) / 3;
+      if (avg > 200) { r = g = b = 255; }
     } else if (filterName === 'document') {
-      r = g = b = gray > otsu - 15 ? 255 : Math.max(0, gray * 0.55);
+      let val = gray >= (otsu * 0.95) ? 255 : gray * 0.8;
+      r = g = b = Math.max(0, Math.min(255, val));
     } else if (filterName === 'magic') {
-      const bR = gray + 1.25 * (r - gray);
-      const bG = gray + 1.25 * (g - gray);
-      const bB = gray + 1.25 * (b - gray);
-      if ((bR + bG + bB) / 3 > 155) {
-        r = Math.min(255, bR + (255 - bR) * 0.35);
-        g = Math.min(255, bG + (255 - bG) * 0.35);
-        b = Math.min(255, bB + (255 - bB) * 0.35);
-      } else {
-        r = Math.max(0, Math.min(255, bR));
-        g = Math.max(0, Math.min(255, bG));
-        b = Math.max(0, Math.min(255, bB));
+      const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+      const factor = 1.3;
+      r = Math.max(0, Math.min(255, luminance + factor * (r - luminance) + 15));
+      g = Math.max(0, Math.min(255, luminance + factor * (g - luminance) + 15));
+      b = Math.max(0, Math.min(255, luminance + factor * (b - luminance) + 15));
+      if (luminance > 190) {
+        r = Math.min(255, r * 1.1); g = Math.min(255, g * 1.1); b = Math.min(255, b * 1.1);
       }
     } else if (filterName === 'cnic') {
-      const cv = Math.max(0, Math.min(255, (gray - 128) * 1.35 + 128));
-      r = Math.round(cv * 0.90);
-      g = Math.round(cv * 0.95);
-      b = Math.round(cv * 1.05);
+      r = Math.max(0, Math.min(255, (r - 128) * 1.2 + 128 + 10));
+      g = Math.max(0, Math.min(255, (g - 128) * 1.2 + 128 + 10));
+      b = Math.max(0, Math.min(255, (b - 128) * 1.2 + 128 + 10));
     } else if (filterName === 'auto-enhance') {
-      r = Math.max(0, Math.min(255, (r - 128) * 1.15 + 128 + 15));
-      g = Math.max(0, Math.min(255, (g - 128) * 1.15 + 128 + 15));
-      b = Math.max(0, Math.min(255, (b - 128) * 1.15 + 128 + 15));
+      r = Math.max(0, Math.min(255, (r - 128) * 1.2 + 128 + 20));
+      g = Math.max(0, Math.min(255, (g - 128) * 1.2 + 128 + 20));
+      b = Math.max(0, Math.min(255, (b - 128) * 1.2 + 128 + 20));
     }
     
     data[i] = r;

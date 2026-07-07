@@ -71,8 +71,8 @@ function estimateForegroundPercentages(closed: Uint8Array, w: number, h: number)
   xCoords.sort((a, b) => a - b);
   yCoords.sort((a, b) => a - b);
 
-  const pctLow = 0.03;
-  const pctHigh = 0.97;
+  const pctLow = 0.05;
+  const pctHigh = 0.95;
 
   const minX = xCoords[Math.floor(xCoords.length * pctLow)];
   const maxX = xCoords[Math.floor(xCoords.length * pctHigh)];
@@ -243,17 +243,17 @@ export function detectCornersFromImageData(
     
     // Proximity search space depth
     const marginX = Math.round(sw * 0.15);
-    const marginY = Math.round(sh * 0.05);
+    const marginY = Math.round(sh * 0.12);
     
-    const searchLeftStart = Math.max(0, Math.round(targetLeft - marginX));
-    const searchLeftEnd = Math.min(sw, Math.round(targetLeft + marginX));
-    const searchRightStart = Math.max(0, Math.round(targetRight - marginX));
-    const searchRightEnd = Math.min(sw, Math.round(targetRight + marginX));
+    const searchLeftStart = Math.max(borderX + 2, Math.round(targetLeft - marginX));
+    const searchLeftEnd = Math.min(sw - borderX - 2, Math.round(targetLeft + marginX));
+    const searchRightStart = Math.max(borderX + 2, Math.round(targetRight - marginX));
+    const searchRightEnd = Math.min(sw - borderX - 2, Math.round(targetRight + marginX));
     
-    const searchTopStart = Math.max(0, Math.round(targetTop - marginY));
-    const searchTopEnd = Math.min(sh, Math.round(targetTop + marginY));
-    const searchBottomStart = Math.max(0, Math.round(targetBottom - marginY));
-    const searchBottomEnd = Math.min(sh, Math.round(targetBottom + marginY));
+    const searchTopStart = Math.max(borderY + 2, Math.round(targetTop - marginY));
+    const searchTopEnd = Math.min(sh - borderY - 2, Math.round(targetTop + marginY));
+    const searchBottomStart = Math.max(borderY + 2, Math.round(targetBottom - marginY));
+    const searchBottomEnd = Math.min(sh - borderY - 2, Math.round(targetBottom + marginY));
     
     // Define bounds for lateral sweep
     const scanYStart = Math.max(0, Math.round(sh * (topPct - 0.04)));
@@ -271,23 +271,25 @@ export function detectCornersFromImageData(
           closed[y * sw + x] !== closed[y * sw + (x - 1)] ||
           closed[y * sw + x] !== closed[y * sw + (x + 1)]
         );
-        const score = val * (isTransition ? 2.5 : 1.0);
+        const score = val * (isTransition ? 25.0 : 0.1);
         if (score > maxScoreL) { maxScoreL = score; maxXL = x; }
+        if (isTransition && val > thresholdX * 0.5) break; // Stop at first valid outer edge
       }
       if (maxXL !== -1 && maxScoreL > thresholdX * 0.45) {
         leftPoints.push({ x: maxXL, y });
       }
       
-      // Right coordinate gradient + morph transition scan
+      // Right coordinate gradient + morph transition scan (scan outside-in: Right to Left)
       let maxScoreR = -1, maxXR = -1;
-      for (let x = searchRightStart; x < searchRightEnd; x++) {
+      for (let x = searchRightEnd - 1; x >= searchRightStart; x--) {
         const val = magnitudesX[y * sw + x];
         const isTransition = x > 0 && x < sw - 1 && (
           closed[y * sw + x] !== closed[y * sw + (x - 1)] ||
           closed[y * sw + x] !== closed[y * sw + (x + 1)]
         );
-        const score = val * (isTransition ? 2.5 : 1.0);
+        const score = val * (isTransition ? 25.0 : 0.1);
         if (score > maxScoreR) { maxScoreR = score; maxXR = x; }
+        if (isTransition && val > thresholdX * 0.5) break; // Stop at first valid outer edge
       }
       if (maxXR !== -1 && maxScoreR > thresholdX * 0.45) {
         rightPoints.push({ x: maxXR, y });
@@ -301,7 +303,7 @@ export function detectCornersFromImageData(
     for (let x = scanXStart; x < scanXEnd; x += scanStride) {
       if (x < 0 || x >= sw) continue;
       
-      // Top coordinate gradient + morph transition scan
+      // Top coordinate gradient + morph transition scan (scan outside-in: Top to Bottom)
       let maxScoreT = -1, foundYT = -1;
       for (let y = searchTopStart; y < searchTopEnd; y++) {
         const val = magnitudesY[y * sw + x];
@@ -309,23 +311,25 @@ export function detectCornersFromImageData(
           closed[y * sw + x] !== closed[(y - 1) * sw + x] ||
           closed[y * sw + x] !== closed[(y + 1) * sw + x]
         );
-        const score = val * (isTransition ? 2.5 : 1.0);
+        const score = val * (isTransition ? 25.0 : 0.1);
         if (score > maxScoreT) { maxScoreT = score; foundYT = y; }
+        if (isTransition && val > thresholdY * 0.5) break; // Stop at first valid outer edge
       }
       if (foundYT !== -1 && maxScoreT > thresholdY * 0.45) {
         topPoints.push({ x, y: foundYT });
       }
       
-      // Bottom coordinate gradient + morph transition scan
+      // Bottom coordinate gradient + morph transition scan (scan outside-in: Bottom to Top)
       let maxScoreB = -1, foundYB = -1;
-      for (let y = searchBottomStart; y < searchBottomEnd; y++) {
+      for (let y = searchBottomEnd - 1; y >= searchBottomStart; y--) {
         const val = magnitudesY[y * sw + x];
         const isTransition = y > 0 && y < sh - 1 && (
           closed[y * sw + x] !== closed[(y - 1) * sw + x] ||
           closed[y * sw + x] !== closed[(y + 1) * sw + x]
         );
-        const score = val * (isTransition ? 2.5 : 1.0);
+        const score = val * (isTransition ? 25.0 : 0.1);
         if (score > maxScoreB) { maxScoreB = score; foundYB = y; }
+        if (isTransition && val > thresholdY * 0.5) break; // Stop at first valid outer edge
       }
       if (foundYB !== -1 && maxScoreB > thresholdY * 0.45) {
         bottomPoints.push({ x, y: foundYB });
@@ -584,12 +588,12 @@ function findRobustForegroundBoundingBox(closed: Uint8Array, w: number, h: numbe
     ];
   }
   
-  // 4. Sort coordinates to find robust percentiles (2% and 98% percentile to cut outlier noise)
+  // 4. Sort coordinates to find robust percentiles
   xCoords.sort((a, b) => a - b);
   yCoords.sort((a, b) => a - b);
   
-  const pctLow = 0.02;
-  const pctHigh = 0.98;
+  const pctLow = 0.05;
+  const pctHigh = 0.95;
   
   const minX = xCoords[Math.floor(xCoords.length * pctLow)];
   const maxX = xCoords[Math.floor(xCoords.length * pctHigh)];

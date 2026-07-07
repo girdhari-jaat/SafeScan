@@ -393,6 +393,7 @@ function Editor({
   const [aiResult, setAiResult] = useState<any>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [targetLanguage, setTargetLanguage] = useState<string>('English');
+  const [aiExtractTab, setAiExtractTab] = useState<'ocr' | 'qr'>('ocr');
   const [aiCopied, setAiCopied] = useState(false);
 
   const handleCopy = useCallback((text: string) => {
@@ -446,7 +447,7 @@ function Editor({
 
       if (isOnline) {
         try {
-          addLog("[DocAI] Offline mode is OFF, calling online Gemini API /api/gemini/analyze");
+          addLog(`[DocAI] Offline mode is OFF, calling online Gemini API /api/gemini/analyze with type ${aiExtractTab}`);
           const apiRes = await fetch("/api/gemini/analyze", {
             method: "POST",
             headers: {
@@ -458,6 +459,7 @@ function Editor({
               documentTitle: activeDocument.title,
               targetLanguage: targetLanguage || "English",
               appName: settings.customAppName || "SafeScan",
+              analysisType: aiExtractTab
             }),
           });
 
@@ -484,12 +486,15 @@ function Editor({
 
       async function runLocalOCR(b64: string) {
         try {
-          // Try barcode first
-          const barcodeResult = await BarcodeService.processImage(b64);
-          if (barcodeResult.success) {
-            return barcodeResult;
+          if (aiExtractTab === 'qr') {
+            const barcodeResult = await BarcodeService.processImage(b64);
+            if (barcodeResult.success) {
+              return barcodeResult;
+            } else {
+              return { success: false, error: "No QR or barcode found in the image." };
+            }
           } else {
-            // Fall back to OCR
+            // Document OCR
             const ocrText = await OCRService.detectText(b64);
             if (ocrText && ocrText.trim().length > 0 && ocrText !== 'OCR is only supported on native Android/iOS devices.') {
                return {
@@ -497,17 +502,17 @@ function Editor({
                  data: {
                    documentType: "OCR Text",
                    detectedLanguage: "Auto",
-                   summaryText: "Text extracted via ML Kit",
+                   summaryText: "Text extracted via local ML Kit",
                    extractedFields: [],
                    fullTranscript: ocrText
                  }
                };
             } else {
-               return { success: false, error: "No text or barcode found in the document" };
+               return { success: false, error: "No text found in the document, or OCR is not supported on this platform." };
             }
           }
         } catch (err: any) { 
-          return { success: false, error: err.message || "Local Barcode scan failed" };
+          return { success: false, error: err.message || "Local extraction failed" };
         }
       }
 
@@ -1017,8 +1022,27 @@ function Editor({
               </button>
             </div>
 
-            {/* Scrollable Container */}
+              {/* Scrollable Container */}
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
+              
+              {/* Type Tabs */}
+              <div className="flex bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl overflow-hidden p-1 gap-1">
+                <button
+                  type="button"
+                  onClick={() => { setAiExtractTab('ocr'); setAiResult(null); setAiError(null); }}
+                  className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${aiExtractTab === 'ocr' ? 'bg-[var(--primary)] text-white shadow-sm' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)]'}`}
+                >
+                  Document OCR
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAiExtractTab('qr'); setAiResult(null); setAiError(null); }}
+                  className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${aiExtractTab === 'qr' ? 'bg-[var(--primary)] text-white shadow-sm' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-primary)]'}`}
+                >
+                  QR & Barcode
+                </button>
+              </div>
+
               {/* Image Thumbnail and Option bar - Pro Level Non-Overlapping Layout */}
               <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-[var(--bg-card)] p-4 rounded-3xl border border-[var(--border-color)]">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -1036,26 +1060,28 @@ function Editor({
                 </div>
                 
                 {/* Language Selector container to avoid overlapping */}
-                <div className="flex flex-col gap-1.5 min-w-[150px] pt-3 sm:pt-0 border-t sm:border-t-0 border-[var(--border-color)]">
-                  <label className="text-[10px] font-black uppercase text-[var(--text-secondary)] font-mono tracking-wider flex items-center gap-1">
-                    <Languages className="w-3.5 h-3.5 text-[var(--primary)]" />
-                    Translate To
-                  </label>
-                  <select
-                    value={targetLanguage}
-                    onChange={(e) => setTargetLanguage(e.target.value)}
-                    disabled={aiLoading}
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl py-2 px-3 text-xs font-bold text-[var(--text-primary)] outline-none cursor-pointer focus:border-[var(--primary)] transition-all"
-                  >
-                    <option value="English">None (English)</option>
-                    <option value="Urdu">Urdu (اردو)</option>
-                    <option value="Spanish">Spanish (Español)</option>
-                    <option value="Arabic">Arabic (العربية)</option>
-                    <option value="French">French (Français)</option>
-                    <option value="German">German (Deutsch)</option>
-                    <option value="Hindi">Hindi (हिन्दी)</option>
-                  </select>
-                </div>
+                {aiExtractTab === 'ocr' && (
+                  <div className="flex flex-col gap-1.5 min-w-[150px] pt-3 sm:pt-0 border-t sm:border-t-0 border-[var(--border-color)]">
+                    <label className="text-[10px] font-black uppercase text-[var(--text-secondary)] font-mono tracking-wider flex items-center gap-1">
+                      <Languages className="w-3.5 h-3.5 text-[var(--primary)]" />
+                      Translate To
+                    </label>
+                    <select
+                      value={targetLanguage}
+                      onChange={(e) => setTargetLanguage(e.target.value)}
+                      disabled={aiLoading}
+                      className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl py-2 px-3 text-xs font-bold text-[var(--text-primary)] outline-none cursor-pointer focus:border-[var(--primary)] transition-all"
+                    >
+                      <option value="English">None (English)</option>
+                      <option value="Urdu">Urdu (اردو)</option>
+                      <option value="Spanish">Spanish (Español)</option>
+                      <option value="Arabic">Arabic (العربية)</option>
+                      <option value="French">French (Français)</option>
+                      <option value="German">German (Deutsch)</option>
+                      <option value="Hindi">Hindi (हिन्दी)</option>
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* Action Button trigger */}
@@ -1108,88 +1134,133 @@ function Editor({
               {/* Successful result parameters displaying structured data */}
               {aiResult && (
                 <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                  {/* Row showing classification classification badges */}
-                  <div className="flex flex-wrap gap-2">
-                    <div className="bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-full flex items-center gap-1.5 shrink-0 select-none">
-                      <Layers className="w-3.5 h-3.5 text-purple-500" />
-                      <span className="text-[10px] font-black uppercase text-purple-500 font-mono tracking-wider">
-                        Type: {aiResult.documentType || "Unclassified"}
-                      </span>
-                    </div>
-                    <div className="bg-[var(--primary)]/10 border border-[var(--primary)]/20 px-3 py-1.5 rounded-full flex items-center gap-1.5 shrink-0 select-none">
-                      <Languages className="w-3.5 h-3.5 text-[var(--primary)]" />
-                      <span className="text-[10px] font-black uppercase text-[var(--primary)] font-mono tracking-wider font-extrabold">
-                        {t.detected}: {aiResult.detectedLanguage || "Unknown"}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Summary translated Section */}
-                  <div className="p-4 bg-amber-500/5 border border-amber-500/12 rounded-2xl md:p-5 select-text space-y-1.5">
-                    <h4 className="text-[11px] font-black uppercase text-amber-500 font-mono tracking-widest flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5 fill-amber-500/20" /> {t.smartSummary} ({targetLanguage})
-                    </h4>
-                    <p className="text-xs text-[var(--text-primary)] leading-relaxed font-sans">
-                      {aiResult.summaryText}
-                    </p>
-                  </div>
-
-                  {/* Extracted Key Fields list Table */}
-                  {aiResult.extractedFields && aiResult.extractedFields.length > 0 && (
-                    <div className="rounded-2xl border border-[var(--border-color)] overflow-hidden">
-                      <div className="p-3 bg-[var(--bg-card)] border-b border-[var(--border-color)]">
-                        <span className="text-[10px] font-black uppercase text-[var(--text-secondary)] font-mono tracking-wider block">
-                          {t.fields}
-                        </span>
+                  {aiExtractTab === 'ocr' ? (
+                    <>
+                      {/* Row showing classification classification badges */}
+                      <div className="flex flex-wrap gap-2">
+                        <div className="bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-full flex items-center gap-1.5 shrink-0 select-none">
+                          <Layers className="w-3.5 h-3.5 text-purple-500" />
+                          <span className="text-[10px] font-black uppercase text-purple-500 font-mono tracking-wider">
+                            Type: {aiResult.documentType || "Unclassified"}
+                          </span>
+                        </div>
+                        <div className="bg-[var(--primary)]/10 border border-[var(--primary)]/20 px-3 py-1.5 rounded-full flex items-center gap-1.5 shrink-0 select-none">
+                          <Languages className="w-3.5 h-3.5 text-[var(--primary)]" />
+                          <span className="text-[10px] font-black uppercase text-[var(--primary)] font-mono tracking-wider font-extrabold">
+                            {t.detected}: {aiResult.detectedLanguage || "Unknown"}
+                          </span>
+                        </div>
                       </div>
-                      <table className="w-full text-xs text-left border-collapse select-text">
-                        <thead>
-                          <tr className="bg-[var(--bg-primary)] border-b border-[var(--border-color)] text-[var(--text-secondary)] font-bold text-[10px] uppercase font-mono">
-                            <th className="p-2.5">Field / Key</th>
-                            <th className="p-2.5 text-right font-black">Value</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {aiResult.extractedFields.map((field: any, i: number) => (
-                            <tr key={i} className="border-b border-[var(--border-color)]/60 last:border-b-0 hover:bg-[var(--bg-card)]">
-                              <td className="p-2.5 font-bold text-[var(--text-secondary)]">{field.label}</td>
-                              <td className="p-2.5 text-right font-mono font-bold text-[var(--text-primary)]">{field.value}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
 
-                  {/* Complete OCR transcription component block */}
-                  <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] overflow-hidden flex flex-col">
-                    <div className="p-3 border-b border-[var(--border-color)] flex justify-between items-center select-none bg-[var(--bg-primary)]">
-                      <span className="text-[10px] font-black uppercase text-[var(--text-secondary)] font-mono tracking-wider">
-                        {t.ocrTranscript}
-                      </span>
-                      <button
-                        onClick={() => handleCopy(aiResult.fullTranscript)}
-                        className="flex items-center gap-1 px-2 py-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-[10px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer transition-all shrink-0 active:scale-95"
-                      >
-                        {aiCopied ? (
-                          <>
-                            <Check className="w-3 h-3 text-[var(--primary)]" />
-                            Copied!
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3" />
-                            {t.copyText}
-                          </>
-                        )}
-                      </button>
-                    </div>
-                    <div className="p-4 overflow-y-auto max-h-[220px] select-text">
-                      <p className="text-xs font-mono text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap select-text">
-                        {aiResult.fullTranscript}
-                      </p>
-                    </div>
-                  </div>
+                      {/* Summary translated Section */}
+                      <div className="p-4 bg-amber-500/5 border border-amber-500/12 rounded-2xl md:p-5 select-text space-y-1.5">
+                        <h4 className="text-[11px] font-black uppercase text-amber-500 font-mono tracking-widest flex items-center gap-1">
+                          <Sparkles className="w-3.5 h-3.5 fill-amber-500/20" /> {t.smartSummary} ({targetLanguage})
+                        </h4>
+                        <p className="text-xs text-[var(--text-primary)] leading-relaxed font-sans">
+                          {aiResult.summaryText}
+                        </p>
+                      </div>
+
+                      {/* Extracted Key Fields list Table */}
+                      {aiResult.extractedFields && aiResult.extractedFields.length > 0 && (
+                        <div className="rounded-2xl border border-[var(--border-color)] overflow-hidden">
+                          <div className="p-3 bg-[var(--bg-card)] border-b border-[var(--border-color)]">
+                            <span className="text-[10px] font-black uppercase text-[var(--text-secondary)] font-mono tracking-wider block">
+                              {t.fields}
+                            </span>
+                          </div>
+                          <table className="w-full text-xs text-left border-collapse select-text">
+                            <thead>
+                              <tr className="bg-[var(--bg-primary)] border-b border-[var(--border-color)] text-[var(--text-secondary)] font-bold text-[10px] uppercase font-mono">
+                                <th className="p-2.5">Field / Key</th>
+                                <th className="p-2.5 text-right font-black">Value</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {aiResult.extractedFields.map((field: any, i: number) => (
+                                <tr key={i} className="border-b border-[var(--border-color)]/60 last:border-b-0 hover:bg-[var(--bg-card)]">
+                                  <td className="p-2.5 font-bold text-[var(--text-secondary)]">{field.label}</td>
+                                  <td className="p-2.5 text-right font-mono font-bold text-[var(--text-primary)]">{field.value}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Complete OCR transcription component block */}
+                      <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] overflow-hidden flex flex-col">
+                        <div className="p-3 border-b border-[var(--border-color)] flex justify-between items-center select-none bg-[var(--bg-primary)]">
+                          <span className="text-[10px] font-black uppercase text-[var(--text-secondary)] font-mono tracking-wider">
+                            {t.ocrTranscript}
+                          </span>
+                          <button
+                            onClick={() => handleCopy(aiResult.fullTranscript)}
+                            className="flex items-center gap-1 px-2 py-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-[10px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer transition-all shrink-0 active:scale-95"
+                          >
+                            {aiCopied ? (
+                              <>
+                                <Check className="w-3 h-3 text-[var(--primary)]" />
+                                Copied!
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                {t.copyText}
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <div className="p-4 overflow-y-auto max-h-[220px] select-text">
+                          <p className="text-xs font-mono text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap select-text">
+                            {aiResult.fullTranscript}
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* QR / Barcode Display Section */}
+                      <div className="flex flex-wrap gap-2">
+                        <div className="bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full flex items-center gap-1.5 shrink-0 select-none">
+                          <Layers className="w-3.5 h-3.5 text-emerald-500" />
+                          <span className="text-[10px] font-black uppercase text-emerald-500 font-mono tracking-wider">
+                            Data Type: {aiResult.dataType || "Unknown"}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] overflow-hidden flex flex-col mt-4">
+                        <div className="p-3 border-b border-[var(--border-color)] flex justify-between items-center select-none bg-[var(--bg-primary)]">
+                          <span className="text-[10px] font-black uppercase text-[var(--text-secondary)] font-mono tracking-wider">
+                            Extracted QR / Barcode Data
+                          </span>
+                          <button
+                            onClick={() => handleCopy(aiResult.extractedData)}
+                            className="flex items-center gap-1 px-2 py-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-[10px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer transition-all shrink-0 active:scale-95"
+                          >
+                            {aiCopied ? (
+                              <>
+                                <Check className="w-3 h-3 text-[var(--primary)]" />
+                                Copied!
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                Copy
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <div className="p-4 overflow-y-auto max-h-[220px] select-text">
+                          <p className="text-xs font-mono text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap select-text">
+                            {aiResult.extractedData}
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>

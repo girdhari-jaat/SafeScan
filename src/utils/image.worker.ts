@@ -114,7 +114,7 @@ const workerAPI = {
       croppedW = w;
       croppedH = h;
       
-      const scale = 0.25;
+      const scale = isRealtime ? 0.30 : 0.40;
       const sw = Math.floor(w * scale);
       const sh = Math.floor(h * scale);
 

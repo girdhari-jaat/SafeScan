@@ -131,6 +131,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         typeof value === "function" ? value(prev[key]) : value;
       const next = { ...prev, [key]: resolvedValue };
 
+      // Mutually exclusive logic for Native Scanner and Phone Camera
+      if (key === "useNativeScanner" && resolvedValue === true) {
+        next.usePhoneCamera = false;
+        safeSetItem("usePhoneCamera", "false");
+      } else if (key === "usePhoneCamera" && resolvedValue === true) {
+        next.useNativeScanner = false;
+        safeSetItem("useNativeScanner", "false");
+      }
+
       // Save to localStorage safely
       if (resolvedValue === null || resolvedValue === undefined) {
         try {
