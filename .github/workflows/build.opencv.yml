@@ -58,7 +58,15 @@ jobs:
             -DBUILD_SHARED_LIBS=ON -DBUILD_LIST=core,imgproc,imgcodecs,java \
             -DBUILD_JAVA=ON -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_EXAMPLES=OFF \
             -DBUILD_ANDROID_EXAMPLES=OFF -DBUILD_ANDROID_PROJECTS=OFF \
-            -DANDROID_STL=c++_shared -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON
+            -DANDROID_STL=c++_static \  # 1. shared ki jaga static
+            -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
+            -DBUILD_opencv_world=OFF \  # 2. world lib mat banao
+            -DCMAKE_BUILD_TYPE=Release \ # 3. Release build
+            -DENABLE_PIC=OFF \           # 4. Position independent code off
+            -DWITH_PROTOBUF=OFF \        # 5. extra cheezen band
+            -DWITH_FFMPEG=OFF \
+            -DBUILD_opencv_video=OFF \
+            -DBUILD_opencv_img_hash=OFF
 
       - name: Build OpenCV
         run: cmake --build build --parallel $(nproc)
