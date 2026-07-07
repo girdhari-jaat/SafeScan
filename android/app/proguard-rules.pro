@@ -19,3 +19,9 @@
 -dontwarn javax.annotation.**
 -dontwarn sun.misc.Unsafe
 
+# TensorFlow Lite Proguard Rules
+-keep class org.tensorflow.lite.** { *; }
+-dontwarn org.tensorflow.lite.gpu.**
+-dontwarn org.tensorflow.lite.**
+
+
