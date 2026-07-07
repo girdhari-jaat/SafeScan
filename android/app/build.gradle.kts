@@ -177,7 +177,7 @@ tasks.register("downloadTFLiteModel") {
         if (!assetsDir.exists()) assetsDir.mkdirs()
         if (!modelFile.exists()) {
             println("Downloading $modelFileName...")
-            modelUrl.toURL().openStream().use { input ->
+            java.net.URL(modelUrl).openStream().use { input ->
                 modelFile.outputStream().use { output ->
                     input.copyTo(output)
                 }
