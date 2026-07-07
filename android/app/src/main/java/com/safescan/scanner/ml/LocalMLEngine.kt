@@ -12,8 +12,8 @@ import org.opencv.core.MatOfPoint
 import org.opencv.core.MatOfPoint2f
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
-import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.gpu.GpuDelegate
+import com.google.ai.edge.litert.Interpreter
+import com.google.ai.edge.litert.gpu.GpuDelegate
 import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -39,7 +39,7 @@ class LocalMLEngine(private val context: Context) {
                 gpuDelegate = GpuDelegate()
                 options.addDelegate(gpuDelegate)
                 interpreter = Interpreter(tfliteModel, options)
-                Log.d("LocalMLEngine", "TFLite model loaded successfully with GPU acceleration")
+                Log.d("LocalMLEngine", "LiteRT model loaded successfully with GPU acceleration")
             } catch (gpuEx: Exception) {
                 Log.w("LocalMLEngine", "GPU acceleration not supported. Falling back to CPU.", gpuEx)
                 // Clean up GPU delegate if it was created
@@ -54,10 +54,10 @@ class LocalMLEngine(private val context: Context) {
                 val options = Interpreter.Options()
                 options.setNumThreads(4) // Use 4 CPU threads for high performance
                 interpreter = Interpreter(tfliteModel, options)
-                Log.d("LocalMLEngine", "TFLite model loaded successfully with CPU (4 threads)")
+                Log.d("LocalMLEngine", "LiteRT model loaded successfully with CPU (4 threads)")
             }
         } catch (e: Exception) {
-            Log.e("LocalMLEngine", "Fatal error loading TFLite model", e)
+            Log.e("LocalMLEngine", "Fatal error loading LiteRT model", e)
         }
     }
 

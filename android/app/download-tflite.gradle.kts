@@ -23,7 +23,8 @@ tasks.register("downloadTFLiteModel") {
                 }
                 println("TFLite model downloaded successfully: ${modelFile.name}")
             } catch (e: Exception) {
-                throw GradleException("Failed to download TFLite model: ${e.message}", e)
+                println("WARNING: Failed to download TFLite model: ${e.message}")
+                println("The build will continue, but please make sure the file exists or is downloaded when network is available.")
             }
         } else {
             println("TFLite model already exists at ${modelFile.absolutePath}, skipping download.")

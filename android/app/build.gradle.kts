@@ -122,11 +122,11 @@ dependencies {
     // OpenCV
     implementation("com.quickbirdstudios:opencv:4.5.3.0")
 
-    // TensorFlow Lite
-    implementation("org.tensorflow:tensorflow-lite:2.16.1")
-    implementation("org.tensorflow:tensorflow-lite-gpu:2.16.1")
-    implementation("org.tensorflow:tensorflow-lite-gpu-api:2.16.1")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    // LiteRT (New TensorFlow Lite)
+    implementation("com.google.ai.edge.litert:litert:1.0.1")
+    implementation("com.google.ai.edge.litert:litert-gpu:1.0.1")
+    implementation("com.google.ai.edge.litert:litert-gpu-api:1.0.1")
+    implementation("com.google.ai.edge.litert:litert-support:1.0.1")
 
     // Lifecycle/ViewModel/Coroutines
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
