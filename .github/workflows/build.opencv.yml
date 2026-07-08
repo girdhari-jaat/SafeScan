@@ -113,14 +113,11 @@ jobs:
             exit 1
           fi
           
-          # Find and copy the compiled jar file
-          JAR_FILE=$(find build -name "opencv*.jar" | head -n 1)
-          if [ -n "$JAR_FILE" ]; then
-            echo "Found compiled jar at: $JAR_FILE"
-            cp "$JAR_FILE" dist_opencv/
-          else
-            echo "Warning: No opencv .jar file found!"
-          fi
+          # Find and copy the compiled jar/aar file
+          echo "Searching for jar or aar files..."
+          find build -type f \( -name "*.jar" -o -name "*.aar" \) -exec cp {} dist_opencv/ \;
+          echo "Contents of dist_opencv:"
+          ls -la dist_opencv/
           
           # Strip debug symbols using NDK llvm-strip toolchain to minimize size
           SO_FILES=$(find dist_opencv -name "*.so")
@@ -149,4 +146,5 @@ jobs:
           path: |
             dist_opencv/arm64-v8a/libopencv_java4.so
             dist_opencv/*.jar
+            dist_opencv/*.aar
           if-no-files-found: error
