@@ -1,6 +1,7 @@
 # Gradle files
 .gradle/
 build/
+!gradle/wrapper/gradle-wrapper.jar
 
 # Local configuration files (contains local paths, SDK paths, and passwords)
 local.properties
