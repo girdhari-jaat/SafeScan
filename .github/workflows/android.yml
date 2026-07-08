@@ -25,7 +25,8 @@ jobs:
       - name: Setup Android SDK 36
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platforms;android-36 build-tools;36.0.0 platform-tools'
+          api-level: 36
+          build-tools: 36.0.0
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -35,8 +36,7 @@ jobs:
 
       - name: Build Release APK
         run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          gradle assembleRelease --no-daemon
         env:
           ANDROID_KEYSTORE_FILE: ${{ secrets.ANDROID_KEYSTORE_FILE }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
