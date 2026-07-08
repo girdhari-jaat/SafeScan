@@ -71,29 +71,32 @@ jobs:
             -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--gc-sections"
 
       - name: Build OpenCV
-        run: cmake --build build --parallel $(nproc)  # <-- ye step add kiya
+        run: cmake --build build --parallel $(nproc)
 
-      - name: Prepare and Strip Release Libraries
+      - name: Prepare and Strip Release Library
         run: |
           mkdir -p dist_opencv/arm64-v8a
           
-          # 3no .so ko copy karo
-          cp build/lib/arm64-v8a/libopencv_core.so dist_opencv/arm64-v8a/
-          cp build/lib/arm64-v8a/libopencv_imgproc.so dist_opencv/arm64-v8a/
-          cp build/lib/arm64-v8a/libopencv_imgcodecs.so dist_opencv/arm64-v8a/
+          # Sirf java wali .so dhoondo
+          SO_FILE=$(find build -type f -name "libopencv_java4.so" | head -n 1)
+          if [ -z "$SO_FILE" ]; then
+            echo "Error: libopencv_java4.so not found!"
+            exit 1
+          fi
           
-          # NDK ka strip tool
+          echo "Found: $SO_FILE"
+          cp "$SO_FILE" dist_opencv/arm64-v8a/
+          
+          # Strip karo
           STRIP_TOOL="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+          "$STRIP_TOOL" --strip-unneeded dist_opencv/arm64-v8a/libopencv_java4.so
           
-          # Debug symbols nikal do
-          "$STRIP_TOOL" --strip-unneeded dist_opencv/arm64-v8a/*.so
-          
-          echo "--- Final Sizes ---"
+          echo "--- Final Size ---"
           ls -lh dist_opencv/arm64-v8a/
 
-      - name: Upload OpenCV Libs
+      - name: Upload libopencv_java4.so
         uses: actions/upload-artifact@v4
         with:
-          name: opencv-4.10.0-arm64-v8a-stripped
-          path: dist_opencv/arm64-v8a/
+          name: opencv-4.10.0-arm64-v8a-java
+          path: dist_opencv/arm64-v8a/libopencv_java4.so
           if-no-files-found: error
