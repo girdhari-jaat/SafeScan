@@ -68,7 +68,7 @@ jobs:
             -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install \
             -DBUILD_SHARED_LIBS=OFF \
             -DBUILD_FAT_JAVA_LIB=ON \
-            -DBUILD_LIST=core,imgproc,java \
+                 -DBUILD_LIST=core,imgproc,imgcodecs,java \
             -DBUILD_JAVA=ON \
             -DBUILD_opencv_java=ON \
             -DBUILD_opencv_world=ON \  # <- YE WALI 1 LINE CHANGE
