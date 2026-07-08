@@ -42,11 +42,11 @@ jobs:
           echo "140.82.114.4 github.com" | sudo tee -a /etc/hosts
           echo "185.199.108.133 github.com" | sudo tee -a /etc/hosts
 
-      - name: Download OpenCV Source 5.0.0
+      - name: Download OpenCV Source 4.10.0
         run: |
-          wget https://github.com/opencv/opencv/archive/refs/tags/5.0.0.zip
-          unzip 5.0.0.zip
-          mv opencv-5.0.0 opencv
+          wget https://github.com/opencv/opencv/archive/refs/tags/4.10.0.zip
+          unzip 4.10.0.zip
+          mv opencv-4.10.0 opencv
 
       - name: Configure CMake
         run: |
@@ -56,24 +56,24 @@ jobs:
             -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 \
             -DANDROID_SDK_ROOT=$ANDROID_SDK_ROOT -DANDROID_NDK=$ANDROID_NDK_ROOT \
             -DBUILD_SHARED_LIBS=ON -DBUILD_LIST=core,imgproc,java \
-            -DBUILD_JAVA=ON -DBUILD_opencv_java=ON \  # <- 1. ye add kiya
-            -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_EXAMPLES=OFF \
+            -DBUILD_JAVA=ON -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_EXAMPLES=OFF \
             -DBUILD_ANDROID_EXAMPLES=OFF -DBUILD_ANDROID_PROJECTS=OFF \
-            -DANDROID_STL=c++_static \  # <- 2. shared se static kiya size kam karne ke liye
-            -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
-            -DWITH_JPEG=OFF -DWITH_PNG=OFF -DWITH_TIFF=OFF -DWITH_WEBP=OFF \  # <- 3. ye sab band size kam
-            -DWITH_FFMPEG=OFF -DWITH_PROTOBUF=OFF \
-            -DCMAKE_INSTALL_PREFIX=install
+            -DANDROID_STL=c++_shared -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
+            -DWITH_JPEG=OFF -DWITH_PNG=OFF -DWITH_TIFF=OFF -DWITH_WEBP=OFF \
+            -DWITH_OPENEXR=OFF -DWITH_JASPER=OFF -DWITH_OPENJPEG=OFF -DWITH_IPP=OFF \
+            -DWITH_TBB=OFF -DWITH_ADE=OFF -DWITH_EIGEN=OFF -DWITH_OPENCL=OFF \
+            -DBUILD_ZLIB=ON -DBUILD_opencv_apps=OFF -DBUILD_ANDROID_SERVICE=OFF \
+            -DBUILD_DOCS=OFF -DBUILD_PACKAGE=OFF \
+            -DCMAKE_C_FLAGS="-Os -fvisibility=hidden -fdata-sections -ffunction-sections" \
+            -DCMAKE_CXX_FLAGS="-Os -fvisibility=hidden -fvisibility-inlines-hidden -fdata-sections -ffunction-sections" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--gc-sections"
 
       - name: Build OpenCV
         run: cmake --build build --parallel $(nproc)
 
-      - name: Install
-        run: cmake --install build  # <- 4. install step add kiya
-
-      - name: Upload libopencv_java5.so
+      - name: Upload libopencv_java4.so
         uses: actions/upload-artifact@v4
         with:
-          name: opencv-5.0.0-arm64-v8a-16kb
+          name: opencv-4.10.0-arm64-v8a-16kb
           path: |
             build/**/*.so
