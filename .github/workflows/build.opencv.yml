@@ -34,6 +34,7 @@ jobs:
       - name: Install Android SDK & NDK
         run: |
           sudo mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          sudo $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-21" "platforms;android-34" "build-tools;34.0.0" "ndk;26.3.11579264" "extras;google;android_sdk_build_tools"
           cd /tmp
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           unzip -q commandlinetools-linux-11076708_latest.zip
