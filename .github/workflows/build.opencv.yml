@@ -31,7 +31,7 @@ jobs:
           unzip commandlinetools-linux-11076708_latest.zip
           mv cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;26.3.11579264"
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-21" "platforms;android-34" "build-tools;34.0.0" "ndk;26.3.11579264"
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -58,6 +58,8 @@ jobs:
             -DANDROID_SDK_ROOT=$ANDROID_SDK_ROOT -DANDROID_NDK=$ANDROID_NDK_ROOT \
             -DBUILD_SHARED_LIBS=ON -DBUILD_FAT_JAVA_LIB=OFF -DBUILD_LIST=core,imgproc,imgcodecs \
             -DBUILD_JAVA=ON -DBUILD_opencv_java=ON -DBUILD_opencv_world=OFF \
+            -DOPENCV_JAVA_SOURCE_ROOT=${{ github.workspace }}/opencv/modules/java \
+            -DANDROID_ANT_EXECUTABLE=/usr/bin/ant \
             -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_EXAMPLES=OFF \
             -DBUILD_ANDROID_EXAMPLES=OFF -DBUILD_ANDROID_PROJECTS=OFF \
             -DANDROID_STL=c++_shared -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
