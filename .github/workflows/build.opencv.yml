@@ -56,7 +56,7 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 \
             -DANDROID_SDK_ROOT=$ANDROID_SDK_ROOT -DANDROID_NDK=$ANDROID_NDK_ROOT \
-            -DBUILD_SHARED_LIBS=ON -DBUILD_FAT_JAVA_LIB=OFF -DBUILD_LIST=core,imgproc,imgcodecs,java \
+            -DBUILD_SHARED_LIBS=ON -DBUILD_FAT_JAVA_LIB=OFF -DBUILD_LIST=core,imgproc,imgcodecs \
             -DBUILD_JAVA=ON -DBUILD_opencv_java=ON -DBUILD_opencv_world=OFF \
             -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_EXAMPLES=OFF \
             -DBUILD_ANDROID_EXAMPLES=OFF -DBUILD_ANDROID_PROJECTS=OFF \
@@ -77,7 +77,6 @@ jobs:
         run: |
           mkdir -p dist_opencv/arm64-v8a
           
-          # Sirf java wali .so dhoondo
           SO_FILE=$(find build -type f -name "libopencv_java4.so" | head -n 1)
           if [ -z "$SO_FILE" ]; then
             echo "Error: libopencv_java4.so not found!"
@@ -87,16 +86,17 @@ jobs:
           echo "Found: $SO_FILE"
           cp "$SO_FILE" dist_opencv/arm64-v8a/
           
-          # Strip karo
           STRIP_TOOL="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
           "$STRIP_TOOL" --strip-unneeded dist_opencv/arm64-v8a/libopencv_java4.so
           
           echo "--- Final Size ---"
           ls -lh dist_opencv/arm64-v8a/
 
-      - name: Upload libopencv_java4.so
+      - name: Upload OpenCV Files
         uses: actions/upload-artifact@v4
         with:
           name: opencv-4.10.0-arm64-v8a-java
-          path: dist_opencv/arm64-v8a/libopencv_java4.so
+          path: |
+            dist_opencv/arm64-v8a/libopencv_java4.so
+            build/bin/opencv-4100.jar
           if-no-files-found: error
