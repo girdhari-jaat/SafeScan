@@ -54,7 +54,7 @@ jobs:
           mv opencv-4.10.0 opencv
 
       - name: Configure CMake
-  run: |
+        run: |
     cmake -S opencv -B build \
       -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
