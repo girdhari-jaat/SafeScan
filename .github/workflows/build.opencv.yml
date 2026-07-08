@@ -57,7 +57,8 @@ jobs:
             -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 \
             -DANDROID_SDK_ROOT=$ANDROID_SDK_ROOT -DANDROID_NDK=$ANDROID_NDK_ROOT \
             -DBUILD_SHARED_LIBS=ON -DBUILD_FAT_JAVA_LIB=OFF -DBUILD_LIST=core,imgproc,imgcodecs,java \
-            -DBUILD_JAVA=ON -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_EXAMPLES=OFF \
+            -DBUILD_JAVA=ON -DBUILD_opencv_java=ON -DBUILD_opencv_world=OFF \
+            -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_EXAMPLES=OFF \
             -DBUILD_ANDROID_EXAMPLES=OFF -DBUILD_ANDROID_PROJECTS=OFF \
             -DANDROID_STL=c++_shared -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
             -DWITH_JPEG=OFF -DWITH_PNG=OFF -DWITH_TIFF=OFF -DWITH_WEBP=OFF \
@@ -69,27 +70,30 @@ jobs:
             -DCMAKE_CXX_FLAGS="-Os -fvisibility=hidden -fvisibility-inlines-hidden -fdata-sections -ffunction-sections" \
             -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--gc-sections"
 
-- name: Prepare and Strip Release Libraries
-  run: |
-    mkdir -p dist_opencv/arm64-v8a
-    
-    # 3no .so ko copy karo
-    cp build/lib/arm64-v8a/libopencv_core.so dist_opencv/arm64-v8a/
-    cp build/lib/arm64-v8a/libopencv_imgproc.so dist_opencv/arm64-v8a/
-    cp build/lib/arm64-v8a/libopencv_imgcodecs.so dist_opencv/arm64-v8a/
-    
-    # NDK ka strip tool
-    STRIP_TOOL="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
-    
-    # Debug symbols nikal do
-    "$STRIP_TOOL" --strip-unneeded dist_opencv/arm64-v8a/*.so
-    
-    echo "--- Final Sizes ---"
-    ls -lh dist_opencv/arm64-v8a/
+      - name: Build OpenCV
+        run: cmake --build build --parallel $(nproc)  # <-- ye step add kiya
 
-- name: Upload OpenCV Libs
-  uses: actions/upload-artifact@v4
-  with:
-    name: opencv-4.10.0-arm64-v8a-stripped
-    path: dist_opencv/arm64-v8a/
-    if-no-files-found: error
+      - name: Prepare and Strip Release Libraries
+        run: |
+          mkdir -p dist_opencv/arm64-v8a
+          
+          # 3no .so ko copy karo
+          cp build/lib/arm64-v8a/libopencv_core.so dist_opencv/arm64-v8a/
+          cp build/lib/arm64-v8a/libopencv_imgproc.so dist_opencv/arm64-v8a/
+          cp build/lib/arm64-v8a/libopencv_imgcodecs.so dist_opencv/arm64-v8a/
+          
+          # NDK ka strip tool
+          STRIP_TOOL="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+          
+          # Debug symbols nikal do
+          "$STRIP_TOOL" --strip-unneeded dist_opencv/arm64-v8a/*.so
+          
+          echo "--- Final Sizes ---"
+          ls -lh dist_opencv/arm64-v8a/
+
+      - name: Upload OpenCV Libs
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencv-4.10.0-arm64-v8a-stripped
+          path: dist_opencv/arm64-v8a/
+          if-no-files-found: error
