@@ -67,8 +67,8 @@ jobs:
             -DANDROID_NDK=$ANDROID_NDK_ROOT \
             -DANDROID_ANT_EXECUTABLE=/usr/bin/ant \
             -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install \
-            -DBUILD_SHARED_LIBS=ON \
-            -DBUILD_FAT_JAVA_LIB=OFF \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DBUILD_FAT_JAVA_LIB=ON \
             -DBUILD_LIST=core,imgproc,java \
             -DBUILD_JAVA=ON \
             -DBUILD_opencv_java=ON \
@@ -91,6 +91,7 @@ jobs:
             -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--gc-sections" \
             -DJAVA_AWT_LIBRARY=NotNeeded \
             -DJAVA_JVM_LIBRARY=NotNeeded
+
 
       - name: Build OpenCV
         run: cmake --build build --parallel $(nproc)
