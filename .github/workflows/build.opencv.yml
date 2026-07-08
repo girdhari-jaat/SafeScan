@@ -45,7 +45,7 @@ jobs:
 
       - name: Download OpenCV Source 4.10.0
         run: |
-          wget https://github.com/opencv/archive/refs/tags/4.10.0.zip
+          wget https://github.com/opencv/opencv/archive/refs/tags/4.10.0.zip
           unzip 4.10.0.zip
           mv opencv-4.10.0 opencv
 
@@ -75,23 +75,17 @@ jobs:
       - name: Prepare and Strip Release Library
         run: |
           mkdir -p dist_opencv/arm64-v8a
-          
-          # Find the compiled libopencv_java4.so file
           SO_FILE=$(find build -type f -name "libopencv_java4.so" | head -n 1)
           if [ -z "$SO_FILE" ]; then
             SO_FILE=$(find build -type f -name "libopencv_java*.so" | head -n 1)
           fi
           if [ -z "$SO_FILE" ]; then
             echo "Error: libopencv_java4.so not found!"
-            echo "--- All .so files in build ---"
             find build -type f -name "*.so"
             exit 1
           fi
-          
           echo "Found compiled library at: $SO_FILE"
           cp "$SO_FILE" dist_opencv/arm64-v8a/
-          
-          # Strip debug symbols
           STRIP_TOOL="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
           "$STRIP_TOOL" --strip-unneeded dist_opencv/arm64-v8a/*.so
 
