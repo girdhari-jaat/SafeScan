@@ -89,9 +89,9 @@ jobs:
             -DWITH_TBB=OFF -DWITH_ADE=OFF -DWITH_EIGEN=OFF -DWITH_OPENCL=OFF \
             -DBUILD_ZLIB=ON -DBUILD_opencv_apps=OFF -DBUILD_ANDROID_SERVICE=OFF \
             -DBUILD_DOCS=OFF -DBUILD_PACKAGE=OFF \
-            -DCMAKE_C_FLAGS="-Os -fvisibility=hidden -fdata-sections -ffunction-sections" \
-            -DCMAKE_CXX_FLAGS="-Os -fvisibility=hidden -fvisibility-inlines-hidden -fdata-sections -ffunction-sections" \
-            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--gc-sections"
+            -DCMAKE_C_FLAGS="-g0 -Os -fvisibility=hidden -fdata-sections -ffunction-sections -DNDEBUG" \
+            -DCMAKE_CXX_FLAGS="-g0 -Os -fvisibility=hidden -fvisibility-inlines-hidden -fdata-sections -ffunction-sections -DNDEBUG" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--gc-sections -Wl,--strip-all -Wl,--exclude-libs,ALL"
 
       - name: Build OpenCV
         run: cmake --build build --parallel $(nproc)
@@ -130,7 +130,7 @@ jobs:
             if [ -f "$STRIP_TOOL" ]; then
               echo "Stripping debug symbols using NDK llvm-strip: $STRIP_TOOL"
               for f in $SO_FILES; do
-                "$STRIP_TOOL" --strip-unneeded "$f"
+                "$STRIP_TOOL" --strip-all "$f"
               done
             else
               echo "NDK llvm-strip not found at $STRIP_TOOL, searching NDK directory..."
@@ -138,12 +138,12 @@ jobs:
               if [ -n "$NDK_STRIP" ]; then
                 echo "Found llvm-strip at: $NDK_STRIP"
                 for f in $SO_FILES; do
-                  "$NDK_STRIP" --strip-unneeded "$f"
+                  "$NDK_STRIP" --strip-all "$f"
                 done
               else
                 echo "Fallback: trying standard strip..."
                 for f in $SO_FILES; do
-                  strip --strip-unneeded "$f" || true
+                  strip --strip-all "$f" || true
                 done
               fi
             fi
