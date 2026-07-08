@@ -71,6 +71,9 @@ jobs:
       - name: Build OpenCV
         run: cmake --build build --parallel $(nproc)
 
+      - name: Strip debug only  # <- BAS YE 1 LINE NAYI HAI
+        run: $ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip build/libopencv_java4.so
+
       - name: Upload libopencv_java4.so
         uses: actions/upload-artifact@v4
         with:
