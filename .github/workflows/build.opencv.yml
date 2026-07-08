@@ -49,10 +49,10 @@ jobs:
 
       - name: Download OpenCV Source 4.10.0
         run: |
-    wget -q https://github.com/opencv/opencv/archive/refs/tags/4.10.0.zip
-    unzip -q 4.10.0.zip
-    mv opencv-4.10.0 opencv
-
+        wget -q https://github.com/opencv/opencv/archive/refs/tags/4.10.0.zip
+        unzip -q 4.10.0.zip
+        mv opencv-4.10.0 opencv
+ 
       - name: Configure CMake
         run: |
           cmake -S opencv -B build \
