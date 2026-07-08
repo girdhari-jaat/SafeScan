@@ -1,4 +1,4 @@
-export const githubWorkflowYml: string = `Name: Build OpenCV Android
+Name: Build OpenCV Android
 
 on:
   workflow_dispatch:
@@ -78,4 +78,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: opencv-4.10.0-arm64-v8a-16kb
-          path: build/lib/libopencv_java4.so`;
+          path: build/lib/libopencv_java4.so
