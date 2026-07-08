@@ -26,7 +26,6 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # Yahan humne explicit JAVA_HOME environment set kiya hai taake CMake ko asani ho
       - name: Set JAVA_HOME Env
         run: |
           echo "JAVA_HOME=${{ steps.setup-java.outputs.path }}" >> $GITHUB_ENV
@@ -67,12 +66,12 @@ jobs:
             -DANDROID_NDK=$ANDROID_NDK_ROOT \
             -DANDROID_ANT_EXECUTABLE=/usr/bin/ant \
             -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install \
-            -DBUILD_SHARED_LIBS=OFF \
+            -DBUILD_SHARED_LIBS=ON \
             -DBUILD_FAT_JAVA_LIB=ON \
             -DBUILD_LIST=core,imgproc,java \
             -DBUILD_JAVA=ON \
             -DBUILD_opencv_java=ON \
-            -DBUILD_opencv_world=OFF \
+            -DBUILD_opencv_world=ON \  # <- YE WALI 1 LINE CHANGE
             -DOPENCV_JAVA_SOURCE_ROOT=${{ github.workspace }}/opencv/modules/java \
             -DBUILD_TESTS=OFF \
             -DBUILD_PERF_TESTS=OFF \
@@ -92,18 +91,15 @@ jobs:
             -DJAVA_AWT_LIBRARY=NotNeeded \
             -DJAVA_JVM_LIBRARY=NotNeeded
 
-
       - name: Build OpenCV
         run: cmake --build build --parallel $(nproc)
 
       - name: Prepare and Strip Release Library
         run: |
           mkdir -p dist_opencv/arm64-v8a
-          
-          # Install directory check ke sath safe alternative
           cmake --install build
           
-          SO_FILE=$(find install -type f -name "libopencv_java4.so" | head -n 1)
+          SO_FILE=$(find install/sdk/native/libs -type f -name "libopencv_java4.so" | head -n 1)
           if [ -z "$SO_FILE" ]; then
             echo "Error: libopencv_java4.so not found!"
             exit 1
