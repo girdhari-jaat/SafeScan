@@ -57,15 +57,11 @@ jobs:
 
       - name: Remove Unused Camera Views (Avoids Videoio dependency)
         run: |
-          # Find and delete camera views that depend on Videoio and aren't needed for document scanning
-          find opencv -name "NativeCameraView.java" -delete
-          find opencv -name "JavaCameraView.java" -delete
-          find opencv -name "JavaCamera2View.java" -delete
-          find opencv -name "CameraBridgeViewBase.java" -delete
-          find opencv -name "CameraGLSurfaceView.java" -delete
-          find opencv -name "CameraGLRendererBase.java" -delete
+          # Find and delete ALL camera and video related Java files from the opencv source
+          find opencv -name "*Camera*.java" -delete
+          find opencv -name "*Renderer*.java" -delete
           find opencv -name "FpsMeter.java" -delete
-          echo "Camera views deleted successfully to build clean lightweight SDK without videoio!"
+          echo "Camera views and renderers deleted successfully to build clean lightweight SDK without videoio!"
 
       - name: Configure CMake
         run: |
