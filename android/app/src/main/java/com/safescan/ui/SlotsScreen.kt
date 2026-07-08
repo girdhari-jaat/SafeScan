@@ -65,6 +65,7 @@ fun SlotsScreen(
     val batchScan by viewModel.batchScan.collectAsState()
     val autoRotation by viewModel.autoRotation.collectAsState()
     val usePhoneCamera by viewModel.usePhoneCamera.collectAsState()
+    val useNativeScanner by viewModel.useNativeScanner.collectAsState()
     val hdMode by viewModel.hdMode.collectAsState()
 
     var isSettingsPopoverOpen by remember { mutableStateOf(false) }
@@ -478,6 +479,12 @@ fun SlotsScreen(
                                 checked = usePhoneCamera,
                                 onCheckedChange = { viewModel.toggleUsePhoneCamera(it) }
                             )
+                            PopoverToggleRow(
+                                icon = Icons.Default.DocumentScanner,
+                                label = "Native Scanner",
+                                checked = useNativeScanner,
+                                onCheckedChange = { viewModel.toggleUseNativeScanner(it) }
+                            )
                         }
 
                         Box(
@@ -843,7 +850,6 @@ fun DocumentGridView(
                                         bitmap = bmp.asImageBitmap(),
                                         contentDescription = "Page ${idx + 1}",
                                         modifier = Modifier.fillMaxSize().clickable {
-                                            onDismiss()
                                             viewModel.openEditorForJpg(idx)
                                         },
                                         contentScale = ContentScale.Crop
@@ -853,7 +859,6 @@ fun DocumentGridView(
                                 // Edit/Crop button
                                 IconButton(
                                     onClick = {
-                                        onDismiss()
                                         viewModel.openCropForJpg(idx)
                                     },
                                     modifier = Modifier
@@ -908,7 +913,6 @@ fun DocumentGridView(
                                         bitmap = bmp.asImageBitmap(),
                                         contentDescription = slot.label,
                                         modifier = Modifier.fillMaxSize().clickable {
-                                            onDismiss()
                                             viewModel.openEditor(slot.id)
                                         },
                                         contentScale = ContentScale.Crop
@@ -918,7 +922,6 @@ fun DocumentGridView(
                                 // Edit/Crop button
                                 IconButton(
                                     onClick = {
-                                        onDismiss()
                                         viewModel.openCrop(slot.id)
                                     },
                                     modifier = Modifier

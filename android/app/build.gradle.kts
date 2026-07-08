@@ -119,14 +119,12 @@ dependencies {
 
 
 
-    // OpenCV
-    implementation("com.quickbirdstudios:opencv:4.5.3.0")
+    // OpenCV (Custom stripped local build)
+    implementation(files("libs/opencv.jar"))
 
-    // LiteRT (New TensorFlow Lite)
-    implementation("com.google.ai.edge.litert:litert:1.0.1")
-    implementation("com.google.ai.edge.litert:litert-gpu:1.0.1")
-    implementation("com.google.ai.edge.litert:litert-gpu-api:1.0.1")
-    implementation("com.google.ai.edge.litert:litert-support:1.0.1")
+    // TFLite via Google Play Services (Reduces APK size)
+    implementation("com.google.android.gms:play-services-tflite-java:16.1.0")
+    implementation("com.google.android.gms:play-services-tflite-gpu:16.2.0")
 
     // Lifecycle/ViewModel/Coroutines
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")

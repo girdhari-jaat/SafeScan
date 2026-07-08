@@ -43,19 +43,30 @@ fun CropScreen(viewModel: ScannerViewModel) {
     val coroutineScope = rememberCoroutineScope()
     
     // 4 corners: TL, TR, BR, BL
-    var tl by remember { mutableStateOf(Offset(50f, 50f)) }
-    var tr by remember { mutableStateOf(Offset(300f, 50f)) }
-    var br by remember { mutableStateOf(Offset(300f, 400f)) }
-    var bl by remember { mutableStateOf(Offset(50f, 400f)) }
+    var tl by remember(croppingBitmap) { mutableStateOf(Offset(50f, 50f)) }
+    var tr by remember(croppingBitmap) { mutableStateOf(Offset(300f, 50f)) }
+    var br by remember(croppingBitmap) { mutableStateOf(Offset(300f, 400f)) }
+    var bl by remember(croppingBitmap) { mutableStateOf(Offset(50f, 400f)) }
 
-    // Initialize corners once image size is known
-    LaunchedEffect(imageSize) {
-        if (imageSize.width > 0 && imageSize.height > 0) {
-            val padding = minOf(imageSize.width, imageSize.height) * 0.1f // 10% padding
-            tl = Offset(padding, padding)
-            tr = Offset(imageSize.width - padding, padding)
-            br = Offset(imageSize.width - padding, imageSize.height - padding)
-            bl = Offset(padding, imageSize.height - padding)
+    // Initialize corners once image size is known or when a new image is loaded
+    LaunchedEffect(imageSize, croppingBitmap) {
+        if (imageSize.width > 0 && imageSize.height > 0 && croppingBitmap != null) {
+            val bmp = croppingBitmap!!
+            val savedCorners = viewModel.getCornersForCropping()
+            if (savedCorners != null && savedCorners.size == 4) {
+                val scaleX = imageSize.width.toFloat() / bmp.width.toFloat()
+                val scaleY = imageSize.height.toFloat() / bmp.height.toFloat()
+                tl = Offset((savedCorners[0].x * scaleX).toFloat(), (savedCorners[0].y * scaleY).toFloat())
+                tr = Offset((savedCorners[1].x * scaleX).toFloat(), (savedCorners[1].y * scaleY).toFloat())
+                br = Offset((savedCorners[2].x * scaleX).toFloat(), (savedCorners[2].y * scaleY).toFloat())
+                bl = Offset((savedCorners[3].x * scaleX).toFloat(), (savedCorners[3].y * scaleY).toFloat())
+            } else {
+                val padding = minOf(imageSize.width, imageSize.height) * 0.1f // 10% padding
+                tl = Offset(padding, padding)
+                tr = Offset(imageSize.width - padding, padding)
+                br = Offset(imageSize.width - padding, imageSize.height - padding)
+                bl = Offset(padding, imageSize.height - padding)
+            }
         }
     }
 

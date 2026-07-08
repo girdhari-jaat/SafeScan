@@ -12,15 +12,16 @@ import org.opencv.core.MatOfPoint
 import org.opencv.core.MatOfPoint2f
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
-import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.gpu.GpuDelegate
+import org.tensorflow.lite.InterpreterApi
+import com.google.android.gms.tflite.gpu.GpuDelegate
 import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.FileChannel
 
 class LocalMLEngine(private val context: Context) {
-    private var interpreter: Interpreter? = null
+
+    private var interpreter: InterpreterApi? = null
     private var gpuDelegate: GpuDelegate? = null
     private val inputSize = 256 // Fairscan model input size
 
@@ -35,11 +36,11 @@ class LocalMLEngine(private val context: Context) {
 
             try {
                 // Try initializing with GPU Delegate
-                val options = Interpreter.Options()
+                val options = InterpreterApi.Options()
                 gpuDelegate = GpuDelegate()
                 options.addDelegate(gpuDelegate)
-                interpreter = Interpreter(tfliteModel, options)
-                Log.d("LocalMLEngine", "LiteRT model loaded successfully with GPU acceleration")
+                interpreter = InterpreterApi.create(tfliteModel, options)
+                Log.d("LocalMLEngine", "LiteRT Play Services model loaded successfully with GPU acceleration")
             } catch (gpuEx: Exception) {
                 Log.w("LocalMLEngine", "GPU acceleration not supported. Falling back to CPU.", gpuEx)
                 // Clean up GPU delegate if it was created
@@ -51,11 +52,12 @@ class LocalMLEngine(private val context: Context) {
                 gpuDelegate = null
                 
                 // Load interpreter with standard CPU options
-                val options = Interpreter.Options()
+                val options = InterpreterApi.Options()
                 options.setNumThreads(4) // Use 4 CPU threads for high performance
-                interpreter = Interpreter(tfliteModel, options)
-                Log.d("LocalMLEngine", "LiteRT model loaded successfully with CPU (4 threads)")
+                interpreter = InterpreterApi.create(tfliteModel, options)
+                Log.d("LocalMLEngine", "LiteRT Play Services model loaded successfully with CPU (4 threads)")
             }
+
         } catch (e: Exception) {
             Log.e("LocalMLEngine", "Fatal error loading LiteRT model", e)
         }

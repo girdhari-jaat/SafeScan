@@ -347,6 +347,7 @@ class ScannerFragment : Fragment() {
                             viewModel = viewModel,
                             onStartScan = {
                                 viewModel.isDocumentOpenedFromLibrary = false
+                                viewModel.openedDocumentId = null
                                 checkPermissionAndStartScanner()
                             },
                             onOpenDocument = { doc ->
@@ -653,7 +654,7 @@ class ScannerFragment : Fragment() {
 
     private fun openPhoneCamera() {
         val context = requireContext()
-        val photoFile = java.io.File(context.externalCacheDir, "temp_camera_${System.currentTimeMillis()}.jpg")
+        val photoFile = java.io.File(context.cacheDir, "temp_camera_${System.currentTimeMillis()}.jpg")
         photoUri = androidx.core.content.FileProvider.getUriForFile(
             context,
             "${context.packageName}.fileprovider",

@@ -116,6 +116,9 @@ class ScannerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Standard")
 
     val capturedJpgFiles = androidx.compose.runtime.mutableStateListOf<java.io.File>()
+    var openedDocumentId: String? = null
+    val originalJpgBitmaps = mutableMapOf<Int, Bitmap>()
+    val jpgCorners = mutableMapOf<Int, List<com.safescan.domain.model.Point>>()
 
     val slots: MutableStateFlow<List<Slot>> = MutableStateFlow(emptyList())
     val selectedSlotId: MutableStateFlow<String?> = MutableStateFlow(null)
@@ -331,12 +334,14 @@ class ScannerViewModel @Inject constructor(
         selectedSlotId.value = slotId
     }
 
-    fun captureToSlot(bitmap: Bitmap, slotId: String) {
+    fun captureToSlot(bitmap: Bitmap, slotId: String, isCapture: Boolean = false) {
         val currentSlots = slots.value.toMutableList()
         val index = currentSlots.indexOfFirst { it.id == slotId }
         if (index != -1) {
-            currentSlots[index] = currentSlots[index].copy(
-                bitmap = bitmap
+            val existing = currentSlots[index]
+            currentSlots[index] = existing.copy(
+                bitmap = bitmap,
+                originalBitmap = if (isCapture || existing.originalBitmap == null) bitmap else existing.originalBitmap
             )
             slots.value = currentSlots
             
@@ -360,7 +365,9 @@ class ScannerViewModel @Inject constructor(
         val index = currentSlots.indexOfFirst { it.id == slotId }
         if (index != -1) {
             currentSlots[index] = currentSlots[index].copy(
-                bitmap = null
+                bitmap = null,
+                originalBitmap = null,
+                corners = null
             )
             slots.value = currentSlots
             
@@ -384,21 +391,39 @@ class ScannerViewModel @Inject constructor(
             } catch (e: Exception) {}
             capturedJpgFiles.removeAt(index)
             
+            originalJpgBitmaps.remove(index)
+            jpgCorners.remove(index)
+            
             // Also sync back to slots if it corresponds to a slot
             if (index < slots.value.size) {
                 val currentSlots = slots.value.toMutableList()
-                currentSlots[index] = currentSlots[index].copy(bitmap = null)
+                currentSlots[index] = currentSlots[index].copy(
+                    bitmap = null,
+                    originalBitmap = null,
+                    corners = null
+                )
                 slots.value = currentSlots
             }
         }
     }
 
+    fun getCornersForCropping(): List<com.safescan.domain.model.Point>? {
+        croppingSlotId.value?.let { slotId ->
+            val slot = slots.value.find { it.id == slotId }
+            return slot?.corners
+        }
+        croppingJpgIndex.value?.let { index ->
+            return jpgCorners[index]
+        }
+        return null
+    }
+
     fun openCrop(slotId: String) {
         val slot = slots.value.find { it.id == slotId }
-        if (slot?.bitmap != null) {
+        if (slot != null) {
             croppingSlotId.value = slotId
             croppingJpgIndex.value = null
-            croppingBitmap.value = slot.bitmap
+            croppingBitmap.value = slot.originalBitmap ?: slot.bitmap
             isCropping.value = true
         }
     }
@@ -406,8 +431,12 @@ class ScannerViewModel @Inject constructor(
     fun openCropForJpg(index: Int) {
         val file = capturedJpgFiles.getOrNull(index) ?: return
         try {
-            val bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+            val originalBmp = originalJpgBitmaps[index]
+            val bitmap = originalBmp ?: android.graphics.BitmapFactory.decodeFile(file.absolutePath)
             if (bitmap != null) {
+                if (originalBmp == null) {
+                    originalJpgBitmaps[index] = bitmap
+                }
                 croppingSlotId.value = null
                 croppingJpgIndex.value = index
                 croppingBitmap.value = bitmap
@@ -431,11 +460,54 @@ class ScannerViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             croppingBitmap.value?.let { bmp ->
                 val cropped = documentScanner.cropAndTransform(bmp, quad, currentMode.value.name)
+                val cornersList = listOf(quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft)
 
                 croppingSlotId.value?.let { slotId ->
-                    captureToSlot(cropped, slotId)
+                    val currentSlots = slots.value.toMutableList()
+                    val index = currentSlots.indexOfFirst { it.id == slotId }
+                    if (index != -1) {
+                        val existing = currentSlots[index]
+                        currentSlots[index] = existing.copy(
+                            bitmap = cropped,
+                            originalBitmap = existing.originalBitmap ?: bmp,
+                            corners = cornersList
+                        )
+                        slots.value = currentSlots
+                        
+                        // Sync with capturedJpgFiles if it exists
+                        if (index < capturedJpgFiles.size) {
+                            val file = capturedJpgFiles[index]
+                            try {
+                                val out = java.io.FileOutputStream(file)
+                                cropped.compress(Bitmap.CompressFormat.JPEG, jpegQuality.value.toInt(), out)
+                                out.flush()
+                                out.close()
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    }
+                    
+                    // Sync to persistent library JSON if we are editing a saved document
+                    openedDocumentId?.let { docId ->
+                        documentRepository.updatePageEdits(
+                            docId = docId,
+                            pageId = slotId,
+                            filter = "original",
+                            brightness = 0f,
+                            contrast = 1.0f,
+                            sharpness = 0f,
+                            rotation = 0,
+                            corners = cornersList,
+                            newPreview = cropped
+                        )
+                    }
                 }
                 croppingJpgIndex.value?.let { index ->
+                    jpgCorners[index] = cornersList
+                    if (!originalJpgBitmaps.containsKey(index)) {
+                        originalJpgBitmaps[index] = bmp
+                    }
                     val file = capturedJpgFiles.getOrNull(index)
                     if (file != null) {
                         try {
@@ -572,16 +644,23 @@ class ScannerViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 // Also save the captured pages and metadata persistently as a document
-                val docId = "doc_" + System.currentTimeMillis()
+                val docId = openedDocumentId ?: ("doc_" + System.currentTimeMillis())
                 val title = pdfFilename.value
                 val pagesData = if (capturedJpgFiles.isNotEmpty()) {
                     capturedJpgFiles.mapIndexed { idx, file ->
                         val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
-                        Triple("p$idx", bmp, bmp)
+                        val originalBmp = originalJpgBitmaps[idx] ?: bmp
+                        val corners = jpgCorners[idx]
+                        com.safescan.data.PageSaveData("p$idx", originalBmp, bmp, corners)
                     }
                 } else {
                     slots.value.filter { it.bitmap != null }.map { slot ->
-                        Triple(slot.id, slot.bitmap!!, slot.bitmap!!)
+                        com.safescan.data.PageSaveData(
+                            id = slot.id,
+                            originalBitmap = slot.originalBitmap ?: slot.bitmap!!,
+                            previewBitmap = slot.bitmap!!,
+                            corners = slot.corners
+                        )
                     }
                 }
                 
@@ -603,11 +682,15 @@ class ScannerViewModel @Inject constructor(
                     val result = pdfExporter.exportCardsToPdf(slotsToExport, pdfFilename.value, currentMode.value, pageSize.value)
                     withContext(Dispatchers.Main) {
                         capturedJpgFiles.clear()
+                        originalJpgBitmaps.clear()
+                        jpgCorners.clear()
                         onResult(result.getOrNull())
                     }
                 } else {
                     withContext(Dispatchers.Main) {
                         capturedJpgFiles.clear()
+                        originalJpgBitmaps.clear()
+                        jpgCorners.clear()
                         onResult(null)
                     }
                 }
@@ -621,11 +704,21 @@ class ScannerViewModel @Inject constructor(
 
     fun loadDocumentIntoSlots(doc: com.safescan.data.DocumentMetadata) {
         isDocumentOpenedFromLibrary = true
+        openedDocumentId = doc.id
         capturedJpgFiles.clear()
+        originalJpgBitmaps.clear()
+        jpgCorners.clear()
         viewModelScope.launch(Dispatchers.IO) {
             val loadedSlots = doc.pages.map { page ->
-                val bmp = documentRepository.loadOriginalBitmap(doc.id, page.id)
-                Slot(page.id, "Page ${page.id}", bmp)
+                val originalBmp = documentRepository.loadOriginalBitmap(doc.id, page.id)
+                val previewBmp = documentRepository.loadPreviewBitmap(doc.id, page.id) ?: originalBmp
+                Slot(
+                    id = page.id,
+                    label = "Page ${page.id}",
+                    bitmap = previewBmp,
+                    originalBitmap = originalBmp,
+                    corners = page.corners
+                )
             }
             withContext(Dispatchers.Main) {
                 val mode = try {
@@ -701,7 +794,7 @@ class ScannerViewModel @Inject constructor(
 
                 if (isNativeScanned || isAutoCropOff) {
                     if (slotId != null) {
-                        captureToSlot(processedBitmap, slotId)
+                        captureToSlot(processedBitmap, slotId, isCapture = true)
                         selectedSlotId.value = null
                     }
                     
@@ -724,7 +817,7 @@ class ScannerViewModel @Inject constructor(
                     when (val result = scannerEngine.scanDocument(processedBitmap)) {
                         is com.safescan.core.AppResult.Success -> {
                             if (slotId != null) {
-                                captureToSlot(result.data, slotId)
+                                captureToSlot(result.data, slotId, isCapture = true)
                                 selectedSlotId.value = null
                             }
                             

@@ -78,7 +78,7 @@ class DocumentRepository @Inject constructor(
         docId: String,
         title: String,
         mode: String,
-        pagesData: List<Triple<String, Bitmap, Bitmap>>
+        pagesData: List<PageSaveData>
     ): Boolean {
         val root = baseDir ?: return false
         val docFolder = File(root, docId)
@@ -94,18 +94,19 @@ class DocumentRepository @Inject constructor(
 
         val pagesMetaList = mutableListOf<PageMetadata>()
 
-        for ((pId, originalBmp, previewBmp) in pagesData) {
-            val origFile = File(pagesDir, "$pId.jpg")
-            val prevFile = File(previewsDir, "$pId.jpg")
+        for (page in pagesData) {
+            val origFile = File(pagesDir, "${page.id}.jpg")
+            val prevFile = File(previewsDir, "${page.id}.jpg")
 
-            saveBitmapToFile(originalBmp, origFile)
-            saveBitmapToFile(previewBmp, prevFile)
+            saveBitmapToFile(page.originalBitmap, origFile)
+            saveBitmapToFile(page.previewBitmap, prevFile)
 
             pagesMetaList.add(
                 PageMetadata(
-                    id = pId,
-                    originalFilename = "pages/$pId.jpg",
-                    previewFilename = "previews/$pId.jpg"
+                    id = page.id,
+                    originalFilename = "pages/${page.id}.jpg",
+                    previewFilename = "previews/${page.id}.jpg",
+                    corners = page.corners
                 )
             )
         }

@@ -1,6 +1,14 @@
 package com.safescan.data
 
+import android.graphics.Bitmap
 import com.safescan.domain.model.Point
+
+data class PageSaveData(
+    val id: String,
+    val originalBitmap: Bitmap,
+    val previewBitmap: Bitmap,
+    val corners: List<Point>? = null
+)
 
 data class PageMetadata(
     val id: String,
@@ -22,3 +30,4 @@ data class DocumentMetadata(
     val mode: String,
     val pages: List<PageMetadata>
 )
+
