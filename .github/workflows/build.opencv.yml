@@ -66,7 +66,7 @@ jobs:
             -DANDROID_NDK=$ANDROID_NDK_ROOT \
             -DANDROID_ANT_EXECUTABLE=/usr/bin/ant \
             -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install \
-            -DBUILD_SHARED_LIBS=ON \
+            -DBUILD_SHARED_LIBS=OFF \
             -DBUILD_FAT_JAVA_LIB=ON \
             -DBUILD_LIST=core,imgproc,java \
             -DBUILD_JAVA=ON \
