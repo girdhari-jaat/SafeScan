@@ -85,8 +85,8 @@ jobs:
             -DWITH_OPENEXR=OFF -DWITH_JASPER=OFF -DWITH_OPENJPEG=OFF -DWITH_IPP=OFF \
             -DWITH_TBB=OFF -DWITH_ADE=OFF -DWITH_EIGEN=OFF -DWITH_OPENCL=OFF \
             -DBUILD_ZLIB=ON -DBUILD_opencv_apps=OFF -DBUILD_DOCS=OFF -DBUILD_PACKAGE=OFF \
-            -DCMAKE_C_FLAGS="-Os -fvisibility=hidden -fdata-sections -ffunction-sections" \
-            -DCMAKE_CXX_FLAGS="-Os -fvisibility=hidden -fvisibility-inlines-hidden -fdata-sections -ffunction-sections" \
+            -DCMAKE_C_FLAGS="-Os -fvisibility=hidden -fdata-sections -ffunction-sections -s" \
+            -DCMAKE_CXX_FLAGS="-Os -fvisibility=hidden -fvisibility-inlines-hidden -fdata-sections -ffunction-sections -s" \
             -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--gc-sections" \
             -DJAVA_AWT_LIBRARY=NotNeeded \
             -DJAVA_JVM_LIBRARY=NotNeeded
@@ -94,10 +94,10 @@ jobs:
       - name: Build OpenCV
         run: cmake --build build --parallel $(nproc)
 
-      - name: Prepare and Strip Release Library
+      - name: Prepare Release Library
         run: |
           mkdir -p dist_opencv/arm64-v8a
-          cmake --install build
+          cmake --install build --strip
           
           SO_FILE=$(find install/sdk/native/libs -type f -name "libopencv_java4.so" | head -n 1)
           if [ -z "$SO_FILE" ]; then
@@ -107,10 +107,6 @@ jobs:
           
           echo "Found: $SO_FILE"
           cp "$SO_FILE" dist_opencv/arm64-v8a/
-          
-          STRIP_TOOL="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
-          "$STRIP_TOOL" --strip-unneeded dist_opencv/arm64-v8a/libopencv_java4.so
-          
           echo "--- Final Size ---"
           ls -lh dist_opencv/arm64-v8a/
 
