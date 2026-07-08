@@ -71,12 +71,34 @@ jobs:
       - name: Build OpenCV
         run: cmake --build build --parallel $(nproc)
 
-      - name: Strip debug only
-        run: $ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip build/lib/libopencv_java4.so
+      - name: Prepare and Strip Release Library
+        run: |
+          mkdir -p dist_opencv/arm64-v8a
+          # Find the compiled libopencv_java4.so file in the build directory
+          SO_FILE=$(find build -name "libopencv_java4.so" | head -n 1)
+          if [ -z "$SO_FILE" ]; then
+            SO_FILE=$(find build -name "libopencv_java*.so" | head -n 1)
+          fi
+          if [ -z "$SO_FILE" ]; then
+            echo "Error: libopencv_java4.so not found!"
+            exit 1
+          fi
+          echo "Found compiled library at: $SO_FILE"
+          cp "$SO_FILE" dist_opencv/arm64-v8a/
+          
+          # Strip debug symbols using NDK llvm-strip toolchain to minimize size
+          STRIP_TOOL="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+          if [ -f "$STRIP_TOOL" ]; then
+            echo "Stripping debug symbols with llvm-strip..."
+            "$STRIP_TOOL" --strip-unneeded dist_opencv/arm64-v8a/*.so
+          else
+            echo "llvm-strip not found, falling back to standard strip"
+            strip --strip-unneeded dist_opencv/arm64-v8a/*.so
+          fi
 
       - name: Upload libopencv_java4.so
         uses: actions/upload-artifact@v4
         with:
           name: opencv-4.10.0-arm64-v8a-16kb
-          path: build/lib/libopencv_java4.so
-          if-no-files-found: error
+          path: |
+            dist_opencv/arm64-v8a/libopencv_java4.so
