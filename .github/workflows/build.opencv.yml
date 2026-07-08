@@ -56,39 +56,29 @@ jobs:
             -DANDROID_ABI=arm64-v8a \
             -DANDROID_PLATFORM=android-21 \
             -DANDROID_SDK_ROOT=$ANDROID_SDK_ROOT \
+            -DANDROID_SDK=$ANDROID_SDK_ROOT \
             -DANDROID_NDK=$ANDROID_NDK_ROOT \
+            -DANDROID_ANT_EXECUTABLE=/usr/bin/ant \
+            -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install \
             -DBUILD_SHARED_LIBS=ON \
             -DBUILD_FAT_JAVA_LIB=OFF \
-            -DBUILD_LIST=core,imgproc,imgcodecs,java \
+            -DBUILD_LIST=java \
             -DBUILD_JAVA=ON \
             -DBUILD_opencv_java=ON \
             -DBUILD_opencv_world=OFF \
             -DOPENCV_JAVA_SOURCE_ROOT=${{ github.workspace }}/opencv/modules/java \
-            -DANDROID_ANT_EXECUTABLE=/usr/bin/ant \
             -DBUILD_TESTS=OFF \
             -DBUILD_PERF_TESTS=OFF \
             -DBUILD_EXAMPLES=OFF \
             -DBUILD_ANDROID_EXAMPLES=OFF \
             -DBUILD_ANDROID_PROJECTS=OFF \
+            -DBUILD_ANDROID_SERVICE=OFF \
             -DANDROID_STL=c++_shared \
             -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
-            -DWITH_JPEG=OFF \
-            -DWITH_PNG=OFF \
-            -DWITH_TIFF=OFF \
-            -DWITH_WEBP=OFF \
-            -DWITH_OPENEXR=OFF \
-            -DWITH_JASPER=OFF \
-            -DWITH_OPENJPEG=OFF \
-            -DWITH_IPP=OFF \
-            -DWITH_TBB=OFF \
-            -DWITH_ADE=OFF \
-            -DWITH_EIGEN=OFF \
-            -DWITH_OPENCL=OFF \
-            -DBUILD_ZLIB=ON \
-            -DBUILD_opencv_apps=OFF \
-            -DBUILD_ANDROID_SERVICE=OFF \
-            -DBUILD_DOCS=OFF \
-            -DBUILD_PACKAGE=OFF \
+            -DWITH_JPEG=OFF -DWITH_PNG=OFF -DWITH_TIFF=OFF -DWITH_WEBP=OFF \
+            -DWITH_OPENEXR=OFF -DWITH_JASPER=OFF -DWITH_OPENJPEG=OFF -DWITH_IPP=OFF \
+            -DWITH_TBB=OFF -DWITH_ADE=OFF -DWITH_EIGEN=OFF -DWITH_OPENCL=OFF \
+            -DBUILD_ZLIB=ON -DBUILD_opencv_apps=OFF -DBUILD_DOCS=OFF -DBUILD_PACKAGE=OFF \
             -DCMAKE_C_FLAGS="-Os -fvisibility=hidden -fdata-sections -ffunction-sections" \
             -DCMAKE_CXX_FLAGS="-Os -fvisibility=hidden -fvisibility-inlines-hidden -fdata-sections -ffunction-sections" \
             -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--gc-sections"
@@ -100,7 +90,7 @@ jobs:
         run: |
           mkdir -p dist_opencv/arm64-v8a
           
-          SO_FILE=$(find build -type f -name "libopencv_java4.so" | head -n 1)
+          SO_FILE=$(find install -type f -name "libopencv_java4.so" | head -n 1)
           if [ -z "$SO_FILE" ]; then
             echo "Error: libopencv_java4.so not found!"
             exit 1
