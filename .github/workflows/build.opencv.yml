@@ -66,6 +66,7 @@ jobs:
           find opencv -name "CameraGLRendererBase.java" -delete
           find opencv -name "Camera2Renderer.java" -delete
           find opencv -name "CameraRenderer.java" -delete
+          find opencv -name "CameraActivity.java" -delete
           find opencv -name "FpsMeter.java" -delete
           echo "Camera views and renderers deleted successfully!"
 
