@@ -95,20 +95,23 @@ jobs:
         run: cmake --build build --parallel $(nproc)
 
       - name: Prepare Release Library
-        run: |
-          mkdir -p dist_opencv/arm64-v8a
-          cmake --install build --strip
-          
-          SO_FILE=$(find install/sdk/native/libs -type f -name "libopencv_java4.so" | head -n 1)
-          if [ -z "$SO_FILE" ]; then
-            echo "Error: libopencv_java4.so not found!"
-            exit 1
-          fi
-          
-          echo "Found: $SO_FILE"
-          cp "$SO_FILE" dist_opencv/arm64-v8a/
-          echo "--- Final Size ---"
-          ls -lh dist_opencv/arm64-v8a/
+  run: |
+    mkdir -p dist_opencv/arm64-v8a
+    cmake --install build --strip
+    
+    # Naya path: install/lib/libopencv_java4.so
+    SO_FILE=$(find install -type f -name "libopencv_java4.so" | head -n 1)
+    if [ -z "$SO_FILE" ]; then
+      echo "Error: libopencv_java4.so not found!"
+      echo "Files in install:"
+      find install -name "*.so"
+      exit 1
+    fi
+    
+    echo "Found: $SO_FILE"
+    cp "$SO_FILE" dist_opencv/arm64-v8a/
+    echo "--- Final Size ---"
+    ls -lh dist_opencv/arm64-v8a/
 
       - name: Upload OpenCV Files
         uses: actions/upload-artifact@v4
