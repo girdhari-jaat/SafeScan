@@ -45,7 +45,7 @@ jobs:
 
       - name: Download OpenCV Source 4.10.0
         run: |
-          wget https://github.com/opencv/opencv/archive/refs/tags/4.10.0.zip
+          wget https://github.com/opencv/archive/refs/tags/4.10.0.zip
           unzip 4.10.0.zip
           mv opencv-4.10.0 opencv
 
@@ -56,7 +56,7 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 \
             -DANDROID_SDK_ROOT=$ANDROID_SDK_ROOT -DANDROID_NDK=$ANDROID_NDK_ROOT \
-            -DBUILD_SHARED_LIBS=OFF -DBUILD_FAT_JAVA_LIB=ON -DBUILD_LIST=core,imgproc,imgcodecs,java \
+            -DBUILD_SHARED_LIBS=ON -DBUILD_FAT_JAVA_LIB=OFF -DBUILD_LIST=core,imgproc,imgcodecs,java \
             -DBUILD_JAVA=ON -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_EXAMPLES=OFF \
             -DBUILD_ANDROID_EXAMPLES=OFF -DBUILD_ANDROID_PROJECTS=OFF \
             -DANDROID_STL=c++_shared -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
@@ -75,31 +75,29 @@ jobs:
       - name: Prepare and Strip Release Library
         run: |
           mkdir -p dist_opencv/arm64-v8a
-          # Find the compiled libopencv_java4.so file in the build directory
-          SO_FILE=$(find build -name "libopencv_java4.so" | head -n 1)
+          
+          # Find the compiled libopencv_java4.so file
+          SO_FILE=$(find build -type f -name "libopencv_java4.so" | head -n 1)
           if [ -z "$SO_FILE" ]; then
-            SO_FILE=$(find build -name "libopencv_java*.so" | head -n 1)
+            SO_FILE=$(find build -type f -name "libopencv_java*.so" | head -n 1)
           fi
           if [ -z "$SO_FILE" ]; then
             echo "Error: libopencv_java4.so not found!"
+            echo "--- All .so files in build ---"
+            find build -type f -name "*.so"
             exit 1
           fi
+          
           echo "Found compiled library at: $SO_FILE"
           cp "$SO_FILE" dist_opencv/arm64-v8a/
           
-          # Strip debug symbols using NDK llvm-strip toolchain to minimize size
+          # Strip debug symbols
           STRIP_TOOL="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
-          if [ -f "$STRIP_TOOL" ]; then
-            echo "Stripping debug symbols with llvm-strip..."
-            "$STRIP_TOOL" --strip-unneeded dist_opencv/arm64-v8a/*.so
-          else
-            echo "llvm-strip not found, falling back to standard strip"
-            strip --strip-unneeded dist_opencv/arm64-v8a/*.so
-          fi
+          "$STRIP_TOOL" --strip-unneeded dist_opencv/arm64-v8a/*.so
 
       - name: Upload libopencv_java4.so
         uses: actions/upload-artifact@v4
         with:
           name: opencv-4.10.0-arm64-v8a-16kb
-          path: |
-            dist_opencv/arm64-v8a/libopencv_java4.so
+          path: dist_opencv/arm64-v8a/libopencv_java4.so
+          if-no-files-found: error
