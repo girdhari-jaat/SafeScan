@@ -13,11 +13,11 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        
         if (!OpenCVLoader.initDebug()) {
             Toast.makeText(this, "OpenCV init failed!", Toast.LENGTH_LONG).show()
         }
+        
+        super.onCreate(savedInstanceState)
 
         // Initialize LiteRT (TFLite) via Google Play Services
         val options = TfLiteInitializationOptions.builder()

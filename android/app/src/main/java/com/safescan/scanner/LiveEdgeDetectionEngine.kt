@@ -11,49 +11,62 @@ import org.opencv.imgproc.Imgproc
 
 class LiveEdgeDetectionEngine {
     
-    // Pre-allocated Mats for performance to avoid GC overhead during live preview
-    private val src = Mat()
-    private val resized = Mat()
-    private val gray = Mat()
-    private val blurred = Mat()
-    private val edges = Mat()
-    private val hierarchy = Mat()
-    private val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
+    // Pre-allocated Mats for performance to avoid GC overhead during live preview (initialized lazily)
+    private var src: Mat? = null
+    private var resized: Mat? = null
+    private var gray: Mat? = null
+    private var blurred: Mat? = null
+    private var edges: Mat? = null
+    private var hierarchy: Mat? = null
+    private var kernel: Mat? = null
+
+    private fun initMatsIfNeeded() {
+        if (src == null) {
+            src = Mat()
+            resized = Mat()
+            gray = Mat()
+            blurred = Mat()
+            edges = Mat()
+            hierarchy = Mat()
+            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
+        }
+    }
 
     fun process(imageProxy: ImageProxy, onResult: (List<Point>) -> Unit) = synchronized(this) {
+        initMatsIfNeeded()
         val bitmap = imageProxy.toBitmap()
         
-        Utils.bitmapToMat(bitmap, src)
+        Utils.bitmapToMat(bitmap, src!!)
         bitmap.recycle() // Instant manual recycling to prevent JVM heap spikes
         
         // Fast downscale for live detection (much faster FPS)
-        val resizeRatio = 400.0 / Math.max(src.width(), src.height())
+        val resizeRatio = 400.0 / Math.max(src!!.width(), src!!.height())
         if (resizeRatio < 1.0) {
-            Imgproc.resize(src, resized, Size(src.width() * resizeRatio, src.height() * resizeRatio))
+            Imgproc.resize(src!!, resized!!, Size(src!!.width() * resizeRatio, src!!.height() * resizeRatio))
         } else {
-            src.copyTo(resized)
+            src!!.copyTo(resized!!)
         }
         
         // Convert to grayscale
-        Imgproc.cvtColor(resized, gray, Imgproc.COLOR_RGBA2GRAY)
+        Imgproc.cvtColor(resized!!, gray!!, Imgproc.COLOR_RGBA2GRAY)
         
         // Median blur is better for removing salt-and-pepper noise while preserving edges
-        Imgproc.medianBlur(gray, blurred, 5)
+        Imgproc.medianBlur(gray!!, blurred!!, 5)
         
         // Enhance contrast slightly using equalization could be heavy, so we rely on adaptive threshold or Canny
-        Imgproc.Canny(blurred, edges, 40.0, 120.0) 
+        Imgproc.Canny(blurred!!, edges!!, 40.0, 120.0) 
         
         // Morphological closing to connect fragmented edges
-        Imgproc.morphologyEx(edges, edges, Imgproc.MORPH_CLOSE, kernel)
+        Imgproc.morphologyEx(edges!!, edges!!, Imgproc.MORPH_CLOSE, kernel!!)
         
         val contours = ArrayList<MatOfPoint>()
         // RETR_EXTERNAL is faster and we only care about the outermost document contour
-        Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+        Imgproc.findContours(edges!!, contours, hierarchy!!, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
         
         contours.sortByDescending { Imgproc.contourArea(it) }
         var foundCorners: List<Point>? = null
         
-        val maxArea = resized.width() * resized.height()
+        val maxArea = resized!!.width() * resized!!.height()
         val minArea = maxArea * 0.12 // Document must occupy at least 12% of the frame
         
         for (contour in contours) {

@@ -61,7 +61,7 @@ class ScannerFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val viewModel: ScannerViewModel by viewModels()
-    private val liveEdgeDetectionEngine = com.safescan.scanner.LiveEdgeDetectionEngine()
+    private val liveEdgeDetectionEngine by lazy { com.safescan.scanner.LiveEdgeDetectionEngine() }
 
     private lateinit var cameraExecutor: ExecutorService
     private var imageCapture: ImageCapture? = null
