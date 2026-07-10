@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - main
+    paths:
+      - '.github/workflows/build.opencv.yml'
 
 jobs:
   build-opencv:

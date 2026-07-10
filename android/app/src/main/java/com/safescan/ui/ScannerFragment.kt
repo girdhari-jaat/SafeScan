@@ -19,6 +19,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.camera.core.AspectRatio
 import androidx.camera.core.CameraControl
 import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
@@ -495,6 +496,35 @@ class ScannerFragment : Fragment() {
         val viewHeight = binding.previewView.height.toFloat()
         if (viewWidth == 0f || viewHeight == 0f) return emptyList()
 
+        val rotatedWidth: Float
+        val rotatedHeight: Float
+        if (rotationDegrees == 90 || rotationDegrees == 270) {
+            rotatedWidth = bitmapHeight.toFloat()
+            rotatedHeight = bitmapWidth.toFloat()
+        } else {
+            rotatedWidth = bitmapWidth.toFloat()
+            rotatedHeight = bitmapHeight.toFloat()
+        }
+
+        val frameRatio = rotatedWidth / rotatedHeight
+        val viewRatio = viewWidth / viewHeight
+
+        val scale: Float
+        val dx: Float
+        val dy: Float
+
+        if (frameRatio > viewRatio) {
+            // The scaled frame is wider than the view, so height fits exactly, and left/right are cropped
+            scale = viewHeight / rotatedHeight
+            dx = (rotatedWidth * scale - viewWidth) / 2f
+            dy = 0f
+        } else {
+            // The scaled frame is taller than the view, so width fits exactly, and top/bottom are cropped
+            scale = viewWidth / rotatedWidth
+            dx = 0f
+            dy = (rotatedHeight * scale - viewHeight) / 2f
+        }
+
         return points.map { pt ->
             // 1. First, normalize coordinates relative to the bitmap (0.0 to 1.0)
             val normX = pt.x.toFloat() / bitmapWidth
@@ -522,8 +552,11 @@ class ScannerFragment : Fragment() {
                 }
             }
 
-            // 3. Map normalized rotated coordinates to the PreviewView screen coordinates
-            android.graphics.PointF(rotatedX * viewWidth, rotatedY * viewHeight)
+            // 3. Map to screen coordinate system with crop-offsets
+            val screenX = (rotatedX * rotatedWidth * scale) - dx
+            val screenY = (rotatedY * rotatedHeight * scale) - dy
+
+            android.graphics.PointF(screenX, screenY)
         }
     }
 
@@ -564,6 +597,7 @@ class ScannerFragment : Fragment() {
                 }
 
                 val previewBuilder = Preview.Builder()
+                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                 
                 val preview = previewBuilder.build().also {
                     it.setSurfaceProvider(binding.previewView.surfaceProvider)
@@ -571,11 +605,13 @@ class ScannerFragment : Fragment() {
 
                 imageCapture = ImageCapture.Builder()
                     .setCaptureMode(captureMode)
+                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                     .build()
 
                 // Initialize ImageAnalysis for live edge detection overlay
                 val imageAnalysis = androidx.camera.core.ImageAnalysis.Builder()
                     .setBackpressureStrategy(androidx.camera.core.ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                     .build()
 
                 imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
