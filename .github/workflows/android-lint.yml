@@ -10,9 +10,6 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: android
     steps:
       - uses: actions/checkout@v4
 
@@ -24,10 +21,10 @@ jobs:
           cache: gradle
 
       - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+        run: chmod +x android/gradlew
 
       - name: Run Detekt
-        run: ./gradlew detekt
+        run: cd android && ./gradlew detekt
 
       - name: Run Ktlint
-        run: ./gradlew ktlintCheck
+        run: cd android && ./gradlew ktlintCheck
