@@ -41,6 +41,7 @@ fun TopBar(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("Grid Mode")
                             Spacer(Modifier.width(8.dp))
+                            Switch(
                                 checked = currentMode == ScannerMode.GRID,
                                 onCheckedChange = { isGrid ->
                                     onModeChange(if (isGrid) ScannerMode.GRID else ScannerMode.CARD)
@@ -48,26 +49,29 @@ fun TopBar(
                             )
                         }
                     },
-                    onClick = { onFlashChange() }
+                    onClick = {
+                        onModeChange(if (currentMode == ScannerMode.GRID) ScannerMode.CARD else ScannerMode.GRID)
+                    }
                 )
                 DropdownMenuItem(
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("Auto Crop")
                             Spacer(Modifier.width(8.dp))
+                            Switch(
                                 checked = autoCrop,
                                 onCheckedChange = { onAutoCropChange(it) }
                             )
                         }
                     },
-                    onClick = { onFlashChange() }
+                    onClick = {
+                        onAutoCropChange(!autoCrop)
+                    }
                 )
                 DropdownMenuItem(
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("Flash: ${flashMode.name}")
-                            Spacer(Modifier.width(8.dp))
-                            )
                         }
                     },
                     onClick = { onFlashChange() }
