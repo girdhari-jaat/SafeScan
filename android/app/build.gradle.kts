@@ -163,6 +163,9 @@ dependencies {
     implementation("com.google.dagger:hilt-android:2.52")
     kapt("com.google.dagger:hilt-android-compiler:2.52")
 
+    // Coil for asynchronous image loading
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.0.0")
 

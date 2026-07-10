@@ -38,6 +38,7 @@ import com.safescan.data.ScannerMode
 import com.safescan.data.Slot
 import com.safescan.scanner.ScannerViewModel
 import com.safescan.R
+import coil.compose.AsyncImage
 
 @Composable
 fun SlotsScreen(
@@ -714,8 +715,8 @@ fun SlotItem(slot: Slot, onClick: () -> Unit, onLongClick: () -> Unit, onClear: 
         contentAlignment = Alignment.Center
     ) {
         if (slot.bitmap != null) {
-            Image(
-                bitmap = slot.bitmap.asImageBitmap(),
+            AsyncImage(
+                model = slot.bitmapPath ?: slot.bitmap,
                 contentDescription = slot.label,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
@@ -837,14 +838,6 @@ fun DocumentGridView(
                     if (capturedJpgs.isNotEmpty()) {
                         items(capturedJpgs.size) { idx ->
                             val file = capturedJpgs[idx]
-                            val lastModified = remember(file.absolutePath) { file.lastModified() }
-                            val bitmap = remember(file.absolutePath, lastModified) {
-                                try {
-                                    android.graphics.BitmapFactory.decodeFile(file.absolutePath)
-                                } catch (e: Exception) {
-                                    null
-                                }
-                            }
                             Box(
                                 modifier = Modifier
                                     .aspectRatio(0.72f)
@@ -852,16 +845,14 @@ fun DocumentGridView(
                                     .background(Color.DarkGray)
                                     .border(1.dp, Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                             ) {
-                                bitmap?.let { bmp ->
-                                    Image(
-                                        bitmap = bmp.asImageBitmap(),
-                                        contentDescription = "Page ${idx + 1}",
-                                        modifier = Modifier.fillMaxSize().clickable {
-                                            viewModel.openEditorForJpg(idx)
-                                        },
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
+                                AsyncImage(
+                                    model = file,
+                                    contentDescription = "Page ${idx + 1}",
+                                    modifier = Modifier.fillMaxSize().clickable {
+                                        viewModel.openEditorForJpg(idx)
+                                    },
+                                    contentScale = ContentScale.Crop
+                                )
                                 
                                 // Edit/Crop button
                                 IconButton(
@@ -902,6 +893,48 @@ fun DocumentGridView(
                                 ) {
                                     Text("${idx + 1}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
+
+                                // Reorder buttons
+                                Row(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .padding(4.dp)
+                                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                        .padding(2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    if (idx > 0) {
+                                        IconButton(
+                                            onClick = {
+                                                viewModel.moveCapturedJpgFile(idx, idx - 1)
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ArrowBack,
+                                                contentDescription = "Move Left",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                    if (idx < capturedJpgs.size - 1) {
+                                        IconButton(
+                                            onClick = {
+                                                viewModel.moveCapturedJpgFile(idx, idx + 1)
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ArrowForward,
+                                                contentDescription = "Move Right",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     } else {
@@ -915,16 +948,14 @@ fun DocumentGridView(
                                     .background(Color.DarkGray)
                                     .border(1.dp, Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                             ) {
-                                slot.bitmap?.let { bmp ->
-                                    Image(
-                                        bitmap = bmp.asImageBitmap(),
-                                        contentDescription = slot.label,
-                                        modifier = Modifier.fillMaxSize().clickable {
-                                            viewModel.openEditor(slot.id)
-                                        },
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
+                                AsyncImage(
+                                    model = slot.bitmapPath ?: slot.bitmap,
+                                    contentDescription = slot.label,
+                                    modifier = Modifier.fillMaxSize().clickable {
+                                        viewModel.openEditor(slot.id)
+                                    },
+                                    contentScale = ContentScale.Crop
+                                )
                                 
                                 // Edit/Crop button
                                 IconButton(
@@ -964,6 +995,58 @@ fun DocumentGridView(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text("${idx + 1}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                // Reorder buttons
+                                Row(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .padding(4.dp)
+                                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                        .padding(2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    if (idx > 0) {
+                                        IconButton(
+                                            onClick = {
+                                                val originalFromIdx = slots.indexOfFirst { it.id == slot.id }
+                                                val prevSlot = activeSlotsList[idx - 1]
+                                                val originalToIdx = slots.indexOfFirst { it.id == prevSlot.id }
+                                                if (originalFromIdx != -1 && originalToIdx != -1) {
+                                                    viewModel.moveSlot(originalFromIdx, originalToIdx)
+                                                }
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ArrowBack,
+                                                contentDescription = "Move Left",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                    if (idx < activeSlotsList.size - 1) {
+                                        IconButton(
+                                            onClick = {
+                                                val originalFromIdx = slots.indexOfFirst { it.id == slot.id }
+                                                val nextSlot = activeSlotsList[idx + 1]
+                                                val originalToIdx = slots.indexOfFirst { it.id == nextSlot.id }
+                                                if (originalFromIdx != -1 && originalToIdx != -1) {
+                                                    viewModel.moveSlot(originalFromIdx, originalToIdx)
+                                                }
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ArrowForward,
+                                                contentDescription = "Move Right",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

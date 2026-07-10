@@ -194,6 +194,15 @@ fun SettingsScreen(
                         onValueChange = { viewModel.setJpegQuality(it) }
                     )
 
+                    val saveJpg by viewModel.saveJpg.collectAsState()
+                    SettingsToggleItem(
+                        icon = Icons.Default.Image,
+                        title = "Save Raw JPG",
+                        description = "Save original raw capture to local storage",
+                        checked = saveJpg,
+                        onCheckedChange = { viewModel.toggleSaveJpg(it) }
+                    )
+
                     val pageSize by viewModel.pageSize.collectAsState()
                     var sizeExpanded by remember { mutableStateOf(false) }
                     SettingsClickItem(

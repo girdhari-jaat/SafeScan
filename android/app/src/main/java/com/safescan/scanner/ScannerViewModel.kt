@@ -124,6 +124,72 @@ class ScannerViewModel @Inject constructor(
     val originalJpgBitmaps = mutableMapOf<Int, Bitmap>()
     val jpgCorners = mutableMapOf<Int, List<com.safescan.domain.model.Point>>()
 
+    // High-Performance LRU (Least Recently Used) Cache for high-res Bitmaps in RAM to prevent OOM
+    private val highResCache = object : android.util.LruCache<String, Bitmap>(8) {
+        override fun entryRemoved(evicted: Boolean, key: String?, oldValue: Bitmap?, newValue: Bitmap?) {
+            Log.d("ScannerViewModel", "Disk-Backed Hybrid LRU Cache evicted high-res bitmap for key: $key")
+        }
+    }
+
+    fun getFullResBitmap(slotId: String, isOriginal: Boolean = false): Bitmap? {
+        val cacheKey = if (isOriginal) "${slotId}_original" else "${slotId}_processed"
+        val cached = highResCache.get(cacheKey)
+        if (cached != null) {
+            return cached
+        }
+
+        val slot = slots.value.find { it.id == slotId }
+        val path = if (isOriginal) slot?.originalBitmapPath else slot?.bitmapPath
+        if (path != null) {
+            val file = java.io.File(path)
+            if (file.exists()) {
+                try {
+                    val bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                    if (bitmap != null) {
+                        highResCache.put(cacheKey, bitmap)
+                        return bitmap
+                    }
+                } catch (e: Exception) {
+                    Log.e("ScannerViewModel", "Failed to load full-res bitmap from path: $path", e)
+                }
+            }
+        }
+        return null
+    }
+
+    private fun saveHighResToDisk(bitmap: Bitmap, slotId: String, suffix: String): String? {
+        val dir = java.io.File(context.cacheDir, "temp_scans")
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        val file = java.io.File(dir, "${slotId}_${suffix}.jpg")
+        return try {
+            java.io.FileOutputStream(file).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+            }
+            file.absolutePath
+        } catch (e: Exception) {
+            Log.e("ScannerViewModel", "Failed to save high-res bitmap to disk", e)
+            null
+        }
+    }
+
+    private fun generateThumbnail(bitmap: Bitmap, maxDimension: Int = 360): Bitmap {
+        val width = bitmap.width
+        val height = bitmap.height
+        val ratio = kotlin.math.min(maxDimension.toFloat() / width, maxDimension.toFloat() / height)
+        return if (ratio < 1f) {
+            Bitmap.createScaledBitmap(
+                bitmap,
+                (width * ratio).toInt(),
+                (height * ratio).toInt(),
+                true
+            )
+        } else {
+            bitmap
+        }
+    }
+
     val slots: MutableStateFlow<List<Slot>> = MutableStateFlow(emptyList())
     val selectedSlotId: MutableStateFlow<String?> = MutableStateFlow(null)
 
@@ -375,9 +441,26 @@ class ScannerViewModel @Inject constructor(
         val index = currentSlots.indexOfFirst { it.id == slotId }
         if (index != -1) {
             val existing = currentSlots[index]
+
+            // Save high-res processed bitmap to disk
+            val processedPath = saveHighResToDisk(bitmap, slotId, "processed")
+            highResCache.put("${slotId}_processed", bitmap)
+
+            // Save high-res original bitmap to disk if it is a new capture, or reuse existing
+            var origPath = existing.originalBitmapPath
+            if (isCapture || origPath == null) {
+                origPath = saveHighResToDisk(bitmap, slotId, "original")
+                highResCache.put("${slotId}_original", bitmap)
+            }
+
+            // Generate lightweight thumbnail
+            val thumbnail = generateThumbnail(bitmap, 360)
+
             currentSlots[index] = existing.copy(
-                bitmap = bitmap,
-                originalBitmap = if (isCapture || existing.originalBitmap == null) bitmap else existing.originalBitmap
+                bitmap = thumbnail,
+                originalBitmap = null, // No high-res original in RAM!
+                bitmapPath = processedPath,
+                originalBitmapPath = origPath
             )
             slots.value = currentSlots
             
@@ -459,7 +542,7 @@ class ScannerViewModel @Inject constructor(
         if (slot != null) {
             croppingSlotId.value = slotId
             croppingJpgIndex.value = null
-            croppingBitmap.value = slot.originalBitmap ?: slot.bitmap
+            croppingBitmap.value = getFullResBitmap(slotId, isOriginal = true) ?: getFullResBitmap(slotId, isOriginal = false) ?: slot.bitmap
             isCropping.value = true
         }
     }
@@ -503,9 +586,25 @@ class ScannerViewModel @Inject constructor(
                     val index = currentSlots.indexOfFirst { it.id == slotId }
                     if (index != -1) {
                         val existing = currentSlots[index]
+                        
+                        // Save high-res to disk
+                        val processedPath = saveHighResToDisk(cropped, slotId, "processed")
+                        highResCache.put("${slotId}_processed", cropped)
+                        
+                        var origPath = existing.originalBitmapPath
+                        if (origPath == null) {
+                            origPath = saveHighResToDisk(bmp, slotId, "original")
+                        }
+                        highResCache.put("${slotId}_original", bmp)
+
+                        // Generate lightweight thumbnail
+                        val thumbnail = generateThumbnail(cropped, 360)
+
                         currentSlots[index] = existing.copy(
-                            bitmap = cropped,
-                            originalBitmap = existing.originalBitmap ?: bmp,
+                            bitmap = thumbnail,
+                            originalBitmap = null,
+                            bitmapPath = processedPath,
+                            originalBitmapPath = origPath,
                             corners = cornersList
                         )
                         slots.value = currentSlots
@@ -565,13 +664,16 @@ class ScannerViewModel @Inject constructor(
 
     fun openEditor(slotId: String) {
         val slot = slots.value.find { it.id == slotId }
-        if (slot?.bitmap != null) {
-            editingSlotId.value = slotId
-            editingJpgIndex.value = null
-            editingBitmapOriginal.value = slot.bitmap
-            editingBitmapPreview.value = slot.bitmap
-            editorState.value = com.safescan.data.EditorState()
-            isEditing.value = true
+        if (slot != null) {
+            val fullRes = getFullResBitmap(slotId, isOriginal = false) ?: slot.bitmap
+            if (fullRes != null) {
+                editingSlotId.value = slotId
+                editingJpgIndex.value = null
+                editingBitmapOriginal.value = fullRes
+                editingBitmapPreview.value = fullRes
+                editorState.value = com.safescan.data.EditorState()
+                isEditing.value = true
+            }
         }
     }
 
@@ -691,10 +793,14 @@ class ScannerViewModel @Inject constructor(
                     }
                 } else {
                     slots.value.filter { it.bitmap != null }.map { slot ->
+                        // Step D: Sequential Document Assembly: Lazy-load the full resolution original and processed bitmaps from disk!
+                        val fullResProcessed = getFullResBitmap(slot.id, isOriginal = false) ?: slot.bitmap!!
+                        val fullResOriginal = getFullResBitmap(slot.id, isOriginal = true) ?: fullResProcessed
+                        
                         com.safescan.data.PageSaveData(
                             id = slot.id,
-                            originalBitmap = slot.originalBitmap ?: slot.bitmap!!,
-                            previewBitmap = slot.bitmap!!,
+                            originalBitmap = fullResOriginal,
+                            previewBitmap = fullResProcessed,
                             corners = slot.corners
                         )
                     }
@@ -713,7 +819,11 @@ class ScannerViewModel @Inject constructor(
                             Slot("p$idx", "Page ${idx + 1}", bmp)
                         }
                     } else {
-                        slots.value
+                        // For slots, we should pass slots with full resolution processed bitmaps!
+                        slots.value.filter { it.bitmap != null }.map { slot ->
+                            val fullResProcessed = getFullResBitmap(slot.id, isOriginal = false) ?: slot.bitmap!!
+                            slot.copy(bitmap = fullResProcessed)
+                        }
                     }
                     val result = pdfExporter.exportCardsToPdf(slotsToExport, pdfFilename.value, currentMode.value, pageSize.value)
                     withContext(Dispatchers.Main) {
@@ -748,12 +858,30 @@ class ScannerViewModel @Inject constructor(
             val loadedSlots = doc.pages.map { page ->
                 val originalBmp = documentRepository.loadOriginalBitmap(doc.id, page.id)
                 val previewBmp = documentRepository.loadPreviewBitmap(doc.id, page.id) ?: originalBmp
+                
+                var originalPath: String? = null
+                var processedPath: String? = null
+                
+                if (originalBmp != null) {
+                    originalPath = saveHighResToDisk(originalBmp, page.id, "original")
+                    highResCache.put("${page.id}_original", originalBmp)
+                }
+                if (previewBmp != null) {
+                    processedPath = saveHighResToDisk(previewBmp, page.id, "processed")
+                    highResCache.put("${page.id}_processed", previewBmp)
+                }
+
+                // Generate downsampled lightweight thumbnail
+                val thumbnail = previewBmp?.let { generateThumbnail(it, 360) }
+
                 Slot(
                     id = page.id,
                     label = "Page ${page.id}",
-                    bitmap = previewBmp,
-                    originalBitmap = originalBmp,
-                    corners = page.corners
+                    bitmap = thumbnail,
+                    originalBitmap = null,
+                    corners = page.corners,
+                    bitmapPath = processedPath,
+                    originalBitmapPath = originalPath
                 )
             }
             withContext(Dispatchers.Main) {
@@ -927,5 +1055,62 @@ class ScannerViewModel @Inject constructor(
         val rotated = Bitmap.createBitmap(original, 0, 0, original.width, original.height, matrix, true)
         editingBitmapOriginal.value = rotated
         applyEdits()
+    }
+
+    fun moveCapturedJpgFile(fromIndex: Int, toIndex: Int) {
+        if (fromIndex in capturedJpgFiles.indices && toIndex in capturedJpgFiles.indices) {
+            val file = capturedJpgFiles.removeAt(fromIndex)
+            capturedJpgFiles.add(toIndex, file)
+
+            // Reorder maps to stay in sync
+            val maxIndex = maxOf(
+                capturedJpgFiles.size,
+                originalJpgBitmaps.keys.maxOrNull() ?: 0,
+                jpgCorners.keys.maxOrNull() ?: 0
+            ) + 2
+
+            // Reorder originalJpgBitmaps
+            val originalBmpList = (0..maxIndex).map { originalJpgBitmaps[it] }.toMutableList()
+            if (fromIndex in originalBmpList.indices && toIndex in originalBmpList.indices) {
+                val item = originalBmpList.removeAt(fromIndex)
+                originalBmpList.add(toIndex, item)
+                originalJpgBitmaps.clear()
+                originalBmpList.forEachIndexed { idx, bmp ->
+                    if (bmp != null) {
+                        originalJpgBitmaps[idx] = bmp
+                    }
+                }
+            }
+
+            // Reorder jpgCorners
+            val cornersList = (0..maxIndex).map { jpgCorners[it] }.toMutableList()
+            if (fromIndex in cornersList.indices && toIndex in cornersList.indices) {
+                val item = cornersList.removeAt(fromIndex)
+                cornersList.add(toIndex, item)
+                jpgCorners.clear()
+                cornersList.forEachIndexed { idx, list ->
+                    if (list != null) {
+                        jpgCorners[idx] = list
+                    }
+                }
+            }
+
+            // Also update the underlying slots list if they are in sync
+            val currentSlots = slots.value.toMutableList()
+            if (fromIndex in currentSlots.indices && toIndex in currentSlots.indices) {
+                val slot = currentSlots.removeAt(fromIndex)
+                currentSlots.add(toIndex, slot)
+                slots.value = currentSlots
+            }
+        }
+    }
+
+    fun moveSlot(fromIndex: Int, toIndex: Int) {
+        val currentSlots = slots.value.toMutableList()
+        if (fromIndex in currentSlots.indices && toIndex in currentSlots.indices) {
+            val slot = currentSlots.removeAt(fromIndex)
+            currentSlots.add(toIndex, slot)
+            slots.value = currentSlots
+        }
     }
 }

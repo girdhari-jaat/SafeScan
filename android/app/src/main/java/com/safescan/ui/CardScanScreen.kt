@@ -113,8 +113,8 @@ fun CardScanScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         if (slot.bitmap != null) {
-                            androidx.compose.foundation.Image(
-                                bitmap = slot.bitmap!!.asImageBitmap(),
+                            coil.compose.AsyncImage(
+                                model = slot.bitmapPath ?: slot.bitmap,
                                 contentDescription = "Slot ${index + 1}",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = androidx.compose.ui.layout.ContentScale.Crop

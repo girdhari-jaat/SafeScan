@@ -121,6 +121,117 @@ fun LibraryScreen(
                 )
             }
 
+            var searchQuery by remember { mutableStateOf("") }
+            var sortOrder by remember { mutableStateOf("newest") } // "newest", "oldest", "alphabetical"
+            var sortMenuExpanded by remember { mutableStateOf(false) }
+
+            val filteredDocs = remember(savedDocs, searchQuery, sortOrder) {
+                savedDocs.filter { doc ->
+                    doc.title.contains(searchQuery, ignoreCase = true)
+                }.sortedWith { d1, d2 ->
+                    when (sortOrder) {
+                        "oldest" -> d1.createdAt.compareTo(d2.createdAt)
+                        "alphabetical" -> d1.title.lowercase().compareTo(d2.title.lowercase())
+                        else -> d2.createdAt.compareTo(d1.createdAt)
+                    }
+                }
+            }
+
+            val filteredFiles = remember(savedFiles, searchQuery, sortOrder) {
+                savedFiles.filter { file ->
+                    file.name.contains(searchQuery, ignoreCase = true)
+                }.sortedWith { f1, f2 ->
+                    when (sortOrder) {
+                        "oldest" -> f1.lastModified().compareTo(f2.lastModified())
+                        "alphabetical" -> f1.name.lowercase().compareTo(f2.name.lowercase())
+                        else -> f2.lastModified().compareTo(f1.lastModified())
+                    }
+                }
+            }
+
+            // Search and Sort Controls Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Search by name...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear search")
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Box {
+                    IconButton(
+                        onClick = { sortMenuExpanded = true },
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp))
+                            .size(56.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sort,
+                            contentDescription = "Sort options",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = sortMenuExpanded,
+                        onDismissRequest = { sortMenuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Newest First") },
+                            onClick = {
+                                sortOrder = "newest"
+                                sortMenuExpanded = false
+                            },
+                            leadingIcon = {
+                                if (sortOrder == "newest") {
+                                    Icon(Icons.Default.Check, contentDescription = null)
+                                }
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Oldest First") },
+                            onClick = {
+                                sortOrder = "oldest"
+                                sortMenuExpanded = false
+                            },
+                            leadingIcon = {
+                                if (sortOrder == "oldest") {
+                                    Icon(Icons.Default.Check, contentDescription = null)
+                                }
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Alphabetical") },
+                            onClick = {
+                                sortOrder = "alphabetical"
+                                sortMenuExpanded = false
+                            },
+                            leadingIcon = {
+                                if (sortOrder == "alphabetical") {
+                                    Icon(Icons.Default.Check, contentDescription = null)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
             Box(modifier = Modifier.fillMaxSize()) {
                 if (selectedTab == 0) {
                     // Tab 1: Original Saved Documents
@@ -130,13 +241,19 @@ fun LibraryScreen(
                             title = "No original documents saved",
                             description = "Once you capture files and export them, the complete original page images and edits are automatically saved here for future editing."
                         )
+                    } else if (filteredDocs.isEmpty()) {
+                        EmptyStateView(
+                            emoji = "🔍",
+                            title = "No search results",
+                            description = "No original documents matched your search query '$searchQuery'."
+                        )
                     } else {
                         LazyColumn(
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            items(savedDocs, key = { it.id }) { doc ->
+                            items(filteredDocs, key = { it.id }) { doc ->
                                 OriginalDocumentCard(
                                     doc = doc,
                                     onClick = { onOpenDocument(doc) },
@@ -153,13 +270,19 @@ fun LibraryScreen(
                             title = "No exported PDFs yet",
                             description = "Tap 'New Scan' button to capture and compile cards or multi-page paper sheets into standard offline PDF documents."
                         )
+                    } else if (filteredFiles.isEmpty()) {
+                        EmptyStateView(
+                            emoji = "🔍",
+                            title = "No search results",
+                            description = "No PDF files matched your search query '$searchQuery'."
+                        )
                     } else {
                         LazyColumn(
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            items(savedFiles, key = { it.absolutePath }) { file ->
+                            items(filteredFiles, key = { it.absolutePath }) { file ->
                                 DocumentItemCard(
                                     file = file,
                                     onShare = {

@@ -8,6 +8,8 @@ data class Slot(
     val label: String,
     val bitmap: Bitmap? = null,
     val originalBitmap: Bitmap? = null,
-    val corners: List<Point>? = null
+    val corners: List<Point>? = null,
+    val bitmapPath: String? = null,
+    val originalBitmapPath: String? = null
 )
 
