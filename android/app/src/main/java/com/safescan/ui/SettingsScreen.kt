@@ -260,6 +260,15 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.toggleClickSound(it) }
                     )
 
+                    val vibrateOnCapture by viewModel.vibrateOnCapture.collectAsState()
+                    SettingsToggleItem(
+                        icon = Icons.Default.Vibration,
+                        title = "Haptic Feedback",
+                        description = "Vibrate when capturing a document",
+                        checked = vibrateOnCapture,
+                        onCheckedChange = { viewModel.setVibrateOnCapture(it) }
+                    )
+
                     val batterySaver by viewModel.batterySaver.collectAsState()
                     SettingsToggleItem(
                         icon = Icons.Default.BatteryChargingFull,

@@ -41,12 +41,12 @@ class LocalMLEngine(private val context: Context) {
                 options.addDelegate(gpuDelegate)
                 interpreter = Interpreter(tfliteModel, options)
                 Log.d("LocalMLEngine", "Native TFLite model loaded successfully with GPU acceleration")
-            } catch (gpuEx: Exception) {
-                Log.w("LocalMLEngine", "GPU acceleration not supported. Falling back to CPU.", gpuEx)
+            } catch (gpuEx: Throwable) {
+                Log.w("LocalMLEngine", "GPU acceleration not supported or failed to initialize. Falling back to CPU safely.", gpuEx)
                 // Clean up GPU delegate if it was created
                 try {
                     gpuDelegate?.close()
-                } catch (closeEx: Exception) {
+                } catch (closeEx: Throwable) {
                     Log.e("LocalMLEngine", "Failed to close gpuDelegate", closeEx)
                 }
                 gpuDelegate = null
@@ -57,7 +57,7 @@ class LocalMLEngine(private val context: Context) {
                 interpreter = Interpreter(tfliteModel, options)
                 Log.d("LocalMLEngine", "Native TFLite model loaded successfully with CPU (4 threads)")
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e("LocalMLEngine", "Fatal error loading Native TFLite model", e)
         }
     }
@@ -146,7 +146,7 @@ class LocalMLEngine(private val context: Context) {
             }
             bestQuad?.release()
             return result
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e("LocalMLEngine", "Error running inference", e)
         } finally {
             maskMat?.release()

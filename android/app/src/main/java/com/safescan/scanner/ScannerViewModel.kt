@@ -1,6 +1,7 @@
 package com.safescan.scanner
 
 import android.graphics.Bitmap
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlin.math.pow
@@ -31,7 +32,7 @@ class ScannerViewModel @Inject constructor(
     private val edgeDetectionEngine: com.safescan.scanner.EdgeDetectionEngine,
     private val pdfExporter: com.safescan.domain.PdfExporter,
     private val documentRepository: com.safescan.data.DocumentRepository,
-    private val documentScanner: DocumentScanner
+    val documentScanner: DocumentScanner
 ) : ViewModel() {
 
     // IMPROVEMENT: Using ScannerUiState with isAutoRunning
@@ -46,6 +47,9 @@ class ScannerViewModel @Inject constructor(
     val autoCrop: StateFlow<Boolean> = settingsRepository.autoCropFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
         
+    val flashMode: StateFlow<com.safescan.data.FlashMode> = settingsRepository.flashModeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.safescan.data.FlashMode.OFF)
+
     val flashOn: StateFlow<Boolean> = settingsRepository.flashOnFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
         
@@ -180,7 +184,28 @@ class ScannerViewModel @Inject constructor(
     fun detectEdges(bitmap: Bitmap, onResult: (List<Point>?) -> Unit) {
         _uiState.update { it.copy(isAutoRunning = true) }
         viewModelScope.launch(Dispatchers.IO) {
-            val points = edgeDetectionEngine.detectEdges(bitmap)
+            var points: List<Point>? = null
+            // Try TFLite Local ML first
+            try {
+                val quad = documentScanner.detectDocument(bitmap)
+                if (quad != null) {
+                    points = listOf(quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft)
+                    Log.d("ScannerViewModel", "detectEdges: Successfully detected corners using TFLite")
+                }
+            } catch (e: Throwable) {
+                Log.e("ScannerViewModel", "detectEdges: TFLite ML detection failed, falling back to OpenCV", e)
+            }
+
+            // Fallback to OpenCV
+            if (points == null || points.size != 4) {
+                try {
+                    points = edgeDetectionEngine.detectEdges(bitmap)
+                    Log.d("ScannerViewModel", "detectEdges: Successfully detected corners using OpenCV fallback")
+                } catch (e: Throwable) {
+                    Log.e("ScannerViewModel", "detectEdges: OpenCV detection fallback failed", e)
+                }
+            }
+
             _uiState.update { it.copy(isAutoRunning = false) }
             withContext(Dispatchers.Main) {
                 onResult(points)
@@ -197,6 +222,17 @@ class ScannerViewModel @Inject constructor(
     fun toggleAutoCrop(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setAutoCrop(enabled)
+        }
+    }
+
+    fun cycleFlashMode() {
+        viewModelScope.launch {
+            val nextMode = when (flashMode.value) {
+                com.safescan.data.FlashMode.OFF -> com.safescan.data.FlashMode.AUTO
+                com.safescan.data.FlashMode.AUTO -> com.safescan.data.FlashMode.TORCH
+                com.safescan.data.FlashMode.TORCH -> com.safescan.data.FlashMode.OFF
+            }
+            settingsRepository.setFlashMode(nextMode)
         }
     }
 
@@ -838,11 +874,40 @@ class ScannerViewModel @Inject constructor(
                             }
                         }
                         is com.safescan.core.AppResult.Error -> {
-                            _uiState.update {
-                                it.copy(
-                                    isLoading = false,
-                                    error = result.message
-                                )
+                            if (result.message == "CORNERS_NOT_FOUND") {
+                                // Fallback to manual crop! Place uncropped image in the slot
+                                if (slotId != null) {
+                                    captureToSlot(processedBitmap, slotId, isCapture = true)
+                                    selectedSlotId.value = null
+                                }
+
+                                _uiState.update { 
+                                    it.copy(
+                                        isLoading = false,
+                                        scannedBitmap = null,
+                                        lastCapturedThumbnail = processedBitmap,
+                                        capturedCount = it.capturedCount + 1,
+                                        error = null // Clear error since we gracefully fall back to manual crop
+                                    )
+                                }
+
+                                if (slotId != null) {
+                                    withContext(Dispatchers.Main) {
+                                        if (!forceSkipEditor && !batchScan.value) {
+                                            android.widget.Toast.makeText(context, "No document found. Opening manual crop.", android.widget.Toast.LENGTH_SHORT).show()
+                                            openCrop(slotId)
+                                        } else {
+                                            android.widget.Toast.makeText(context, "No document found on some pages.", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            } else {
+                                _uiState.update {
+                                    it.copy(
+                                        isLoading = false,
+                                        error = result.message
+                                    )
+                                }
                             }
                         }
                     }

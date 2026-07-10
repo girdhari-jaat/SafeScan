@@ -83,7 +83,6 @@ class ScannerFragment : Fragment() {
         val cameraGranted = ContextCompat.checkSelfPermission(requireContext(), android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
         if (cameraGranted) {
             updateViewMode(FragmentViewMode.SCANNER)
-        } else {
             Toast.makeText(context, "Camera permission is required to scan documents.", Toast.LENGTH_LONG).show()
         }
     }
@@ -130,7 +129,6 @@ class ScannerFragment : Fragment() {
                         android.graphics.ImageDecoder.decodeBitmap(
                             android.graphics.ImageDecoder.createSource(requireContext().contentResolver, uri)
                         )
-                    } else {
                         @Suppress("DEPRECATION")
                         android.provider.MediaStore.Images.Media.getBitmap(requireContext().contentResolver, uri)
                     }
@@ -184,7 +182,6 @@ class ScannerFragment : Fragment() {
             if (scannedText.isNotEmpty()) {
                 viewModel.recognizedText.value = scannedText
                 Toast.makeText(context, "Text captured successfully!", Toast.LENGTH_SHORT).show()
-            } else {
                 Toast.makeText(context, "No text detected", Toast.LENGTH_SHORT).show()
             }
         }
@@ -203,7 +200,6 @@ class ScannerFragment : Fragment() {
             if (scannedQr.isNotEmpty()) {
                 viewModel.recognizedText.value = scannedQr
                 Toast.makeText(context, "QR Scanned: $scannedQr", Toast.LENGTH_LONG).show()
-            } else {
                 Toast.makeText(context, "No QR data found", Toast.LENGTH_SHORT).show()
             }
         }
@@ -258,7 +254,6 @@ class ScannerFragment : Fragment() {
                 Log.e("ScannerFragment", "Failed to start system QR scanner", e)
                 Toast.makeText(context, "System QR scanner not available.", Toast.LENGTH_SHORT).show()
             }
-        } else {
             Toast.makeText(requireContext(), "Requires Android 14+", Toast.LENGTH_SHORT).show()
         }
     }
@@ -297,7 +292,6 @@ class ScannerFragment : Fragment() {
                     viewModel.isEditing.value = false
                 } else if (currentViewMode == FragmentViewMode.SCANNER) {
                     updateViewMode(FragmentViewMode.LIBRARY)
-                } else {
                     isEnabled = false
                     requireActivity().onBackPressedDispatcher.onBackPressed()
                     isEnabled = true
@@ -358,11 +352,9 @@ class ScannerFragment : Fragment() {
                     }
                 }
             }
-        } else {
             // Show camera-related XML views (only previewView, hide old buttons)
             if (viewModel.isDocumentOpenedFromLibrary) {
                 binding.previewView.visibility = View.GONE
-            } else {
                 binding.previewView.visibility = View.VISIBLE
                 // Start live CameraX preview
                 startCamera()
@@ -388,7 +380,6 @@ class ScannerFragment : Fragment() {
                             com.safescan.ui.CropScreen(viewModel = viewModel)
                         } else if (isEditing) {
                             com.safescan.ui.EditorScreen(viewModel = viewModel)
-                        } else {
                             if (viewModel.isDocumentOpenedFromLibrary) {
                                 com.safescan.ui.DocumentGridView(
                                     viewModel = viewModel,
@@ -397,7 +388,6 @@ class ScannerFragment : Fragment() {
                                         updateViewMode(FragmentViewMode.LIBRARY)
                                     }
                                 )
-                            } else {
                                 SlotsScreen(
                                     viewModel = viewModel,
                                     onCaptureClick = { takePhoto() },
@@ -426,11 +416,13 @@ class ScannerFragment : Fragment() {
         val permissionsToRequest = mutableListOf(android.Manifest.permission.CAMERA)
         if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.S_V2) {
             permissionsToRequest.add(android.Manifest.permission.READ_EXTERNAL_STORAGE)
-        } else {
             permissionsToRequest.add(android.Manifest.permission.READ_MEDIA_IMAGES)
             if (android.os.Build.VERSION.SDK_INT >= 34) {
                 permissionsToRequest.add(android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
             }
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            permissionsToRequest.add(android.Manifest.permission.POST_NOTIFICATIONS)
         }
 
         val missingPermissions = permissionsToRequest.filter {
@@ -457,7 +449,6 @@ class ScannerFragment : Fragment() {
             val current = viewModel.uiState.value.currentEngine
             val next = if (current == ScannerEngineType.OPENCV) {
                 ScannerEngineType.LOCAL_ML
-            } else {
                 ScannerEngineType.OPENCV
             }
             viewModel.toggleEngine(next)
@@ -478,7 +469,6 @@ class ScannerFragment : Fragment() {
                         .addPoint(centerPoint, FocusMeteringAction.FLAG_AF)
                         .setAutoCancelDuration(3, TimeUnit.SECONDS)
                         .build()
-                } else {
                     FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF)
                         .setAutoCancelDuration(3, TimeUnit.SECONDS)
                         .build()
@@ -556,7 +546,6 @@ class ScannerFragment : Fragment() {
                     cameraProvider.unbindAll()
                     binding.previewView.visibility = View.INVISIBLE
                     return@addListener
-                } else {
                     binding.previewView.visibility = View.VISIBLE
                 }
 
@@ -582,7 +571,6 @@ class ScannerFragment : Fragment() {
 
                 imageCapture = ImageCapture.Builder()
                     .setCaptureMode(captureMode)
-                    .setFlashMode(if (viewModel.flashOn.value) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF)
                     .build()
 
                 // Initialize ImageAnalysis for live edge detection overlay
@@ -599,7 +587,7 @@ class ScannerFragment : Fragment() {
                             val width = imageProxy.width
                             val height = imageProxy.height
                             
-                            liveEdgeDetectionEngine.process(imageProxy) { corners ->
+                            liveEdgeDetectionEngine.process(imageProxy, viewModel.documentScanner) { corners ->
                                 val mappedPoints = mapPointsToPreviewView(corners, width, height, rotationDegrees)
                                 activity?.runOnUiThread {
                                     _binding?.overlayView?.updateCorners(mappedPoints)
@@ -699,6 +687,23 @@ class ScannerFragment : Fragment() {
             }
         }
 
+        // Trigger vibration/haptic feedback if enabled
+        if (viewModel.vibrateOnCapture.value) {
+            try {
+                val vibrator = currentContext.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                if (vibrator != null && vibrator.hasVibrator()) {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        vibrator.vibrate(android.os.VibrationEffect.createOneShot(100, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        vibrator.vibrate(100)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ScannerFragment", "Failed to vibrate on capture", e)
+            }
+        }
+
         imageCapture.takePicture(
             ContextCompat.getMainExecutor(currentContext),
             object : ImageCapture.OnImageCapturedCallback() {
@@ -706,7 +711,6 @@ class ScannerFragment : Fragment() {
                     val rawBitmap = imageProxy.toBitmap()
                     val rotationDegrees = if (viewModel.autoRotation.value) {
                         imageProxy.imageInfo.rotationDegrees
-                    } else {
                         0
                     }
                     val bitmap = if (rotationDegrees != 0) {
@@ -714,7 +718,6 @@ class ScannerFragment : Fragment() {
                         val rotated = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
                         rawBitmap.recycle()
                         rotated
-                    } else {
                         rawBitmap
                     }
                     viewModel.onCapture(bitmap)
@@ -733,7 +736,7 @@ class ScannerFragment : Fragment() {
     }
 
     private fun toggleFlash() {
-        viewModel.toggleFlash(!viewModel.flashOn.value)
+        viewModel.cycleFlashMode()
     }
 
     private fun setupObservers() {
@@ -764,19 +767,21 @@ class ScannerFragment : Fragment() {
         // Observe flash/torch state to update physical camera on-the-fly without restart
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.flashOn.collect { enabled ->
-                    flashEnabled = enabled
+                viewModel.flashMode.collect { mode ->
+                    val torchOn = mode == com.safescan.data.FlashMode.TORCH
+                    flashEnabled = torchOn
+                    
                     try {
-                        cameraControl?.enableTorch(enabled)
+                        cameraControl?.enableTorch(torchOn)
                     } catch (e: Exception) {
                         Log.e("ScannerFragment", "Failed to update torch", e)
                     }
-                    imageCapture?.flashMode = if (enabled) {
-                        ImageCapture.FLASH_MODE_ON
-                    } else {
-                        ImageCapture.FLASH_MODE_OFF
+                    imageCapture?.flashMode = when (mode) {
+                        com.safescan.data.FlashMode.AUTO -> ImageCapture.FLASH_MODE_AUTO
+                        com.safescan.data.FlashMode.ON, com.safescan.data.FlashMode.TORCH -> ImageCapture.FLASH_MODE_ON
+                        else -> ImageCapture.FLASH_MODE_OFF
                     }
-                    _binding?.btnFlash?.alpha = if (enabled) 1.0f else 0.5f
+                    _binding?.btnFlash?.alpha = if (mode != com.safescan.data.FlashMode.OFF) 1.0f else 0.5f
                 }
             }
         }
@@ -807,6 +812,11 @@ class ScannerFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        try {
+            liveEdgeDetectionEngine.release()
+        } catch (e: Exception) {
+            Log.e("ScannerFragment", "Failed to release liveEdgeDetectionEngine", e)
+        }
         _binding = null
         imageCapture = null
         cameraControl = null

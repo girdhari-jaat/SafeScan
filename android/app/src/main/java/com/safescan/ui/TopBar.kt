@@ -17,10 +17,10 @@ import com.safescan.data.ScannerMode
 fun TopBar(
     currentMode: ScannerMode,
     autoCrop: Boolean,
-    flashOn: Boolean,
+    flashMode: com.safescan.data.FlashMode,
     onModeChange: (ScannerMode) -> Unit,
     onAutoCropChange: (Boolean) -> Unit,
-    onFlashChange: (Boolean) -> Unit,
+    onFlashChange: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -41,7 +41,6 @@ fun TopBar(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("Grid Mode")
                             Spacer(Modifier.width(8.dp))
-                            Switch(
                                 checked = currentMode == ScannerMode.GRID,
                                 onCheckedChange = { isGrid ->
                                     onModeChange(if (isGrid) ScannerMode.GRID else ScannerMode.CARD)
@@ -49,33 +48,29 @@ fun TopBar(
                             )
                         }
                     },
-                    onClick = { }
+                    onClick = { onFlashChange() }
                 )
                 DropdownMenuItem(
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("Auto Crop")
                             Spacer(Modifier.width(8.dp))
-                            Switch(
                                 checked = autoCrop,
                                 onCheckedChange = { onAutoCropChange(it) }
                             )
                         }
                     },
-                    onClick = { }
+                    onClick = { onFlashChange() }
                 )
                 DropdownMenuItem(
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Flash")
+                            Text("Flash: ${flashMode.name}")
                             Spacer(Modifier.width(8.dp))
-                            Switch(
-                                checked = flashOn,
-                                onCheckedChange = { onFlashChange(it) }
                             )
                         }
                     },
-                    onClick = { }
+                    onClick = { onFlashChange() }
                 )
                 Divider()
                 DropdownMenuItem(

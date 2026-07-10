@@ -29,3 +29,4 @@
 -keep class org.tensorflow.lite.gpu.** { *; }
 -keepclassmembers class org.tensorflow.lite.gpu.GpuDelegateFactory$Options { *; }
 
+

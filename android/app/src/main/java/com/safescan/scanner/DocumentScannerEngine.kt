@@ -1,6 +1,7 @@
 package com.safescan.scanner
 
 import android.graphics.Bitmap
+import android.util.Log
 import com.safescan.core.AppResult
 import com.safescan.domain.model.Point
 import kotlinx.coroutines.Dispatchers
@@ -31,15 +32,27 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
         try {
             var corners: List<Point>? = null
 
+            // 1. Try Local ML (TFLite) first if enabled/available
             if (engineType == ScannerEngineType.LOCAL_ML && mlEngine != null) {
-                corners = mlEngine.detectCorners(bitmap)
-            } else if (engineType == ScannerEngineType.OPENCV) {
-                corners = detectCornersOpenCV(bitmap)
+                try {
+                    corners = mlEngine.detectCorners(bitmap)
+                } catch (e: Throwable) {
+                    Log.e("DocumentScannerEngine", "Local ML detection failed, will fallback to OpenCV", e)
+                }
             }
 
+            // 2. If ML detection failed or was not used, fall back to OpenCV corner detection
             if (corners == null || corners.size != 4) {
-                // Fallback to default full-screen-ish quad if no ML detection is available
-                corners = getFallbackQuad(bitmap.width.toDouble(), bitmap.height.toDouble())
+                try {
+                    corners = detectCornersOpenCV(bitmap)
+                } catch (e: Throwable) {
+                    Log.e("DocumentScannerEngine", "OpenCV detection fallback failed", e)
+                }
+            }
+
+            // 3. If both ML and OpenCV failed to find a valid 4-corner quad, return a CORNERS_NOT_FOUND error
+            if (corners == null || corners.size != 4) {
+                return@withContext AppResult.Error("CORNERS_NOT_FOUND")
             }
 
             if (corners.size == 4) {

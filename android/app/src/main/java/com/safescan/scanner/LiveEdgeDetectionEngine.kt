@@ -1,5 +1,6 @@
 package com.safescan.scanner
 
+import android.util.Log
 import androidx.camera.core.ImageProxy
 import com.safescan.domain.model.Point
 import org.opencv.android.Utils
@@ -32,91 +33,152 @@ class LiveEdgeDetectionEngine {
         }
     }
 
-    fun process(imageProxy: ImageProxy, onResult: (List<Point>) -> Unit) = synchronized(this) {
-        initMatsIfNeeded()
-        val bitmap = imageProxy.toBitmap()
-        
-        Utils.bitmapToMat(bitmap, src!!)
-        bitmap.recycle() // Instant manual recycling to prevent JVM heap spikes
-        
-        // Fast downscale for live detection (much faster FPS)
-        val resizeRatio = 400.0 / Math.max(src!!.width(), src!!.height())
-        if (resizeRatio < 1.0) {
-            Imgproc.resize(src!!, resized!!, Size(src!!.width() * resizeRatio, src!!.height() * resizeRatio))
-        } else {
-            src!!.copyTo(resized!!)
+    fun release() = synchronized(this) {
+        try {
+            src?.release()
+            src = null
+            resized?.release()
+            resized = null
+            gray?.release()
+            gray = null
+            blurred?.release()
+            blurred = null
+            edges?.release()
+            edges = null
+            hierarchy?.release()
+            hierarchy = null
+            kernel?.release()
+            kernel = null
+            Log.d("LiveEdgeDetectionEngine", "Mats released successfully")
+        } catch (e: Throwable) {
+            Log.e("LiveEdgeDetectionEngine", "Failed to release Mats", e)
         }
-        
-        // Convert to grayscale
-        Imgproc.cvtColor(resized!!, gray!!, Imgproc.COLOR_RGBA2GRAY)
-        
-        // Median blur is better for removing salt-and-pepper noise while preserving edges
-        Imgproc.medianBlur(gray!!, blurred!!, 5)
-        
-        // Enhance contrast slightly using equalization could be heavy, so we rely on adaptive threshold or Canny
-        Imgproc.Canny(blurred!!, edges!!, 40.0, 120.0) 
-        
-        // Morphological closing to connect fragmented edges
-        Imgproc.morphologyEx(edges!!, edges!!, Imgproc.MORPH_CLOSE, kernel!!)
-        
+    }
+
+    fun process(imageProxy: ImageProxy, documentScanner: DocumentScanner?, onResult: (List<Point>) -> Unit) = synchronized(this) {
+        initMatsIfNeeded()
+        var bitmap: android.graphics.Bitmap? = null
         val contours = ArrayList<MatOfPoint>()
-        // RETR_EXTERNAL is faster and we only care about the outermost document contour
-        Imgproc.findContours(edges!!, contours, hierarchy!!, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
-        
-        contours.sortByDescending { Imgproc.contourArea(it) }
-        var foundCorners: List<Point>? = null
-        
-        val maxArea = resized!!.width() * resized!!.height()
-        val minArea = maxArea * 0.12 // Document must occupy at least 12% of the frame
-        
-        for (contour in contours) {
-            val area = Imgproc.contourArea(contour)
-            if (area < minArea) break // since they are sorted, we can stop early
+        try {
+            bitmap = imageProxy.toBitmap()
+            if (bitmap == null) {
+                return@synchronized
+            }
             
-            val contour2f = MatOfPoint2f(*contour.toArray())
-            val approx = MatOfPoint2f()
-            val peri = Imgproc.arcLength(contour2f, true)
+            var foundCorners: List<Point>? = null
             
-            var approxSuccess = false
-            // Try different epsilon approximations to get a clean quadrilateral
-            for (epsFactor in listOf(0.015, 0.02, 0.03, 0.04)) {
-                Imgproc.approxPolyDP(contour2f, approx, epsFactor * peri, true)
-                if (approx.total() == 4L) {
-                    val approxPoints = approx.toArray().map { Point(it.x / resizeRatio, it.y / resizeRatio) }
-                    if (isConvexPoints(approxPoints) && getMaxCosinePoints(approxPoints) < 0.4) {
-                        foundCorners = orderPoints(approxPoints)
-                        approxSuccess = true
-                        approx.release()
-                        break
+            // 1. Try TFLite ML first
+            if (documentScanner != null) {
+                try {
+                    val quad = documentScanner.detectDocument(bitmap)
+                    if (quad != null) {
+                        foundCorners = listOf(quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft)
+                        Log.d("LiveEdgeDetectionEngine", "Successfully detected document corners using TFLite ML on live feed")
+                    }
+                } catch (e: Throwable) {
+                    Log.e("LiveEdgeDetectionEngine", "TFLite ML detection failed in live feed, falling back to OpenCV", e)
+                }
+            }
+            
+            // 2. Fallback to OpenCV if TFLite didn't find corners
+            if (foundCorners == null) {
+                Utils.bitmapToMat(bitmap, src!!)
+                
+                // Fast downscale for live detection (much faster FPS)
+                val resizeRatio = 400.0 / Math.max(src!!.width(), src!!.height())
+                if (resizeRatio < 1.0) {
+                    Imgproc.resize(src!!, resized!!, Size(src!!.width() * resizeRatio, src!!.height() * resizeRatio))
+                } else {
+                    src!!.copyTo(resized!!)
+                }
+                
+                // Convert to grayscale
+                Imgproc.cvtColor(resized!!, gray!!, Imgproc.COLOR_RGBA2GRAY)
+                
+                // Median blur is better for removing salt-and-pepper noise while preserving edges
+                Imgproc.medianBlur(gray!!, blurred!!, 5)
+                
+                // Enhance contrast slightly using equalization could be heavy, so we rely on adaptive threshold or Canny
+                Imgproc.Canny(blurred!!, edges!!, 40.0, 120.0) 
+                
+                // Morphological closing to connect fragmented edges
+                Imgproc.morphologyEx(edges!!, edges!!, Imgproc.MORPH_CLOSE, kernel!!)
+                
+                // RETR_EXTERNAL is faster and we only care about the outermost document contour
+                Imgproc.findContours(edges!!, contours, hierarchy!!, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+                
+                contours.sortByDescending { Imgproc.contourArea(it) }
+                
+                val maxArea = resized!!.width() * resized!!.height()
+                val minArea = maxArea * 0.12 // Document must occupy at least 12% of the frame
+                
+                for (contour in contours) {
+                    val area = Imgproc.contourArea(contour)
+                    if (area < minArea) break // since they are sorted, we can stop early
+                    
+                    var contour2f: MatOfPoint2f? = null
+                    try {
+                        contour2f = MatOfPoint2f(*contour.toArray())
+                        val approx = MatOfPoint2f()
+                        val peri = Imgproc.arcLength(contour2f, true)
+                        
+                        var approxSuccess = false
+                        // Try different epsilon approximations to get a clean quadrilateral
+                        for (epsFactor in listOf(0.015, 0.02, 0.03, 0.04)) {
+                            try {
+                                Imgproc.approxPolyDP(contour2f, approx, epsFactor * peri, true)
+                                if (approx.total() == 4L) {
+                                    val approxPoints = approx.toArray().map { Point(it.x / resizeRatio, it.y / resizeRatio) }
+                                    if (isConvexPoints(approxPoints) && getMaxCosinePoints(approxPoints) < 0.4) {
+                                        foundCorners = orderPoints(approxPoints)
+                                        approxSuccess = true
+                                        break
+                                    }
+                                }
+                            } finally {
+                                approx.release()
+                            }
+                        }
+                        
+                        // FALLBACK: If approxPolyDP failed but it's a large contour, use extreme points
+                        if (!approxSuccess) {
+                            val extremePoints = getExtremePoints(contour).map { Point(it.x / resizeRatio, it.y / resizeRatio) }
+                            if (extremePoints.size == 4 && isConvexPoints(extremePoints) && getMaxCosinePoints(extremePoints) < 0.4) {
+                                foundCorners = orderPoints(extremePoints)
+                            }
+                        }
+                    } catch (e: Throwable) {
+                        Log.e("LiveEdgeDetectionEngine", "Contour loop processing error", e)
+                    } finally {
+                        contour2f?.release()
+                    }
+                    
+                    if (foundCorners != null) {
+                        break // Found our document
                     }
                 }
-                approx.release()
             }
             
-            // FALLBACK: If approxPolyDP failed but it's a large contour, use extreme points
-            if (!approxSuccess) {
-                val extremePoints = getExtremePoints(contour).map { Point(it.x / resizeRatio, it.y / resizeRatio) }
-                if (extremePoints.size == 4 && isConvexPoints(extremePoints) && getMaxCosinePoints(extremePoints) < 0.4) {
-                    foundCorners = orderPoints(extremePoints)
+            if (foundCorners != null) {
+                onResult(foundCorners)
+            }
+        } catch (e: Throwable) {
+            Log.e("LiveEdgeDetectionEngine", "Live edge detection processing error", e)
+        } finally {
+            bitmap?.recycle()
+            for (contour in contours) {
+                try {
+                    contour.release()
+                } catch (ce: Throwable) {
+                    Log.e("LiveEdgeDetectionEngine", "Failed to release individual contour", ce)
                 }
             }
-            
-            contour2f.release()
-            if (foundCorners != null) {
-                break // Found our document
+            try {
+                imageProxy.close()
+            } catch (ipe: Throwable) {
+                Log.e("LiveEdgeDetectionEngine", "Failed to close ImageProxy", ipe)
             }
         }
-        
-        // Release contours
-        for (contour in contours) {
-            contour.release()
-        }
-        
-        if (foundCorners != null) {
-            onResult(foundCorners)
-        }
-        
-        imageProxy.close()
     }
 
     private fun getExtremePoints(contour: MatOfPoint): List<Point> {

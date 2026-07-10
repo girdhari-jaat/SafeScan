@@ -52,13 +52,14 @@ fun SlotsScreen(
     val currentMode by viewModel.currentMode.collectAsState()
     val slots by viewModel.slots.collectAsState()
     val autoCrop by viewModel.autoCrop.collectAsState()
-    val flashOn by viewModel.flashOn.collectAsState()
+    val flashMode by viewModel.flashMode.collectAsState()
     val doubleFocus by viewModel.doubleFocusEnabled.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
 
     val showGrid by viewModel.showGrid.collectAsState()
     val clickSound by viewModel.clickSound.collectAsState()
+    val vibrateOnCapture by viewModel.vibrateOnCapture.collectAsState()
     val liveDetect by viewModel.liveDetect.collectAsState()
     val shadowRemove by viewModel.shadowRemove.collectAsState()
     val batterySaver by viewModel.batterySaver.collectAsState()
@@ -120,12 +121,12 @@ fun SlotsScreen(
                     IconButton(
                         onClick = onFlashToggle,
                         modifier = Modifier.background(
-                            if (flashOn) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.5f),
+                            if (flashMode != com.safescan.data.FlashMode.OFF) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.5f),
                             CircleShape
                         )
                     ) {
                         Icon(
-                            imageVector = if (flashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                            imageVector = when(flashMode) { com.safescan.data.FlashMode.AUTO -> Icons.Default.FlashAuto; com.safescan.data.FlashMode.TORCH -> Icons.Default.FlashOn; else -> Icons.Default.FlashOff },
                             contentDescription = "Toggle Flash",
                             tint = Color.White,
                             modifier = Modifier.size(18.dp)
@@ -430,6 +431,12 @@ fun SlotsScreen(
                                 label = "Shutter Sound",
                                 checked = clickSound,
                                 onCheckedChange = { viewModel.toggleClickSound(it) }
+                            )
+                            PopoverToggleRow(
+                                icon = Icons.Default.Vibration,
+                                label = "Haptic Feedbk",
+                                checked = vibrateOnCapture,
+                                onCheckedChange = { viewModel.setVibrateOnCapture(it) }
                             )
                             PopoverToggleRow(
                                 icon = Icons.Default.AutoFixHigh,

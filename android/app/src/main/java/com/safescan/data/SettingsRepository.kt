@@ -21,6 +21,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         val SCANNER_MODE = stringPreferencesKey("scanner_mode")
         val AUTO_CROP = booleanPreferencesKey("auto_crop")
         val FLASH_ON = booleanPreferencesKey("flash_on")
+        val FLASH_MODE = stringPreferencesKey("flash_mode_v2")
         val DPI = floatPreferencesKey("dpi")
         val JPEG_QUALITY = floatPreferencesKey("jpeg_quality")
         val PDF_FILENAME = stringPreferencesKey("pdf_filename")
@@ -67,6 +68,16 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     val autoCropFlow: Flow<Boolean> = safeData
         .map { preferences -> preferences[PreferencesKeys.AUTO_CROP] ?: true }
 
+    val flashModeFlow: Flow<FlashMode> = safeData
+        .map { preferences ->
+            val legacy = preferences[PreferencesKeys.FLASH_ON] ?: false
+            val modeName = preferences[PreferencesKeys.FLASH_MODE]
+            if (modeName != null) {
+                try { FlashMode.valueOf(modeName) } catch (e: Exception) { FlashMode.OFF }
+            } else {
+                if (legacy) FlashMode.TORCH else FlashMode.OFF
+            }
+        }
     val flashOnFlow: Flow<Boolean> = safeData
         .map { preferences -> preferences[PreferencesKeys.FLASH_ON] ?: false }
 
@@ -145,6 +156,12 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     suspend fun setAutoCrop(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.AUTO_CROP] = enabled
+        }
+    }
+
+    suspend fun setFlashMode(mode: FlashMode) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.FLASH_MODE] = mode.name
         }
     }
 
