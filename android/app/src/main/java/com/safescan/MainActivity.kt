@@ -7,16 +7,11 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.gms.tflite.client.TfLiteInitializationOptions
 import com.google.android.gms.tflite.java.TfLite
-import org.opencv.android.OpenCVLoader
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        if (!OpenCVLoader.initDebug()) {
-            Toast.makeText(this, "OpenCV init failed!", Toast.LENGTH_LONG).show()
-        }
-        
         super.onCreate(savedInstanceState)
 
         // Initialize LiteRT (TFLite) via Google Play Services
