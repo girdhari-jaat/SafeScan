@@ -130,6 +130,7 @@ class ScannerFragment : Fragment() {
                         android.graphics.ImageDecoder.decodeBitmap(
                             android.graphics.ImageDecoder.createSource(requireContext().contentResolver, uri)
                         )
+                    } else {
                         @Suppress("DEPRECATION")
                         android.provider.MediaStore.Images.Media.getBitmap(requireContext().contentResolver, uri)
                     }
@@ -450,6 +451,7 @@ class ScannerFragment : Fragment() {
             val current = viewModel.uiState.value.currentEngine
             val next = if (current == ScannerEngineType.OPENCV) {
                 ScannerEngineType.LOCAL_ML
+            } else {
                 ScannerEngineType.OPENCV
             }
             viewModel.toggleEngine(next)
@@ -468,10 +470,11 @@ class ScannerFragment : Fragment() {
                     val centerPoint = factory.createPoint(binding.previewView.width / 2f, binding.previewView.height / 2f)
                     FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
                         .addPoint(centerPoint, FocusMeteringAction.FLAG_AF)
-                        .setAutoCancelDuration(3, TimeUnit.SECONDS)
+                        .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS)
                         .build()
+                } else {
                     FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF)
-                        .setAutoCancelDuration(3, TimeUnit.SECONDS)
+                        .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS)
                         .build()
                 }
                 
@@ -747,6 +750,7 @@ class ScannerFragment : Fragment() {
                     val rawBitmap = imageProxy.toBitmap()
                     val rotationDegrees = if (viewModel.autoRotation.value) {
                         imageProxy.imageInfo.rotationDegrees
+                    } else {
                         0
                     }
                     val bitmap = if (rotationDegrees != 0) {
@@ -754,6 +758,7 @@ class ScannerFragment : Fragment() {
                         val rotated = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
                         rawBitmap.recycle()
                         rotated
+                    } else {
                         rawBitmap
                     }
                     viewModel.onCapture(bitmap)
@@ -814,7 +819,7 @@ class ScannerFragment : Fragment() {
                     }
                     imageCapture?.flashMode = when (mode) {
                         com.safescan.data.FlashMode.AUTO -> ImageCapture.FLASH_MODE_AUTO
-                        com.safescan.data.FlashMode.ON, com.safescan.data.FlashMode.TORCH -> ImageCapture.FLASH_MODE_ON
+                        com.safescan.data.FlashMode.TORCH -> ImageCapture.FLASH_MODE_ON
                         else -> ImageCapture.FLASH_MODE_OFF
                     }
                     _binding?.btnFlash?.alpha = if (mode != com.safescan.data.FlashMode.OFF) 1.0f else 0.5f
