@@ -31,11 +31,11 @@ object ScannerModule {
 
     @Provides
     @Singleton
-    fun provideMLScannerEngine(): MLScannerEngine {
+    fun provideMLScannerEngine(localMLEngine: LocalMLEngine): MLScannerEngine {
         return object : MLScannerEngine {
             override suspend fun detectCorners(bitmap: Bitmap): List<Point>? {
-                // Implementation left empty for now as requested
-                return null
+                val quad = localMLEngine.detectCorners(bitmap)
+                return quad?.let { listOf(it.topLeft, it.topRight, it.bottomRight, it.bottomLeft) }
             }
         }
     }

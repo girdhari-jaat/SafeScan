@@ -360,14 +360,17 @@ class ScannerFragment : Fragment() {
             }
         } else {
             // Show camera-related XML views (only previewView, hide old buttons)
-            binding.previewView.visibility = View.VISIBLE
+            if (viewModel.isDocumentOpenedFromLibrary) {
+                binding.previewView.visibility = View.GONE
+            } else {
+                binding.previewView.visibility = View.VISIBLE
+                // Start live CameraX preview
+                startCamera()
+            }
             binding.btnCapture.visibility = View.GONE
             binding.btnFlash.visibility = View.GONE
             binding.btnSwitchEngine.visibility = View.GONE
             
-            // Start live CameraX preview
-            startCamera()
-
             // Bind Compose View to scanner/editor layout overlays
             binding.composeView.apply {
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
@@ -641,7 +644,9 @@ class ScannerFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         if (currentViewMode == FragmentViewMode.SCANNER && allPermissionsGranted()) {
-            startCamera()
+            if (!viewModel.isDocumentOpenedFromLibrary) {
+                startCamera()
+            }
         }
     }
 
@@ -792,7 +797,7 @@ class ScannerFragment : Fragment() {
                 kotlinx.coroutines.flow.combine(viewModel.usePhoneCamera, viewModel.useNativeScanner) { a, b ->
                     Pair(a, b)
                 }.collect {
-                    if (currentViewMode == FragmentViewMode.SCANNER) {
+                    if (currentViewMode == FragmentViewMode.SCANNER && !viewModel.isDocumentOpenedFromLibrary) {
                         startCamera()
                     }
                 }
