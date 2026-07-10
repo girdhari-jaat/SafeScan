@@ -133,7 +133,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         .map { preferences -> preferences[PreferencesKeys.SAVE_TO_GALLERY] ?: false }
 
     val liveDetectFlow: Flow<Boolean> = safeData
-        .map { preferences -> preferences[PreferencesKeys.LIVE_DETECT] ?: true }
+        .map { preferences -> preferences[PreferencesKeys.LIVE_DETECT] ?: false }
 
     val batterySaverFlow: Flow<Boolean> = safeData
         .map { preferences -> preferences[PreferencesKeys.BATTERY_SAVER] ?: false }

@@ -110,10 +110,21 @@ object ImageProcessor {
                     val gray = Mat()
                     Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY)
                     val cleanGray = removeShadowsGray(gray)
-                    Imgproc.threshold(cleanGray, outMat, 128.0, 255.0, Imgproc.THRESH_BINARY or Imgproc.THRESH_OTSU)
+                    
+                    // Boost contrast significantly before thresholding
+                    cleanGray.convertTo(cleanGray, -1, 1.5, -20.0)
+                    
+                    Imgproc.threshold(cleanGray, outMat, 0.0, 255.0, Imgproc.THRESH_BINARY or Imgproc.THRESH_OTSU)
+                    
+                    // Apply slight sharpening to the black and white result to make fonts crisp
+                    val blurred = Mat()
+                    Imgproc.GaussianBlur(outMat, blurred, Size(0.0, 0.0), 2.0)
+                    Core.addWeighted(outMat, 1.5, blurred, -0.5, 0.0, outMat)
+                    
                     Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
                     gray.release()
                     cleanGray.release()
+                    blurred.release()
                 }
                 FilterType.CARD -> {
                     val gray = Mat()
@@ -141,10 +152,21 @@ object ImageProcessor {
                     Imgproc.cvtColor(cleanColor, hsv, Imgproc.COLOR_BGR2HSV)
                     val hsvChannels = ArrayList<Mat>()
                     Core.split(hsv, hsvChannels)
-                    hsvChannels[1].convertTo(hsvChannels[1], -1, 1.3, 0.0) // Boost saturation slightly
+                    
+                    // Boost saturation and contrast
+                    hsvChannels[1].convertTo(hsvChannels[1], -1, 1.5, 0.0)
+                    hsvChannels[2].convertTo(hsvChannels[2], -1, 1.2, -10.0)
+                    
                     Core.merge(hsvChannels, hsv)
                     
-                    Imgproc.cvtColor(hsv, outMat, Imgproc.COLOR_HSV2BGR)
+                    val enhanced = Mat()
+                    Imgproc.cvtColor(hsv, enhanced, Imgproc.COLOR_HSV2BGR)
+                    
+                    // Apply Unsharp Masking for crisp text
+                    val blurred = Mat()
+                    Imgproc.GaussianBlur(enhanced, blurred, Size(0.0, 0.0), 3.0)
+                    Core.addWeighted(enhanced, 1.5, blurred, -0.5, 0.0, outMat)
+                    
                     Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_BGR2RGBA)
                     
                     cleanColor.release()
@@ -152,6 +174,8 @@ object ImageProcessor {
                     for (ch in hsvChannels) {
                         ch.release()
                     }
+                    enhanced.release()
+                    blurred.release()
                 }
                 FilterType.PHOTO -> {
                     val hsv = Mat()
@@ -182,7 +206,15 @@ object ImageProcessor {
                     hsvChannels[2].convertTo(hsvChannels[2], -1, 1.15, -15.0)
 
                     Core.merge(hsvChannels, hsv)
-                    Imgproc.cvtColor(hsv, outMat, Imgproc.COLOR_HSV2BGR)
+                    
+                    val enhanced = Mat()
+                    Imgproc.cvtColor(hsv, enhanced, Imgproc.COLOR_HSV2BGR)
+                    
+                    // Apply Unsharp Masking for crisp text
+                    val blurred = Mat()
+                    Imgproc.GaussianBlur(enhanced, blurred, Size(0.0, 0.0), 2.5)
+                    Core.addWeighted(enhanced, 1.4, blurred, -0.4, 0.0, outMat)
+                    
                     Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_BGR2RGBA)
                     
                     cleanColor.release()
@@ -190,6 +222,8 @@ object ImageProcessor {
                     for (ch in hsvChannels) {
                         ch.release()
                     }
+                    enhanced.release()
+                    blurred.release()
                 }
                 FilterType.COLOR -> {
                     Imgproc.cvtColor(src, outMat, Imgproc.COLOR_BGR2RGBA)

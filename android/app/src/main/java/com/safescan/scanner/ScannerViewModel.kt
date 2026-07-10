@@ -105,7 +105,7 @@ class ScannerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val liveDetect: StateFlow<Boolean> = settingsRepository.liveDetectFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val batterySaver: StateFlow<Boolean> = settingsRepository.batterySaverFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)

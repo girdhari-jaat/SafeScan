@@ -354,9 +354,11 @@ class ScannerFragment : Fragment() {
                     }
                 }
             }
+        } else {
             // Show camera-related XML views (only previewView, hide old buttons)
             if (viewModel.isDocumentOpenedFromLibrary) {
                 binding.previewView.visibility = View.GONE
+            } else {
                 binding.previewView.visibility = View.VISIBLE
                 // Start live CameraX preview
                 startCamera()
@@ -382,31 +384,31 @@ class ScannerFragment : Fragment() {
                             com.safescan.ui.CropScreen(viewModel = viewModel)
                         } else if (isEditing) {
                             com.safescan.ui.EditorScreen(viewModel = viewModel)
-                            if (viewModel.isDocumentOpenedFromLibrary) {
-                                com.safescan.ui.DocumentGridView(
-                                    viewModel = viewModel,
-                                    onDismiss = {
-                                        viewModel.isDocumentOpenedFromLibrary = false
-                                        updateViewMode(FragmentViewMode.LIBRARY)
-                                    }
-                                )
-                                SlotsScreen(
-                                    viewModel = viewModel,
-                                    onCaptureClick = { takePhoto() },
-                                    onClose = { updateViewMode(FragmentViewMode.LIBRARY) },
-                                    onFlashToggle = { toggleFlash() },
-                                    onGalleryClick = { pickImageLauncher.launch("image/*") },
-                                    onSlotClick = { slotId ->
-                                        viewModel.onSlotClick(slotId)
-                                        // return to preview view and result image gone
-                                        binding.resultImageView.visibility = View.GONE
-                                        binding.previewView.visibility = View.VISIBLE
-                                    },
-                                    onSlotLongClick = { slotId ->
-                                        viewModel.openEditor(slotId)
-                                    }
-                                )
-                            }
+                        } else if (viewModel.isDocumentOpenedFromLibrary) {
+                            com.safescan.ui.DocumentGridView(
+                                viewModel = viewModel,
+                                onDismiss = {
+                                    viewModel.isDocumentOpenedFromLibrary = false
+                                    updateViewMode(FragmentViewMode.LIBRARY)
+                                }
+                            )
+                        } else {
+                            SlotsScreen(
+                                viewModel = viewModel,
+                                onCaptureClick = { takePhoto() },
+                                onClose = { updateViewMode(FragmentViewMode.LIBRARY) },
+                                onFlashToggle = { toggleFlash() },
+                                onGalleryClick = { pickImageLauncher.launch("image/*") },
+                                onSlotClick = { slotId ->
+                                    viewModel.onSlotClick(slotId)
+                                    // return to preview view and result image gone
+                                    binding.resultImageView.visibility = View.GONE
+                                    binding.previewView.visibility = View.VISIBLE
+                                },
+                                onSlotLongClick = { slotId ->
+                                    viewModel.openEditor(slotId)
+                                }
+                            )
                         }
                     }
                 }
@@ -582,6 +584,7 @@ class ScannerFragment : Fragment() {
                     cameraProvider.unbindAll()
                     binding.previewView.visibility = View.INVISIBLE
                     return@addListener
+                } else {
                     binding.previewView.visibility = View.VISIBLE
                 }
 
