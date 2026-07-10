@@ -115,36 +115,57 @@ class LocalMLEngine(private val context: Context) {
             hierarchy = Mat()
             Imgproc.findContours(resizedMask, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
             
-            var bestQuad: MatOfPoint2f? = null
-            var maxArea = 0.0
-
-            for (contour in contours) {
-                val contour2f = MatOfPoint2f(*contour.toArray())
-                val peri = Imgproc.arcLength(contour2f, true)
-                val approx = MatOfPoint2f()
-                Imgproc.approxPolyDP(contour2f, approx, 0.02 * peri, true)
-
-                if (approx.total() == 4L) {
-                    val area = Imgproc.contourArea(approx)
-                    if (area > maxArea && area > (bitmap.width * bitmap.height * 0.05)) {
-                        maxArea = area
-                        bestQuad?.release()
-                        bestQuad = approx
-                    } else {
-                        approx.release()
+            // Sort contours by area in descending order using OpenCV Imgproc.contourArea
+            contours.sortByDescending { Imgproc.contourArea(it) }
+            
+            var bestQuadPoints: List<Point>? = null
+            val minDocumentArea = bitmap.width * bitmap.height * 0.05 // Document must cover at least 5% of the frame
+            
+            if (contours.isNotEmpty()) {
+                val largestContour = contours[0]
+                val area = Imgproc.contourArea(largestContour)
+                
+                if (area > minDocumentArea) {
+                    val contour2f = MatOfPoint2f(*largestContour.toArray())
+                    val peri = Imgproc.arcLength(contour2f, true)
+                    
+                    // 1. Dynamic simplification: iterate epsilon from 0.01 to 0.15 of perimeter to find exactly 4 corners
+                    var approx = MatOfPoint2f()
+                    var found4Points = false
+                    
+                    for (i in 1..15) {
+                        val epsilon = (i * 0.01) * peri
+                        val tempApprox = MatOfPoint2f()
+                        Imgproc.approxPolyDP(contour2f, tempApprox, epsilon, true)
+                        
+                        if (tempApprox.total() == 4L) {
+                            approx.release()
+                            approx = tempApprox
+                            found4Points = true
+                            break
+                        }
+                        tempApprox.release()
                     }
-                } else {
-                    approx.release()
+                    
+                    if (found4Points) {
+                        val points = approx.toArray()
+                        bestQuadPoints = points.map { Point(it.x, it.y) }
+                        approx.release()
+                    } else {
+                        // 2. Robust fallback: extract extreme projection points of the largest contour directly if simplification didn't yield exactly 4 corners
+                        val points = largestContour.toArray()
+                        if (points.size >= 4) {
+                            bestQuadPoints = points.map { Point(it.x, it.y) }
+                        }
+                    }
+                    contour2f.release()
                 }
-                contour2f.release()
             }
             
-            val result = bestQuad?.let { quad ->
-                val points = quad.toArray()
-                val ordered = orderPoints(points.map { Point(it.x, it.y) })
+            val result = bestQuadPoints?.let { pts ->
+                val ordered = orderPoints(pts)
                 Quadrilateral(ordered[0], ordered[1], ordered[2], ordered[3])
             }
-            bestQuad?.release()
             return result
         } catch (e: Throwable) {
             Log.e("LocalMLEngine", "Error running inference", e)

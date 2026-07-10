@@ -44,7 +44,7 @@ object ScannerModule {
     @Singleton
     fun provideDocumentScannerEngine(mlScannerEngine: MLScannerEngine): DocumentScannerEngine {
         return DocumentScannerEngine(mlEngine = mlScannerEngine).apply {
-            engineType = com.safescan.scanner.ScannerEngineType.OPENCV
+            engineType = com.safescan.scanner.ScannerEngineType.LOCAL_ML
         }
     }
 }

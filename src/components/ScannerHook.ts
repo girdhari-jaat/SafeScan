@@ -210,7 +210,7 @@ export function useScannerHook({ onCapture }: UseScannerHookProps) {
               shrinkCanvas.width = targetW;
               shrinkCanvas.height = targetH;
             }
-            const shrinkCtx = shrinkCanvas.getContext('2d');
+            const shrinkCtx = shrinkCanvas.getContext('2d') as any;
             if (shrinkCtx) {
               shrinkCtx.drawImage(bitmap, 0, 0, targetW, targetH);
               bitmap.close();

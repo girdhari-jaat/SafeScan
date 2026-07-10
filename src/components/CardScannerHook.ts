@@ -601,7 +601,7 @@ export function useCardScannerHook({ mode, initialPages: _initialPages, onAutosa
               shrinkCanvas.width = targetW;
               shrinkCanvas.height = targetH;
             }
-            const shrinkCtx = shrinkCanvas.getContext('2d');
+            const shrinkCtx = shrinkCanvas.getContext('2d') as any;
             if (shrinkCtx) {
               shrinkCtx.drawImage(rawBitmap, 0, 0, targetW, targetH);
               rawBitmap.close();

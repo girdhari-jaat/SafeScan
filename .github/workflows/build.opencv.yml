@@ -1,12 +1,10 @@
 name: Build Minimal OpenCV Android SDK
 
 on:
-  workflow_dispatch:  # Manual
+  workflow_dispatch:
   push:
     branches:
       - main
-    paths:  # <-- when yml file modify
-      - '.github/workflows/build.opencv.yml'  # Sirf is file pe
 
 jobs:
   build-opencv:
