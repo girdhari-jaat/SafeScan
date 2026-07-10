@@ -119,8 +119,8 @@ dependencies {
 
 
 
-    // OpenCV (Custom stripped local build)
-    implementation(files("libs/opencv.jar"))
+    // OpenCV dependency
+    implementation("com.quickbirdstudios:opencv:4.5.3.0")
 
     // TFLite via Google Play Services (Reduces APK size)
     implementation("com.google.android.gms:play-services-tflite-java:16.1.0")
