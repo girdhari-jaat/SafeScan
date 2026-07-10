@@ -92,6 +92,11 @@ android {
     }
 
     packaging {
+        jniLibs {
+            excludes.add("lib/armeabi-v7a/**")
+            excludes.add("lib/x86/**")
+            excludes.add("lib/x86_64/**")
+        }
         resources {
             excludes.add("META-INF/*.kotlin_module")
             excludes.add("META-INF/LICENSE*")
