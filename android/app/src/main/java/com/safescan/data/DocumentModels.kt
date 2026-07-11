@@ -18,6 +18,7 @@ data class PageMetadata(
     val brightness: Float = 0f,
     val contrast: Float = 1.0f,
     val sharpness: Float = 0f,
+    val saturation: Float = 0f,
     val rotation: Int = 0,
     val recognizedText: String? = null,
     val corners: List<Point>? = null

@@ -132,6 +132,7 @@ class DocumentRepository @Inject constructor(
         brightness: Float,
         contrast: Float,
         sharpness: Float,
+        saturation: Float = 0f,
         rotation: Int,
         corners: List<Point>?,
         newPreview: Bitmap? = null
@@ -156,6 +157,7 @@ class DocumentRepository @Inject constructor(
                         brightness = brightness,
                         contrast = contrast,
                         sharpness = sharpness,
+                        saturation = saturation,
                         rotation = rotation,
                         corners = corners
                     )
@@ -256,6 +258,7 @@ class DocumentRepository @Inject constructor(
                         put("brightness", p.brightness.toDouble())
                         put("contrast", p.contrast.toDouble())
                         put("sharpness", p.sharpness.toDouble())
+                        put("saturation", p.saturation.toDouble())
                         put("rotation", p.rotation)
                         put("recognizedText", p.recognizedText ?: "")
 
@@ -305,6 +308,7 @@ class DocumentRepository @Inject constructor(
             val brightness = pObj.optDouble("brightness", 0.0).toFloat()
             val contrast = pObj.optDouble("contrast", 1.0).toFloat()
             val sharpness = pObj.optDouble("sharpness", 0.0).toFloat()
+            val saturation = pObj.optDouble("saturation", 0.0).toFloat()
             val rotation = pObj.optInt("rotation", 0)
             val recognizedText = pObj.optString("recognizedText", "").let { if (it.isEmpty()) null else it }
 
@@ -327,6 +331,7 @@ class DocumentRepository @Inject constructor(
                     brightness = brightness,
                     contrast = contrast,
                     sharpness = sharpness,
+                    saturation = saturation,
                     rotation = rotation,
                     recognizedText = recognizedText,
                     corners = corners

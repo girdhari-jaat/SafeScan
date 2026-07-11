@@ -183,25 +183,46 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                                     }
                                 }
                             } else if (activePanel == "adjustments") {
-                                Text(
-                                    text = "Manual Adjustments",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                )
-                                AdjustmentSlider(
-                                    label = stringResource(id = R.string.brightness),
-                                    value = editorState.brightness,
-                                    valueRange = -100f..100f,
-                                    onValueChange = { viewModel.updateEditorState(editorState.copy(brightness = it)) }
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                AdjustmentSlider(
-                                    label = stringResource(id = R.string.contrast),
-                                    value = editorState.contrast,
-                                    valueRange = 0.5f..3.0f,
-                                    onValueChange = { viewModel.updateEditorState(editorState.copy(contrast = it)) }
-                                )
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .maxHeight(220.dp)
+                                        .verticalScroll(rememberScrollState())
+                                ) {
+                                    Text(
+                                        text = "Manual Adjustments",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    )
+                                    AdjustmentSlider(
+                                        label = stringResource(id = R.string.brightness),
+                                        value = editorState.brightness,
+                                        valueRange = -100f..100f,
+                                        onValueChange = { viewModel.updateEditorState(editorState.copy(brightness = it)) }
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    AdjustmentSlider(
+                                        label = stringResource(id = R.string.contrast),
+                                        value = editorState.contrast,
+                                        valueRange = 0.5f..3.0f,
+                                        onValueChange = { viewModel.updateEditorState(editorState.copy(contrast = it)) }
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    AdjustmentSlider(
+                                        label = stringResource(id = R.string.sharpness),
+                                        value = editorState.sharpness,
+                                        valueRange = 0.0f..3.0f,
+                                        onValueChange = { viewModel.updateEditorState(editorState.copy(sharpness = it)) }
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    AdjustmentSlider(
+                                        label = stringResource(id = R.string.saturation),
+                                        value = editorState.saturation,
+                                        valueRange = -100f..100f,
+                                        onValueChange = { viewModel.updateEditorState(editorState.copy(saturation = it)) }
+                                    )
+                                }
                             }
                         }
                     }

@@ -119,12 +119,12 @@ class LiveEdgeDetectionEngine {
                     var contour2f: MatOfPoint2f? = null
                     try {
                         contour2f = MatOfPoint2f(*contour.toArray())
-                        val approx = MatOfPoint2f()
                         val peri = Imgproc.arcLength(contour2f, true)
                         
                         var approxSuccess = false
                         // Try different epsilon approximations to get a clean quadrilateral
                         for (epsFactor in listOf(0.015, 0.02, 0.03, 0.04)) {
+                            val approx = MatOfPoint2f()
                             try {
                                 Imgproc.approxPolyDP(contour2f, approx, epsFactor * peri, true)
                                 if (approx.total() == 4L) {

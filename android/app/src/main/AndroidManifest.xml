@@ -23,6 +23,7 @@
         android:name=".SafeScanApplication"
         android:allowBackup="true"
         android:enableOnBackInvokedCallback="true"
+        android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher"
         android:label="SafeScan"
         android:roundIcon="@mipmap/ic_launcher_round"

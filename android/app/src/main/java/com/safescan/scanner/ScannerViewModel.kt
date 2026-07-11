@@ -12,6 +12,7 @@ import com.safescan.data.ScannerMode
 import com.safescan.data.Slot
 import com.safescan.data.SettingsRepository
 import com.safescan.data.ScannerUiState
+import com.safescan.core.DiagnosticsLogger
 import com.safescan.domain.model.Point
 import com.safescan.domain.model.Quadrilateral
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +42,8 @@ class ScannerViewModel @Inject constructor(
     // IMPROVEMENT: Using ScannerUiState with isAutoRunning
     private val _uiState = MutableStateFlow(ScannerUiState())
     val uiState: StateFlow<ScannerUiState> = _uiState.asStateFlow()
+
+    val isDocumentDetected = MutableStateFlow(false)
 
     private val captureMutex = kotlinx.coroutines.sync.Mutex()
 
@@ -288,6 +291,7 @@ class ScannerViewModel @Inject constructor(
     private val STABILITY_TOLERANCE = 30.0
 
     fun onDocumentDetected(points: List<com.safescan.domain.model.Point>?) {
+        isDocumentDetected.value = (points != null && points.size == 4)
         if (!autoCapture.value || points == null || points.size != 4) {
             stableFrameCount = 0
             lastQuadPoints = null
@@ -387,6 +391,7 @@ class ScannerViewModel @Inject constructor(
     fun toggleAutoCrop(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setAutoCrop(enabled)
+            DiagnosticsLogger.info("Auto Crop toggled: $enabled")
         }
     }
 
@@ -398,137 +403,169 @@ class ScannerViewModel @Inject constructor(
                 com.safescan.data.FlashMode.TORCH -> com.safescan.data.FlashMode.OFF
             }
             settingsRepository.setFlashMode(nextMode)
+            DiagnosticsLogger.info("Flash mode cycled to: ${nextMode.name}")
         }
     }
 
     fun toggleFlash(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setFlashOn(enabled)
+            DiagnosticsLogger.info("Flash toggled: $enabled")
         }
     }
 
     fun toggleDoubleFocus(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setDoubleFocus(enabled)
+            DiagnosticsLogger.info("Double Focus toggled: $enabled")
         }
     }
 
     fun toggleSaveJpg(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setSaveJpg(enabled)
+            DiagnosticsLogger.info("Save Raw JPG toggled: $enabled")
         }
     }
 
     fun toggleAutoPdf(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setAutoPdf(enabled)
+            DiagnosticsLogger.info("Auto-PDF generation toggled: $enabled")
         }
     }
 
     fun toggleBatchScan(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setBatchScan(enabled)
+            DiagnosticsLogger.info("Batch Scan toggled: $enabled")
         }
     }
 
     fun toggleShowGrid(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setShowGrid(enabled)
+            DiagnosticsLogger.info("Show Grid Lines toggled: $enabled")
         }
     }
 
     fun toggleClickSound(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setClickSound(enabled)
+            DiagnosticsLogger.info("Capture shutter sound toggled: $enabled")
         }
     }
 
     fun toggleAutoOrientation(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setAutoOrientation(enabled)
+            DiagnosticsLogger.info("Auto Orientation toggled: $enabled")
         }
     }
 
     fun toggleShadowRemove(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setShadowRemove(enabled)
+            DiagnosticsLogger.info("Shadow Removal toggled: $enabled")
         }
     }
 
     fun toggleAutoRotation(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setAutoRotation(enabled)
+            DiagnosticsLogger.info("Auto Rotation toggled: $enabled")
         }
     }
 
     fun setDefaultFilter(filter: String) {
         viewModelScope.launch {
             settingsRepository.setDefaultFilter(filter)
+            DiagnosticsLogger.info("Default Filter set to: $filter")
         }
     }
 
     fun setUiLanguage(language: String) {
         viewModelScope.launch {
             settingsRepository.setUiLanguage(language)
+            DiagnosticsLogger.info("UI Language set to: $language")
         }
     }
 
     fun setVibrateOnCapture(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setVibrateOnCapture(enabled)
+            DiagnosticsLogger.info("Vibrate On Capture toggled: $enabled")
         }
     }
 
     fun setSaveToGallery(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setSaveToGallery(enabled)
+            DiagnosticsLogger.info("Save To Gallery toggled: $enabled")
         }
     }
 
     fun toggleLiveDetect(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setLiveDetect(enabled)
+            DiagnosticsLogger.info("Live Edge Detection toggled: $enabled")
         }
     }
 
     fun toggleBatterySaver(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setBatterySaver(enabled)
+            DiagnosticsLogger.info("Battery Saver toggled: $enabled")
         }
     }
 
     fun toggleUsePhoneCamera(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setUsePhoneCamera(enabled)
+            DiagnosticsLogger.info("Use Phone Camera toggled: $enabled")
         }
     }
 
     fun toggleUseNativeScanner(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setUseNativeScanner(enabled)
+            DiagnosticsLogger.info("ML Kit Native Scanner toggled: $enabled")
         }
     }
 
     fun setHdMode(mode: String) {
         viewModelScope.launch {
             settingsRepository.setHdMode(mode)
+            DiagnosticsLogger.info("Capture Quality set to: $mode")
         }
     }
     
     fun setDpi(value: Float) {
-        viewModelScope.launch { settingsRepository.setDpi(value) }
+        viewModelScope.launch {
+            settingsRepository.setDpi(value)
+            DiagnosticsLogger.info("Export DPI resolution set to: ${value.toInt()}")
+        }
     }
     
     fun setJpegQuality(value: Float) {
-        viewModelScope.launch { settingsRepository.setJpegQuality(value) }
+        viewModelScope.launch {
+            settingsRepository.setJpegQuality(value)
+            DiagnosticsLogger.info("Export JPEG Quality set to: ${value.toInt()}%")
+        }
     }
     
     fun setPdfFilename(value: String) {
-        viewModelScope.launch { settingsRepository.setPdfFilename(value) }
+        viewModelScope.launch {
+            settingsRepository.setPdfFilename(value)
+            DiagnosticsLogger.info("Default PDF filename set to: '$value'")
+        }
     }
     
     fun setPageSize(value: String) {
-        viewModelScope.launch { settingsRepository.setPageSize(value) }
+        viewModelScope.launch {
+            settingsRepository.setPageSize(value)
+            DiagnosticsLogger.info("Export Page Size set to: $value")
+        }
     }
 
     fun onSlotClick(slotId: String) {
@@ -536,6 +573,7 @@ class ScannerViewModel @Inject constructor(
     }
 
     fun captureToSlot(bitmap: Bitmap, slotId: String, isCapture: Boolean = false, corners: List<Point>? = null) {
+        DiagnosticsLogger.info("Processing captured image for slot $slotId...")
         val currentSlots = slots.value.toMutableList()
         val index = currentSlots.indexOfFirst { it.id == slotId }
         if (index != -1) {
@@ -563,6 +601,7 @@ class ScannerViewModel @Inject constructor(
                 corners = corners ?: existing.corners
             )
             slots.value = currentSlots
+            DiagnosticsLogger.info("Slot $slotId loaded with compressed thumbnail & disk paths.")
             
             // Sync with capturedJpgFiles if it exists
             if (index < capturedJpgFiles.size) {
@@ -688,7 +727,9 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    fun applyCrop(quad: Quadrilateral) {
+    fun applyCrop(quad: Quadrilateral, andNext: Boolean = false) {
+        val currentSlotId = croppingSlotId.value
+        val currentJpgIndex = croppingJpgIndex.value
         viewModelScope.launch(Dispatchers.IO) {
             croppingBitmap.value?.let { bmp ->
                 val cropped = documentScanner.cropAndTransform(bmp, quad, currentMode.value.name)
@@ -770,7 +811,30 @@ class ScannerViewModel @Inject constructor(
                 }
             }
             withContext(Dispatchers.Main) {
-                closeCrop(true)
+                if (andNext) {
+                    if (currentSlotId != null) {
+                        val currentSlots = slots.value
+                        val currentIndex = currentSlots.indexOfFirst { it.id == currentSlotId }
+                        val nextIndex = currentIndex + 1
+                        if (nextIndex >= 0 && nextIndex < currentSlots.size) {
+                            val nextSlot = currentSlots[nextIndex]
+                            openCrop(nextSlot.id)
+                        } else {
+                            closeCrop(true)
+                        }
+                    } else if (currentJpgIndex != null) {
+                        val nextIndex = currentJpgIndex + 1
+                        if (nextIndex >= 0 && nextIndex < capturedJpgFiles.size) {
+                            openCropForJpg(nextIndex)
+                        } else {
+                            closeCrop(true)
+                        }
+                    } else {
+                        closeCrop(true)
+                    }
+                } else {
+                    closeCrop(true)
+                }
             }
         }
     }
@@ -855,6 +919,7 @@ class ScannerViewModel @Inject constructor(
         val bmp = editingBitmapPreview.value ?: return
         isOcrRunning.value = true
         recognizedText.value = null
+        DiagnosticsLogger.info("Starting Text Recognition (OCR) off-thread...")
         viewModelScope.launch(Dispatchers.IO) {
             val result = ocrEngine.recognizeText(bmp)
             withContext(Dispatchers.Main) {
@@ -862,9 +927,11 @@ class ScannerViewModel @Inject constructor(
                 when (result) {
                     is com.safescan.core.AppResult.Success -> {
                         recognizedText.value = result.data.joinToString("\n")
+                        DiagnosticsLogger.info("OCR completed successfully. Recognized ${result.data.size} lines.")
                     }
                     is com.safescan.core.AppResult.Error -> {
                         recognizedText.value = "Error: ${result.message}"
+                        DiagnosticsLogger.error("OCR recognition error: ${result.message}")
                     }
                 }
             }
@@ -875,6 +942,7 @@ class ScannerViewModel @Inject constructor(
         val bmp = editingBitmapPreview.value ?: return
         isBarcodeRunning.value = true
         recognizedText.value = null
+        DiagnosticsLogger.info("Scanning for Barcode/QR Code...")
         viewModelScope.launch(Dispatchers.IO) {
             val result = ocrEngine.scanQR(bmp)
             withContext(Dispatchers.Main) {
@@ -882,9 +950,11 @@ class ScannerViewModel @Inject constructor(
                 when (result) {
                     is com.safescan.core.AppResult.Success -> {
                         recognizedText.value = result.data ?: "No QR/Barcode found."
+                        DiagnosticsLogger.info("QR/Barcode scan completed: ${result.data}")
                     }
                     is com.safescan.core.AppResult.Error -> {
                         recognizedText.value = "Error: ${result.message}"
+                        DiagnosticsLogger.error("QR/Barcode scan error: ${result.message}")
                     }
                 }
             }
@@ -892,6 +962,7 @@ class ScannerViewModel @Inject constructor(
     }
 
     fun exportPdf(context: android.content.Context, onResult: (java.io.File?) -> Unit) {
+        DiagnosticsLogger.info("Starting PDF/Document assembly pipeline...")
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 // Also save the captured pages and metadata persistently as a document
@@ -921,6 +992,7 @@ class ScannerViewModel @Inject constructor(
                 
                 if (pagesData.isNotEmpty()) {
                     documentRepository.saveDocument(docId, title, currentMode.value.name, pagesData)
+                    DiagnosticsLogger.info("Saved document meta of ${pagesData.size} pages securely offline.")
                     reloadSavedDocuments()
                 } else {
                     documentRepository.deleteDocument(docId)
@@ -941,11 +1013,13 @@ class ScannerViewModel @Inject constructor(
                             slot.copy(bitmap = fullResProcessed)
                         }
                     }
+                    DiagnosticsLogger.info("Exporting document to PDF at ${pageSize.value} layout off-thread...")
                     val result = pdfExporter.exportCardsToPdf(slotsToExport, pdfFilename.value, currentMode.value, pageSize.value)
                     withContext(Dispatchers.Main) {
                         capturedJpgFiles.clear()
                         originalJpgBitmaps.clear()
                         jpgCorners.clear()
+                        DiagnosticsLogger.info("PDF document generated successfully.")
                         onResult(result.getOrNull())
                     }
                 } else {
@@ -957,6 +1031,7 @@ class ScannerViewModel @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
+                DiagnosticsLogger.error("PDF Export Pipeline error: ${e.message}")
                 withContext(Dispatchers.Main) {
                     onResult(null)
                 }
@@ -1041,8 +1116,12 @@ class ScannerViewModel @Inject constructor(
         }
         
         viewModelScope.launch(Dispatchers.IO) {
-            // Compress the image to avoid 9MB size
-            val maxResolution = 1920f
+            // Dynamically scale the image based on our negotiated CameraHardwareConfig constraints (supporting Fast, Standard, High, and high-megapixel modes)
+            val currentModeVal = currentMode.value
+            val hdModeStr = hdMode.value
+            val captureSettings = com.safescan.scanner.CameraHardwareConfig.getCaptureSettings(null, currentModeVal, hdModeStr)
+            val maxResolution = kotlin.math.max(captureSettings.targetSize.width.toFloat(), captureSettings.targetSize.height.toFloat())
+            
             val ratio = kotlin.math.min(maxResolution / bitmap.width, maxResolution / bitmap.height)
             val resizedBitmap = if (ratio < 1) {
                 android.graphics.Bitmap.createScaledBitmap(

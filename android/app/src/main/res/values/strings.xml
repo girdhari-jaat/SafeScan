@@ -24,6 +24,7 @@
     <string name="brightness">Brightness</string>
     <string name="contrast">Contrast</string>
     <string name="sharpness">Sharpness</string>
+    <string name="saturation">Saturation</string>
     <string name="resolution_dpi">Resolution (DPI)</string>
     <string name="jpeg_quality">JPEG Quality (%)</string>
     <string name="crop_document">Crop Document</string>
@@ -31,4 +32,6 @@
     <string name="auto_crop_failed">Auto Crop Failed</string>
     <string name="pdf_saved">PDF Saved Successfully</string>
     <string name="no_document_found">No Document Found</string>
+    <string name="full">Full</string>
+    <string name="next">Next</string>
 </resources>

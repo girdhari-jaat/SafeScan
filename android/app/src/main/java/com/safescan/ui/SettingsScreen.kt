@@ -26,25 +26,50 @@ fun SettingsScreen(
     viewModel: ScannerViewModel,
     onBack: () -> Unit
 ) {
+    var selectedTabIndex by remember { mutableStateOf(0) }
+    val tabTitles = listOf("Scanning", "Processing", "Export", "System")
+    val tabIcons = listOf(
+        Icons.Default.CameraAlt,
+        Icons.Default.Tune,
+        Icons.Default.Save,
+        Icons.Default.Settings
+    )
+
     Scaffold(
         topBar = {
-            LargeTopAppBar(
-                title = { 
-                    Text(
-                        stringResource(id = R.string.settings),
-                        fontWeight = FontWeight.Bold
+            Column {
+                TopAppBar(
+                    title = { 
+                        Text(
+                            stringResource(id = R.string.settings),
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surface
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.largeTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surface
                 )
-            )
+                TabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.primary
+                ) {
+                    tabTitles.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTabIndex == index,
+                            onClick = { selectedTabIndex = index },
+                            icon = { Icon(tabIcons[index], contentDescription = title) },
+                            text = { Text(title, style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                }
+            }
         }
     ) { padding ->
         LazyColumn(
@@ -55,262 +80,273 @@ fun SettingsScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            item {
-                SettingsSection(title = "Scanning") {
-                    val batchScan by viewModel.batchScan.collectAsState()
-                    SettingsToggleItem(
-                        icon = Icons.Default.Layers,
-                        title = "Batch Scan",
-                        description = "Capture multiple pages in one go",
-                        checked = batchScan,
-                        onCheckedChange = { viewModel.toggleBatchScan(it) }
-                    )
-                    
-                    val liveDetect by viewModel.liveDetect.collectAsState()
-                    SettingsToggleItem(
-                        icon = Icons.Default.RemoveRedEye,
-                        title = "Live Edge Detection",
-                        description = "Real-time document boundary highlighting",
-                        checked = liveDetect,
-                        onCheckedChange = { viewModel.toggleLiveDetect(it) }
-                    )
+            when (selectedTabIndex) {
+                0 -> {
+                    item {
+                        SettingsSection(title = "Scanning") {
+                            val batchScan by viewModel.batchScan.collectAsState()
+                            SettingsToggleItem(
+                                icon = Icons.Default.Layers,
+                                title = "Batch Scan",
+                                description = "Capture multiple pages in one go",
+                                checked = batchScan,
+                                onCheckedChange = { viewModel.toggleBatchScan(it) }
+                            )
+                            
+                            val liveDetect by viewModel.liveDetect.collectAsState()
+                            SettingsToggleItem(
+                                icon = Icons.Default.RemoveRedEye,
+                                title = "Live Edge Detection",
+                                description = "Real-time document boundary highlighting",
+                                checked = liveDetect,
+                                onCheckedChange = { viewModel.toggleLiveDetect(it) }
+                            )
 
-                    val autoCrop by viewModel.autoCrop.collectAsState()
-                    SettingsToggleItem(
-                        icon = Icons.Default.CropFree,
-                        title = "Auto Crop",
-                        description = "Automatically detect and crop document edges",
-                        checked = autoCrop,
-                        onCheckedChange = { viewModel.toggleAutoCrop(it) }
-                    )
+                            val autoCrop by viewModel.autoCrop.collectAsState()
+                            SettingsToggleItem(
+                                icon = Icons.Default.CropFree,
+                                title = "Auto Crop",
+                                description = "Automatically detect and crop document edges",
+                                checked = autoCrop,
+                                onCheckedChange = { viewModel.toggleAutoCrop(it) }
+                            )
 
-                    val hdMode by viewModel.hdMode.collectAsState()
-                    var hdExpanded by remember { mutableStateOf(false) }
-                    SettingsClickItem(
-                        icon = Icons.Default.Speed,
-                        title = "Capture Quality (HD)",
-                        subtitle = hdMode,
-                        onClick = { hdExpanded = true }
-                    ) {
-                        DropdownMenu(
-                            expanded = hdExpanded,
-                            onDismissRequest = { hdExpanded = false }
-                        ) {
-                            listOf("Fast", "Standard", "High").forEach { mode ->
-                                DropdownMenuItem(
-                                    text = { Text(mode) },
-                                    onClick = {
-                                        viewModel.setHdMode(mode)
-                                        hdExpanded = false
+                            val hdMode by viewModel.hdMode.collectAsState()
+                            var hdExpanded by remember { mutableStateOf(false) }
+                            SettingsClickItem(
+                                icon = Icons.Default.Speed,
+                                title = "Capture Quality (HD)",
+                                subtitle = hdMode,
+                                onClick = { hdExpanded = true }
+                            ) {
+                                DropdownMenu(
+                                    expanded = hdExpanded,
+                                    onDismissRequest = { hdExpanded = false }
+                                ) {
+                                    listOf("Fast", "Standard", "High").forEach { mode ->
+                                        DropdownMenuItem(
+                                            text = { Text(mode) },
+                                            onClick = {
+                                                viewModel.setHdMode(mode)
+                                                hdExpanded = false
+                                            }
+                                        )
                                     }
-                                )
+                                }
                             }
-                        }
-                    }
 
-                    val showGrid by viewModel.showGrid.collectAsState()
-                    SettingsToggleItem(
-                        icon = Icons.Default.Grid4x4,
-                        title = "Show Grid Lines",
-                        description = "Display helpful grid lines on camera view",
-                        checked = showGrid,
-                        onCheckedChange = { viewModel.toggleShowGrid(it) }
-                    )
-                }
-            }
-
-            item {
-                SettingsSection(title = "Processing") {
-                    val shadowRemove by viewModel.shadowRemove.collectAsState()
-                    SettingsToggleItem(
-                        icon = Icons.Default.Brightness6,
-                        title = "Shadow Removal",
-                        description = "Flatten lighting for cleaner documents",
-                        checked = shadowRemove,
-                        onCheckedChange = { viewModel.toggleShadowRemove(it) }
-                    )
-
-                    val autoRotation by viewModel.autoRotation.collectAsState()
-                    SettingsToggleItem(
-                        icon = Icons.Default.RotateRight,
-                        title = "Auto Rotation",
-                        description = "Automatically rotate pages for correct orientation",
-                        checked = autoRotation,
-                        onCheckedChange = { viewModel.toggleAutoRotation(it) }
-                    )
-
-                    val defaultFilter by viewModel.defaultFilter.collectAsState()
-                    var filterExpanded by remember { mutableStateOf(false) }
-                    SettingsClickItem(
-                        icon = Icons.Default.FilterBAndW,
-                        title = "Default Filter",
-                        subtitle = defaultFilter.replaceFirstChar { it.uppercase() },
-                        onClick = { filterExpanded = true }
-                    ) {
-                        DropdownMenu(
-                            expanded = filterExpanded,
-                            onDismissRequest = { filterExpanded = false }
-                        ) {
-                            val filters = listOf("original", "magic", "grayscale", "threshold")
-                            filters.forEach { filter ->
-                                DropdownMenuItem(
-                                    text = { Text(filter.replaceFirstChar { it.uppercase() }) },
-                                    onClick = {
-                                        viewModel.setDefaultFilter(filter)
-                                        filterExpanded = false
-                                    }
-                                )
-                            }
+                            val showGrid by viewModel.showGrid.collectAsState()
+                            SettingsToggleItem(
+                                icon = Icons.Default.Grid4x4,
+                                title = "Show Grid Lines",
+                                description = "Display helpful grid lines on camera view",
+                                checked = showGrid,
+                                onCheckedChange = { viewModel.toggleShowGrid(it) }
+                            )
                         }
                     }
                 }
-            }
+                1 -> {
+                    item {
+                        SettingsSection(title = "Processing") {
+                            val shadowRemove by viewModel.shadowRemove.collectAsState()
+                            SettingsToggleItem(
+                                icon = Icons.Default.Brightness6,
+                                title = "Shadow Removal",
+                                description = "Flatten lighting for cleaner documents",
+                                checked = shadowRemove,
+                                onCheckedChange = { viewModel.toggleShadowRemove(it) }
+                            )
 
-            item {
-                SettingsSection(title = "Export & Quality") {
-                    val pdfFilename by viewModel.pdfFilename.collectAsState()
-                    SettingsInputItem(
-                        icon = Icons.Default.Description,
-                        title = "Default PDF Filename",
-                        value = pdfFilename,
-                        onValueChange = { viewModel.setPdfFilename(it) }
-                    )
+                            val autoRotation by viewModel.autoRotation.collectAsState()
+                            SettingsToggleItem(
+                                icon = Icons.Default.RotateRight,
+                                title = "Auto Rotation",
+                                description = "Automatically rotate pages for correct orientation",
+                                checked = autoRotation,
+                                onCheckedChange = { viewModel.toggleAutoRotation(it) }
+                            )
 
-                    val dpi by viewModel.dpi.collectAsState()
-                    SettingsSliderItem(
-                        icon = Icons.Default.HighQuality,
-                        title = "Resolution (DPI)",
-                        value = dpi,
-                        valueRange = 72f..600f,
-                        onValueChange = { viewModel.setDpi(it) }
-                    )
-
-                    val jpegQuality by viewModel.jpegQuality.collectAsState()
-                    SettingsSliderItem(
-                        icon = Icons.Default.PhotoLibrary,
-                        title = "JPEG Quality",
-                        value = jpegQuality,
-                        valueRange = 10f..100f,
-                        onValueChange = { viewModel.setJpegQuality(it) }
-                    )
-
-                    val saveJpg by viewModel.saveJpg.collectAsState()
-                    SettingsToggleItem(
-                        icon = Icons.Default.Image,
-                        title = "Save Raw JPG",
-                        description = "Save original raw capture to local storage",
-                        checked = saveJpg,
-                        onCheckedChange = { viewModel.toggleSaveJpg(it) }
-                    )
-
-                    val pageSize by viewModel.pageSize.collectAsState()
-                    var sizeExpanded by remember { mutableStateOf(false) }
-                    SettingsClickItem(
-                        icon = Icons.Default.AspectRatio,
-                        title = "Page Size",
-                        subtitle = pageSize,
-                        onClick = { sizeExpanded = true }
-                    ) {
-                        DropdownMenu(
-                            expanded = sizeExpanded,
-                            onDismissRequest = { sizeExpanded = false }
-                        ) {
-                            listOf("A4", "Letter", "Original").forEach { size ->
-                                DropdownMenuItem(
-                                    text = { Text(size) },
-                                    onClick = {
-                                        viewModel.setPageSize(size)
-                                        sizeExpanded = false
+                            val defaultFilter by viewModel.defaultFilter.collectAsState()
+                            var filterExpanded by remember { mutableStateOf(false) }
+                            SettingsClickItem(
+                                icon = Icons.Default.FilterBAndW,
+                                title = "Default Filter",
+                                subtitle = defaultFilter.replaceFirstChar { it.uppercase() },
+                                onClick = { filterExpanded = true }
+                            ) {
+                                DropdownMenu(
+                                    expanded = filterExpanded,
+                                    onDismissRequest = { filterExpanded = false }
+                                ) {
+                                    val filters = listOf("original", "magic", "grayscale", "threshold")
+                                    filters.forEach { filter ->
+                                        DropdownMenuItem(
+                                            text = { Text(filter.replaceFirstChar { it.uppercase() }) },
+                                            onClick = {
+                                                viewModel.setDefaultFilter(filter)
+                                                filterExpanded = false
+                                            }
+                                        )
                                     }
-                                )
+                                }
                             }
                         }
                     }
                 }
-            }
+                2 -> {
+                    item {
+                        SettingsSection(title = "Export & Quality") {
+                            val pdfFilename by viewModel.pdfFilename.collectAsState()
+                            SettingsInputItem(
+                                icon = Icons.Default.Description,
+                                title = "Default PDF Filename",
+                                value = pdfFilename,
+                                onValueChange = { viewModel.setPdfFilename(it) }
+                            )
 
-            item {
-                SettingsSection(title = "Preferences") {
-                    val uiLanguage by viewModel.uiLanguage.collectAsState()
-                    var langExpanded by remember { mutableStateOf(false) }
-                    val languageLabel = when(uiLanguage) {
-                        "ur" -> "Urdu (اردو)"
-                        "sd" -> "Sindhi (سنڌي)"
-                        else -> "English"
-                    }
-                    SettingsClickItem(
-                        icon = Icons.Default.Language,
-                        title = "App Language",
-                        subtitle = languageLabel,
-                        onClick = { langExpanded = true }
-                    ) {
-                        DropdownMenu(
-                            expanded = langExpanded,
-                            onDismissRequest = { langExpanded = false }
-                        ) {
-                            listOf("en" to "English", "ur" to "Urdu (اردو)", "sd" to "Sindhi (سنڌي)").forEach { (code, label) ->
-                                DropdownMenuItem(
-                                    text = { Text(label) },
-                                    onClick = {
-                                        viewModel.setUiLanguage(code)
-                                        langExpanded = false
+                            val dpi by viewModel.dpi.collectAsState()
+                            SettingsSliderItem(
+                                icon = Icons.Default.HighQuality,
+                                title = "Resolution (DPI)",
+                                value = dpi,
+                                valueRange = 72f..600f,
+                                onValueChange = { viewModel.setDpi(it) }
+                            )
+
+                            val jpegQuality by viewModel.jpegQuality.collectAsState()
+                            SettingsSliderItem(
+                                icon = Icons.Default.PhotoLibrary,
+                                title = "JPEG Quality",
+                                value = jpegQuality,
+                                valueRange = 10f..100f,
+                                onValueChange = { viewModel.setJpegQuality(it) }
+                            )
+
+                            val saveJpg by viewModel.saveJpg.collectAsState()
+                            SettingsToggleItem(
+                                icon = Icons.Default.Image,
+                                title = "Save Raw JPG",
+                                description = "Save original raw capture to local storage",
+                                checked = saveJpg,
+                                onCheckedChange = { viewModel.toggleSaveJpg(it) }
+                            )
+
+                            val pageSize by viewModel.pageSize.collectAsState()
+                            var sizeExpanded by remember { mutableStateOf(false) }
+                            SettingsClickItem(
+                                icon = Icons.Default.AspectRatio,
+                                title = "Page Size",
+                                subtitle = pageSize,
+                                onClick = { sizeExpanded = true }
+                            ) {
+                                DropdownMenu(
+                                    expanded = sizeExpanded,
+                                    onDismissRequest = { sizeExpanded = false }
+                                ) {
+                                    listOf("A4", "Letter", "Original").forEach { size ->
+                                        DropdownMenuItem(
+                                            text = { Text(size) },
+                                            onClick = {
+                                                viewModel.setPageSize(size)
+                                                sizeExpanded = false
+                                            }
+                                        )
                                     }
-                                )
+                                }
                             }
                         }
                     }
-
-                    val clickSound by viewModel.clickSound.collectAsState()
-                    SettingsToggleItem(
-                        icon = Icons.Default.VolumeUp,
-                        title = "Click Sound",
-                        description = "Play sound when capturing a document",
-                        checked = clickSound,
-                        onCheckedChange = { viewModel.toggleClickSound(it) }
-                    )
-
-                    val vibrateOnCapture by viewModel.vibrateOnCapture.collectAsState()
-                    SettingsToggleItem(
-                        icon = Icons.Default.Vibration,
-                        title = "Haptic Feedback",
-                        description = "Vibrate when capturing a document",
-                        checked = vibrateOnCapture,
-                        onCheckedChange = { viewModel.setVibrateOnCapture(it) }
-                    )
-
-                    val batterySaver by viewModel.batterySaver.collectAsState()
-                    SettingsToggleItem(
-                        icon = Icons.Default.BatteryChargingFull,
-                        title = "Battery Saver",
-                        description = "Reduce UI animations and camera frequency",
-                        checked = batterySaver,
-                        onCheckedChange = { viewModel.toggleBatterySaver(it) }
-                    )
-
-                    val useNativeScanner by viewModel.useNativeScanner.collectAsState()
-                    SettingsToggleItem(
-                        icon = Icons.Default.DocumentScanner,
-                        title = "Native Scanner",
-                        description = "Use ML Kit Document Scanner API if available",
-                        checked = useNativeScanner,
-                        onCheckedChange = { viewModel.toggleUseNativeScanner(it) }
-                    )
                 }
-            }
+                3 -> {
+                    item {
+                        SettingsSection(title = "Preferences") {
+                            val uiLanguage by viewModel.uiLanguage.collectAsState()
+                            var langExpanded by remember { mutableStateOf(false) }
+                            val languageLabel = when(uiLanguage) {
+                                "ur" -> "Urdu (اردو)"
+                                "sd" -> "Sindhi (سنڌي)"
+                                else -> "English"
+                            }
+                            SettingsClickItem(
+                                icon = Icons.Default.Language,
+                                title = "App Language",
+                                subtitle = languageLabel,
+                                onClick = { langExpanded = true }
+                            ) {
+                                DropdownMenu(
+                                    expanded = langExpanded,
+                                    onDismissRequest = { langExpanded = false }
+                                ) {
+                                    listOf("en" to "English", "ur" to "Urdu (اردو)", "sd" to "Sindhi (سنڌي)").forEach { (code, label) ->
+                                        DropdownMenuItem(
+                                            text = { Text(label) },
+                                            onClick = {
+                                                viewModel.setUiLanguage(code)
+                                                langExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
 
-            item {
-                SettingsSection(title = "About") {
-                    SettingsInfoItem(
-                        icon = Icons.Default.Info,
-                        title = "Safe Scan v1.0",
-                        subtitle = "Fully Offline & Secure Document Scanner"
-                    )
-                    Text(
-                        "Crafted with Privacy First principle. No data leaves your device.",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                            val clickSound by viewModel.clickSound.collectAsState()
+                            SettingsToggleItem(
+                                icon = Icons.Default.VolumeUp,
+                                title = "Click Sound",
+                                description = "Play sound when capturing a document",
+                                checked = clickSound,
+                                onCheckedChange = { viewModel.toggleClickSound(it) }
+                            )
+
+                            val vibrateOnCapture by viewModel.vibrateOnCapture.collectAsState()
+                            SettingsToggleItem(
+                                icon = Icons.Default.Vibration,
+                                title = "Haptic Feedback",
+                                description = "Vibrate when capturing a document",
+                                checked = vibrateOnCapture,
+                                onCheckedChange = { viewModel.setVibrateOnCapture(it) }
+                            )
+
+                            val batterySaver by viewModel.batterySaver.collectAsState()
+                            SettingsToggleItem(
+                                icon = Icons.Default.BatteryChargingFull,
+                                title = "Battery Saver",
+                                description = "Reduce UI animations and camera frequency",
+                                checked = batterySaver,
+                                onCheckedChange = { viewModel.toggleBatterySaver(it) }
+                            )
+
+                            val useNativeScanner by viewModel.useNativeScanner.collectAsState()
+                            SettingsToggleItem(
+                                icon = Icons.Default.DocumentScanner,
+                                title = "Native Scanner",
+                                description = "Use ML Kit Document Scanner API if available",
+                                checked = useNativeScanner,
+                                onCheckedChange = { viewModel.toggleUseNativeScanner(it) }
+                            )
+                        }
+                    }
+
+                    item {
+                        SettingsSection(title = "About") {
+                            SettingsInfoItem(
+                                icon = Icons.Default.Info,
+                                title = "Safe Scan v1.0",
+                                subtitle = "Fully Offline & Secure Document Scanner"
+                            )
+                            Text(
+                                "Crafted with Privacy First principle. No data leaves your device.",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(16.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    item {
+                        DeveloperStatsView(viewModel = viewModel)
+                    }
                 }
             }
             

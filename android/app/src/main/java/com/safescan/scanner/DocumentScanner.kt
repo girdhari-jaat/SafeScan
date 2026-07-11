@@ -1,5 +1,6 @@
 package com.safescan.scanner
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Matrix
@@ -12,7 +13,8 @@ import kotlin.math.pow
 import kotlin.math.sqrt
 
 class DocumentScanner(
-    private val localMLEngine: LocalMLEngine
+    private val localMLEngine: LocalMLEngine,
+    private val context: Context
 ) {
     fun detectDocument(bitmap: Bitmap): Quadrilateral? {
         return localMLEngine.detectCorners(bitmap)
@@ -32,19 +34,34 @@ class DocumentScanner(
         val heightB = sqrt((tl.x - bl.x).pow(2) + (tl.y - bl.y).pow(2))
         var maxHeight = max(heightA, heightB).toInt().coerceAtLeast(1)
 
-        if (mode == "GRID") {
-            val targetRatio = 1.4142f // A4 Height/Width
+        val isA4 = CameraHardwareConfig.isA4Supported(context)
+        val isCnic = CameraHardwareConfig.isCnicSupported(context)
+
+        if (mode == "DOCUMENT" || mode == "CARD") {
+            // DOCUMENT/CARD try A4 first, fallback to 4:3
+            val targetRatio = if (isA4) 1.4142f else 1.3333f
             if (maxHeight > maxWidth) {
                 maxHeight = (maxWidth * targetRatio).toInt()
             } else {
                 maxWidth = (maxHeight * targetRatio).toInt()
             }
-        } else if (mode == "CARD") {
-            val targetRatio = 1.586f // ID Card
-            if (maxWidth > maxHeight) {
-                maxHeight = (maxWidth / targetRatio).toInt()
+        } else if (mode == "GRID") {
+            // GRID tries CNIC first, fallback to 3:4 portrait
+            if (isCnic) {
+                val targetRatio = 1.5857f
+                if (maxWidth > maxHeight) {
+                    maxHeight = (maxWidth / targetRatio).toInt()
+                } else {
+                    maxWidth = (maxHeight / targetRatio).toInt()
+                }
             } else {
-                maxWidth = (maxHeight / targetRatio).toInt()
+                // Fallback to 3:4 portrait
+                val targetRatio = 1.3333f // height / width = 4 / 3
+                if (maxHeight > maxWidth) {
+                    maxHeight = (maxWidth * targetRatio).toInt()
+                } else {
+                    maxWidth = (maxHeight * targetRatio).toInt()
+                }
             }
         }
 

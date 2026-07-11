@@ -39,6 +39,7 @@ import com.safescan.data.Slot
 import com.safescan.scanner.ScannerViewModel
 import com.safescan.R
 import coil.compose.AsyncImage
+import androidx.compose.animation.core.*
 
 @Composable
 fun SlotsScreen(
@@ -70,6 +71,7 @@ fun SlotsScreen(
     val usePhoneCamera by viewModel.usePhoneCamera.collectAsState()
     val useNativeScanner by viewModel.useNativeScanner.collectAsState()
     val hdMode by viewModel.hdMode.collectAsState()
+    val isDocumentDetected by viewModel.isDocumentDetected.collectAsState()
 
     var isSettingsPopoverOpen by remember { mutableStateOf(false) }
 
@@ -161,11 +163,16 @@ fun SlotsScreen(
             }
 
             // B. CENTER INSTRUCTIONS OVERLAY
-            val guideText = when (currentMode) {
-                ScannerMode.CARD -> "Align Card Inside Cutout"
-                ScannerMode.DOCUMENT -> "Align Document Inside Frame"
-                ScannerMode.GRID -> "Utilize Grid for Centered Alignment"
+            val guideText = if (isDocumentDetected) {
+                if (autoCapture) "HOLD STILL... AUTO-CAPTURING" else "READY TO CAPTURE"
+            } else {
+                when (currentMode) {
+                    ScannerMode.CARD -> "Align Card Inside Cutout"
+                    ScannerMode.DOCUMENT -> "Align Document Inside Frame"
+                    ScannerMode.GRID -> "Utilize Grid for Centered Alignment"
+                }
             }
+            val guideColor = if (isDocumentDetected) Color(0xFF10B981) else Color.Yellow
 
             Box(
                 modifier = Modifier
@@ -173,14 +180,37 @@ fun SlotsScreen(
                     .padding(vertical = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = guideText,
-                    color = Color.Yellow,
-                    style = MaterialTheme.typography.bodyMedium,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
                         .background(Color.Black.copy(alpha = 0.75f), shape = RoundedCornerShape(8.dp))
                         .padding(horizontal = 16.dp, vertical = 8.dp)
-                )
+                ) {
+                    if (isDocumentDetected) {
+                        val pulseTransition = rememberInfiniteTransition(label = "dot_pulse")
+                        val dotAlpha by pulseTransition.animateFloat(
+                            initialValue = 0.3f,
+                            targetValue = 1.0f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(800, easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "dot_alpha"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF10B981).copy(alpha = dotAlpha))
+                        )
+                    }
+                    Text(
+                        text = guideText,
+                        color = guideColor,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
             }
 
             // C. BOTTOM AREA: Floating Carousel & Premium Control Hub
@@ -617,6 +647,30 @@ private fun PopoverToggleRow(
 
 @Composable
 fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean, modifier: Modifier = Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isA4 = remember(context) { com.safescan.scanner.CameraHardwareConfig.isA4Supported(context) }
+    val isCnic = remember(context) { com.safescan.scanner.CameraHardwareConfig.isCnicSupported(context) }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "viewfinder_pulse")
+    val borderAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "border_pulse"
+    )
+    val laserYRatio by infiniteTransition.animateFloat(
+        initialValue = 0.05f,
+        targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "laser_y"
+    )
+
     Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height
@@ -626,31 +680,45 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean, modifier: Modifier =
         val isBookMode = false
 
         when (mode) {
-            ScannerMode.CARD -> {
-                val preferredWidth = width * 0.85f
-                val preferredHeight = preferredWidth / 1.586f
-                if (preferredHeight > height * 0.6f) {
-                    rectHeight = height * 0.45f
-                    rectWidth = rectHeight * 1.586f
-                } else {
-                    rectWidth = preferredWidth
-                    rectHeight = preferredHeight
-                }
-            }
-            ScannerMode.DOCUMENT -> {
+            ScannerMode.CARD, ScannerMode.DOCUMENT -> {
+                // DOCUMENT and CARD: Try A4 ratio first, fallback to 4:3
+                val targetRatio = if (isA4) 1.4142f else 1.3333f
                 val preferredHeight = height * 0.65f
-                val preferredWidth = preferredHeight / 1.414f
+                val preferredWidth = preferredHeight / targetRatio
                 if (preferredWidth > width * 0.85f) {
                     rectWidth = width * 0.85f
-                    rectHeight = rectWidth * 1.414f
+                    rectHeight = rectWidth * targetRatio
                 } else {
                     rectWidth = preferredWidth
                     rectHeight = preferredHeight
                 }
             }
             ScannerMode.GRID -> {
-                rectWidth = width * 0.9f
-                rectHeight = height * 0.75f
+                // GRID: Try Pakistani CNIC / ID Card horizontal ratio first, fallback to 3:4 portrait
+                if (isCnic) {
+                    val targetRatio = 1.5857f // landscape card ratio
+                    val preferredWidth = width * 0.85f
+                    val preferredHeight = preferredWidth / targetRatio
+                    if (preferredHeight > height * 0.6f) {
+                        rectHeight = height * 0.45f
+                        rectWidth = rectHeight * targetRatio
+                    } else {
+                        rectWidth = preferredWidth
+                        rectHeight = preferredHeight
+                    }
+                } else {
+                    // Fallback to 3:4 portrait
+                    val targetRatio = 1.3333f // height / width = 4 / 3, so width / height = 0.75
+                    val preferredHeight = height * 0.65f
+                    val preferredWidth = preferredHeight * 0.75f
+                    if (preferredWidth > width * 0.85f) {
+                        rectWidth = width * 0.85f
+                        rectHeight = rectWidth / 0.75f
+                    } else {
+                        rectWidth = preferredWidth
+                        rectHeight = preferredHeight
+                    }
+                }
             }
         }
 
@@ -680,13 +748,23 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean, modifier: Modifier =
                 size = Size(width - (left + rectWidth), rectHeight)
             )
 
-            // 2. Draw high-contrast target outline
+            // 2. Draw high-contrast target outline with pulsing glow
             drawRoundRect(
-                color = Color.White,
+                color = Color.White.copy(alpha = borderAlpha),
                 topLeft = Offset(left, top),
                 size = Size(rectWidth, rectHeight),
                 cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
                 style = Stroke(width = 2.5.dp.toPx())
+            )
+
+            // Draw a high-tech glowing laser scanning line inside the cutout
+            val laserY = top + rectHeight * laserYRatio
+            drawLine(
+                color = Color(0xFF10B981).copy(alpha = 0.8f),
+                start = Offset(left + 8.dp.toPx(), laserY),
+                end = Offset(left + rectWidth - 8.dp.toPx(), laserY),
+                strokeWidth = 3.dp.toPx(),
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(15f, 15f), 0f)
             )
 
             // 3. Draw grid if requested

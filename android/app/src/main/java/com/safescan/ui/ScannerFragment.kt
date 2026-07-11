@@ -76,6 +76,7 @@ class ScannerFragment : Fragment() {
         SCANNER
     }
     private var currentViewMode = FragmentViewMode.LIBRARY
+    private var isTargetLocked = false
 
     // On-demand permission launcher
     private val requestPermissionLauncher = registerForActivityResult(
@@ -466,7 +467,23 @@ class ScannerFragment : Fragment() {
             }
         }
 
+        val scaleGestureDetector = android.view.ScaleGestureDetector(requireContext(), object : android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(detector: android.view.ScaleGestureDetector): Boolean {
+                val cameraInfoObj = cameraInfo ?: return false
+                val cameraControlObj = cameraControl ?: return false
+                val currentZoomRatio = cameraInfoObj.zoomState.value?.zoomRatio ?: 1f
+                val delta = detector.scaleFactor
+                val targetZoomRatio = (currentZoomRatio * delta).coerceIn(1f, 10f)
+                cameraControlObj.setZoomRatio(targetZoomRatio)
+                return true
+            }
+        })
+
         binding.previewView.setOnTouchListener { _, event ->
+            scaleGestureDetector.onTouchEvent(event)
+            if (scaleGestureDetector.isInProgress) {
+                return@setOnTouchListener true
+            }
             if (event.action == MotionEvent.ACTION_DOWN) {
                 val factory = binding.previewView.meteringPointFactory
                 val point = factory.createPoint(event.x, event.y)
@@ -490,7 +507,7 @@ class ScannerFragment : Fragment() {
                 }
                 return@setOnTouchListener true
             }
-            false
+            true
         }
     }
 
@@ -593,35 +610,29 @@ class ScannerFragment : Fragment() {
                 }
 
                 val mode = viewModel.currentMode.value
+                val hdModeStr = viewModel.hdMode.value
 
-                // 1. Dynamic Hardware Negotiation & Mood Alignment (from gemini.md rules)
-                val captureMode = when (mode) {
-                    com.safescan.data.ScannerMode.CARD -> ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY // Fast capture, lower latency
-                    com.safescan.data.ScannerMode.GRID -> ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
-                    com.safescan.data.ScannerMode.DOCUMENT -> ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY // Standard balanced
-                }
-
-                val targetFrameRateRange = when (mode) {
-                    com.safescan.data.ScannerMode.CARD -> Range(60, 60) // High frame rate for fast card detection
-                    else -> Range(30, 30) // Standard frame rate for high detail documents
-                }
+                // 1. Dynamic Hardware Negotiation & Mood Alignment (configured in CameraHardwareConfig)
+                val captureSettings = com.safescan.scanner.CameraHardwareConfig.getCaptureSettings(currentContext, mode, hdModeStr)
+                val previewSelector = com.safescan.scanner.CameraHardwareConfig.getPreviewResolutionSelector(currentContext, mode)
+                val analysisSelector = com.safescan.scanner.CameraHardwareConfig.getImageAnalysisResolutionSelector(currentContext, mode)
 
                 val previewBuilder = Preview.Builder()
-                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                    .setResolutionSelector(previewSelector)
                 
                 val preview = previewBuilder.build().also {
                     it.setSurfaceProvider(binding.previewView.surfaceProvider)
                 }
 
                 imageCapture = ImageCapture.Builder()
-                    .setCaptureMode(captureMode)
-                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                    .setCaptureMode(captureSettings.captureMode)
+                    .setResolutionSelector(captureSettings.resolutionSelector)
                     .build()
 
                 // Initialize ImageAnalysis for live edge detection overlay
                 val imageAnalysis = androidx.camera.core.ImageAnalysis.Builder()
                     .setBackpressureStrategy(androidx.camera.core.ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                    .setResolutionSelector(analysisSelector)
                     .build()
 
                 imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
@@ -636,7 +647,18 @@ class ScannerFragment : Fragment() {
                             liveEdgeDetectionEngine.process(imageProxy, viewModel.documentScanner) { corners ->
                                 val mappedPoints = mapPointsToPreviewView(corners, width, height, rotationDegrees)
                                 activity?.runOnUiThread {
-                                    _binding?.overlayView?.updateCorners(mappedPoints)
+                                    val bindingObj = _binding
+                                    bindingObj?.overlayView?.updateCorners(mappedPoints)
+                                    if (corners != null && corners.isNotEmpty()) {
+                                        if (!isTargetLocked) {
+                                            isTargetLocked = true
+                                            if (viewModel.vibrateOnCapture.value) {
+                                                bindingObj?.root?.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                                            }
+                                        }
+                                    } else {
+                                        isTargetLocked = false
+                                    }
                                 }
                                 viewModel.onDocumentDetected(corners)
                             }
@@ -646,6 +668,8 @@ class ScannerFragment : Fragment() {
                         }
                     } else {
                         imageProxy.close()
+                        isTargetLocked = false
+                        viewModel.onDocumentDetected(null)
                         activity?.runOnUiThread {
                             _binding?.overlayView?.updateCorners(null)
                         }
@@ -866,6 +890,28 @@ class ScannerFragment : Fragment() {
                 kotlinx.coroutines.flow.combine(viewModel.usePhoneCamera, viewModel.useNativeScanner) { a, b ->
                     Pair(a, b)
                 }.collect {
+                    if (currentViewMode == FragmentViewMode.SCANNER && !viewModel.isDocumentOpenedFromLibrary) {
+                        startCamera()
+                    }
+                }
+            }
+        }
+
+        // Restart camera on mood / currentMode change to negotiate hardware aspect ratio and constraints on the fly
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.currentMode.collect {
+                    if (currentViewMode == FragmentViewMode.SCANNER && !viewModel.isDocumentOpenedFromLibrary) {
+                        startCamera()
+                    }
+                }
+            }
+        }
+
+        // Restart camera on hdMode (Quality) change to negotiate hardware resolution and latency/quality constraints on the fly
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.hdMode.collect {
                     if (currentViewMode == FragmentViewMode.SCANNER && !viewModel.isDocumentOpenedFromLibrary) {
                         startCamera()
                     }

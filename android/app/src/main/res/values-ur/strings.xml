@@ -24,6 +24,7 @@
     <string name="brightness">چمک</string>
     <string name="contrast">کنسٹرسٹ</string>
     <string name="sharpness">تیزی</string>
+    <string name="saturation">رنگت</string>
     <string name="crop_document">دستاویز کاٹیں</string>
     <string name="doc_not_found">دستاویز نہیں ملی۔ دستی طور پر منتقل کریں۔</string>
     <string name="auto_crop_failed">خودکار کراپ ناکام رہا</string>

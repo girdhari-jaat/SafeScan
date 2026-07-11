@@ -25,8 +25,8 @@ object ScannerModule {
 
     @Provides
     @Singleton
-    fun provideDocumentScanner(localMLEngine: LocalMLEngine): DocumentScanner {
-        return DocumentScanner(localMLEngine)
+    fun provideDocumentScanner(localMLEngine: LocalMLEngine, @ApplicationContext context: Context): DocumentScanner {
+        return DocumentScanner(localMLEngine, context)
     }
 
     @Provides

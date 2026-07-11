@@ -99,6 +99,22 @@ object ImageProcessor {
                 Core.addWeighted(src, 1.0 + state.sharpness.toDouble(), blurred, -state.sharpness.toDouble(), 0.0, src)
             }
 
+            // Apply Saturation if it's not 0
+            if (state.saturation != 0f) {
+                val satFactor = 1.0 + (state.saturation / 100.0)
+                val hsv = Mat()
+                Imgproc.cvtColor(src, hsv, Imgproc.COLOR_BGR2HSV)
+                val channels = ArrayList<Mat>()
+                Core.split(hsv, channels)
+                channels[1].convertTo(channels[1], -1, satFactor, 0.0)
+                Core.merge(channels, hsv)
+                Imgproc.cvtColor(hsv, src, Imgproc.COLOR_HSV2BGR)
+                hsv.release()
+                for (ch in channels) {
+                    ch.release()
+                }
+            }
+
             // Apply Filter
             outMat = Mat()
             when (state.filter) {

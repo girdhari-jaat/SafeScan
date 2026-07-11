@@ -24,6 +24,7 @@
     <string name="brightness">चमक</string>
     <string name="contrast">विपरीतता</string>
     <string name="sharpness">तीक्ष्णता</string>
+    <string name="saturation">Saturation</string>
     <string name="crop_document">दस्तावेज़ क्रॉप करें</string>
     <string name="doc_not_found">दस्तावेज़ नहीं मिला। मैन्युअल रूप से स्थानांतरित करें।</string>
     <string name="auto_crop_failed">ऑटो क्रॉप विफल रहा</string>

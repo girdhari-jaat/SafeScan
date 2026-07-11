@@ -65,25 +65,28 @@ class EdgeDetectionEngine {
                 
                 val contour2f = MatOfPoint2f(*contour.toArray())
                 val peri = Imgproc.arcLength(contour2f, true)
-                val approx = MatOfPoint2f()
                 
                 // Try to approximate with different epsilon factors to get exactly 4 corners
                 var approxSuccess = false
                 for (epsFactor in listOf(0.015, 0.02, 0.03, 0.04)) {
-                    Imgproc.approxPolyDP(contour2f, approx, epsFactor * peri, true)
-                    if (approx.total() == 4L) {
-                        val approxPoints = approx.toArray().map { Point(it.x / resizeRatio, it.y / resizeRatio) }
-                        if (isConvexPoints(approxPoints) && getMaxCosinePoints(approxPoints) < 0.4) {
-                            val scaledArea = area / (resizeRatio * resizeRatio)
-                            if (scaledArea > bestArea) {
-                                bestArea = scaledArea
-                                bestPoints = orderPoints(approxPoints)
-                                approxSuccess = true
-                                break
+                    val approx = MatOfPoint2f()
+                    try {
+                        Imgproc.approxPolyDP(contour2f, approx, epsFactor * peri, true)
+                        if (approx.total() == 4L) {
+                            val approxPoints = approx.toArray().map { Point(it.x / resizeRatio, it.y / resizeRatio) }
+                            if (isConvexPoints(approxPoints) && getMaxCosinePoints(approxPoints) < 0.4) {
+                                val scaledArea = area / (resizeRatio * resizeRatio)
+                                if (scaledArea > bestArea) {
+                                    bestArea = scaledArea
+                                    bestPoints = orderPoints(approxPoints)
+                                    approxSuccess = true
+                                    break
+                                }
                             }
                         }
+                    } finally {
+                        approx.release()
                     }
-                    approx.release()
                 }
 
                 // FALLBACK WITHIN CONTOUR: If approxPolyDP failed but we have a large robust contour,
@@ -99,7 +102,6 @@ class EdgeDetectionEngine {
                     }
                 }
 
-                approx.release()
                 contour2f.release()
             }
             

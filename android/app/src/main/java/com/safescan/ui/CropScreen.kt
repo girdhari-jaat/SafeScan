@@ -7,6 +7,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.platform.LocalView
+import android.view.HapticFeedbackConstants
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -25,6 +29,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
 import com.safescan.scanner.ScannerViewModel
 import com.safescan.domain.model.Point
 import com.safescan.domain.model.Quadrilateral
@@ -76,7 +81,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(id = R.string.crop_document)) },
+                title = {},
                 navigationIcon = {
                     // IMPROVEMENT: Disabled cancel button when auto edge detection is running to prevent crash
                     IconButton(
@@ -87,6 +92,21 @@ fun CropScreen(viewModel: ScannerViewModel) {
                     }
                 },
                 actions = {
+                    // "Full" Button to select entire image frame
+                    TextButton(
+                        enabled = !uiState.isAutoRunning,
+                        onClick = {
+                            if (imageSize.width > 0 && imageSize.height > 0) {
+                                tl = Offset(0f, 0f)
+                                tr = Offset(imageSize.width.toFloat(), 0f)
+                                br = Offset(imageSize.width.toFloat(), imageSize.height.toFloat())
+                                bl = Offset(0f, imageSize.height.toFloat())
+                            }
+                        }
+                    ) {
+                        Text(stringResource(id = R.string.full), color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
+
                     // IMPROVEMENT: Added disabled states and a CircularProgressIndicator during Edge Detection run
                     TextButton(
                         enabled = !uiState.isAutoRunning,
@@ -141,6 +161,28 @@ fun CropScreen(viewModel: ScannerViewModel) {
                     ) {
                         Icon(Icons.Default.Check, stringResource(id = R.string.save))
                     }
+
+                    // "Next" Button after the check/save button to apply crop and proceed
+                    TextButton(
+                        enabled = !uiState.isAutoRunning,
+                        onClick = {
+                            if (imageSize.width > 0 && imageSize.height > 0 && croppingBitmap != null) {
+                                val bmp = croppingBitmap!!
+                                val scaleX = bmp.width.toFloat() / imageSize.width
+                                val scaleY = bmp.height.toFloat() / imageSize.height
+                                
+                                val quad = Quadrilateral(
+                                    Point((tl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                                    Point((tr.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tr.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                                    Point((br.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (br.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                                    Point((bl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (bl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0))
+                                )
+                                viewModel.applyCrop(quad, andNext = true)
+                            }
+                        }
+                    ) {
+                        Text(stringResource(id = R.string.next), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
+                    }
                 }
             )
         }
@@ -153,199 +195,277 @@ fun CropScreen(viewModel: ScannerViewModel) {
             contentAlignment = Alignment.Center
         ) {
             croppingBitmap?.let { bmp ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(bmp.width.toFloat() / bmp.height.toFloat())
-                        .onGloballyPositioned { coordinates ->
-                            imageSize = coordinates.size
-                        }
-                ) {
-                    Image(
-                        bitmap = bmp.asImageBitmap(),
-                        contentDescription = "Crop Image",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit
-                    )
+                        var draggingHandle by remember { mutableStateOf<String?>(null) }
+                    var dragOffset by remember { mutableStateOf(Offset.Zero) }
 
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val path = Path().apply {
-                            moveTo(tl.x, tl.y)
-                            lineTo(tr.x, tr.y)
-                            lineTo(br.x, br.y)
-                            lineTo(bl.x, bl.y)
-                            close()
-                        }
-                        
-                        // Draw semi-transparent overlay outside crop area
-                        drawPath(
-                            path = path,
-                            color = Color.Cyan.copy(alpha = 0.2f)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(bmp.width.toFloat() / bmp.height.toFloat())
+                            .onGloballyPositioned { coordinates ->
+                                imageSize = coordinates.size
+                            }
+                    ) {
+                        Image(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = "Crop Image",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit
                         )
 
-                        drawPath(
-                            path = path,
-                            color = Color.Cyan,
-                            style = Stroke(width = 2.dp.toPx())
-                        )
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val path = Path().apply {
+                                moveTo(tl.x, tl.y)
+                                lineTo(tr.x, tr.y)
+                                lineTo(br.x, br.y)
+                                lineTo(bl.x, bl.y)
+                                close()
+                            }
+                            
+                            // Draw semi-transparent overlay outside crop area
+                            drawPath(
+                                path = path,
+                                color = Color.Cyan.copy(alpha = 0.2f)
+                            )
 
-                    // Draw corner and side handles
-                        val handleRadius = 12.dp.toPx()
-                        val outerRadius = 16.dp.toPx()
-                        val sideHandleRadius = 8.dp.toPx()
-                        
-                        // Corner handles
-                        listOf(tl, tr, br, bl).forEach { center ->
-                            drawCircle(Color.White, radius = outerRadius, center = center)
-                            drawCircle(Color.Cyan, radius = handleRadius, center = center)
+                            drawPath(
+                                path = path,
+                                color = Color.Cyan,
+                                style = Stroke(width = 2.dp.toPx())
+                            )
+
+                            // 3x3 Perspective/Bilinear grid lines when dragging a handle
+                            if (draggingHandle != null) {
+                                val gridColor = Color(0xFF10B981).copy(alpha = 0.5f)
+                                val pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+
+                                // Vertical Grid Lines (interp 1/3 and 2/3)
+                                for (i in 1..2) {
+                                    val ratio = i / 3f
+                                    val startPoint = Offset(
+                                        tl.x + (tr.x - tl.x) * ratio,
+                                        tl.y + (tr.y - tl.y) * ratio
+                                    )
+                                    val endPoint = Offset(
+                                        bl.x + (br.x - bl.x) * ratio,
+                                        bl.y + (br.y - bl.y) * ratio
+                                    )
+                                    drawLine(
+                                        color = gridColor,
+                                        start = startPoint,
+                                        end = endPoint,
+                                        strokeWidth = 1.dp.toPx(),
+                                        pathEffect = pathEffect
+                                    )
+                                }
+
+                                // Horizontal Grid Lines (interp 1/3 and 2/3)
+                                for (j in 1..2) {
+                                    val ratio = j / 3f
+                                    val startPoint = Offset(
+                                        tl.x + (bl.x - tl.x) * ratio,
+                                        tl.y + (bl.y - tl.y) * ratio
+                                    )
+                                    val endPoint = Offset(
+                                        tr.x + (br.x - tr.x) * ratio,
+                                        tr.y + (br.y - tr.y) * ratio
+                                    )
+                                    drawLine(
+                                        color = gridColor,
+                                        start = startPoint,
+                                        end = endPoint,
+                                        strokeWidth = 1.dp.toPx(),
+                                        pathEffect = pathEffect
+                                    )
+                                }
+                            }
+
+                            // Draw corner and side handles
+                            val handleRadius = 12.dp.toPx()
+                            val outerRadius = 16.dp.toPx()
+                            val sideHandleRadius = 8.dp.toPx()
+                            
+                            // Corner handles with active dragging glow
+                            listOf(
+                                Triple(tl, "tl", Color(0xFF10B981)),
+                                Triple(tr, "tr", Color(0xFF10B981)),
+                                Triple(br, "br", Color(0xFF10B981)),
+                                Triple(bl, "bl", Color(0xFF10B981))
+                            ).forEach { (center, label, brandColor) ->
+                                val isActive = draggingHandle == label
+                                val scaleFactor = if (isActive) 1.35f else 1.0f
+                                val activeColor = if (isActive) brandColor else Color.Cyan
+                                
+                                if (isActive) {
+                                    drawCircle(
+                                        color = brandColor.copy(alpha = 0.35f),
+                                        radius = outerRadius * 2.0f,
+                                        center = center
+                                    )
+                                }
+                                
+                                drawCircle(Color.White, radius = outerRadius * scaleFactor, center = center)
+                                drawCircle(activeColor, radius = handleRadius * scaleFactor, center = center)
+                            }
+
+                            // Side handles (midpoints) with active dragging glow
+                            val midTop = Offset((tl.x + tr.x) / 2, (tl.y + tr.y) / 2)
+                            val midRight = Offset((tr.x + br.x) / 2, (tr.y + br.y) / 2)
+                            val midBottom = Offset((br.x + bl.x) / 2, (br.y + bl.y) / 2)
+                            val midLeft = Offset((bl.x + tl.x) / 2, (bl.y + tl.y) / 2)
+
+                            listOf(
+                                Pair(midTop, "midTop"),
+                                Pair(midRight, "midRight"),
+                                Pair(midBottom, "midBottom"),
+                                Pair(midLeft, "midLeft")
+                            ).forEach { (center, label) ->
+                                val isActive = draggingHandle == label
+                                val scaleFactor = if (isActive) 1.3f else 1.0f
+                                val activeColor = if (isActive) Color(0xFF10B981) else Color.Cyan
+                                
+                                if (isActive) {
+                                    drawCircle(
+                                        color = Color(0xFF10B981).copy(alpha = 0.3f),
+                                        radius = (sideHandleRadius + 2.dp.toPx()) * 2.2f,
+                                        center = center
+                                    )
+                                }
+                                drawCircle(Color.White, radius = (sideHandleRadius + 2.dp.toPx()) * scaleFactor, center = center)
+                                drawCircle(activeColor, radius = sideHandleRadius * scaleFactor, center = center)
+                            }
                         }
 
-                        // Side handles (midpoints)
+                        // Midpoints for side handle logic
                         val midTop = Offset((tl.x + tr.x) / 2, (tl.y + tr.y) / 2)
                         val midRight = Offset((tr.x + br.x) / 2, (tr.y + br.y) / 2)
                         val midBottom = Offset((br.x + bl.x) / 2, (br.y + bl.y) / 2)
                         val midLeft = Offset((bl.x + tl.x) / 2, (bl.y + tl.y) / 2)
 
-                        listOf(midTop, midRight, midBottom, midLeft).forEach { center ->
-                            drawCircle(Color.White, radius = sideHandleRadius + 2.dp.toPx(), center = center)
-                            drawCircle(Color.Cyan, radius = sideHandleRadius, center = center)
-                        }
-                    }
+                        // Corner Handles
+                        CornerHandle(
+                            offset = tl, 
+                            onDragStart = { draggingHandle = "tl" },
+                            onDragEnd = { draggingHandle = null },
+                            onDrag = { 
+                                tl = updateOffset(tl, it, imageSize)
+                                dragOffset = tl
+                            }
+                        )
+                        CornerHandle(
+                            offset = tr, 
+                            onDragStart = { draggingHandle = "tr" },
+                            onDragEnd = { draggingHandle = null },
+                            onDrag = { 
+                                tr = updateOffset(tr, it, imageSize)
+                                dragOffset = tr
+                            }
+                        )
+                        CornerHandle(
+                            offset = br, 
+                            onDragStart = { draggingHandle = "br" },
+                            onDragEnd = { draggingHandle = null },
+                            onDrag = { 
+                                br = updateOffset(br, it, imageSize)
+                                dragOffset = br
+                            }
+                        )
+                        CornerHandle(
+                            offset = bl, 
+                            onDragStart = { draggingHandle = "bl" },
+                            onDragEnd = { draggingHandle = null },
+                            onDrag = { 
+                                bl = updateOffset(bl, it, imageSize)
+                                dragOffset = bl
+                            }
+                        )
 
-                    // Midpoints for side handle logic
-                    val midTop = Offset((tl.x + tr.x) / 2, (tl.y + tr.y) / 2)
-                    val midRight = Offset((tr.x + br.x) / 2, (tr.y + br.y) / 2)
-                    val midBottom = Offset((br.x + bl.x) / 2, (br.y + bl.y) / 2)
-                    val midLeft = Offset((bl.x + tl.x) / 2, (bl.y + tl.y) / 2)
+                        // Side Handles
+                        CornerHandle(
+                            offset = midTop,
+                            size = 40.dp,
+                            onDragStart = { draggingHandle = "midTop" },
+                            onDragEnd = { draggingHandle = null },
+                            onDrag = { delta ->
+                                tl = updateOffset(tl, Offset(0f, delta.y), imageSize)
+                                tr = updateOffset(tr, Offset(0f, delta.y), imageSize)
+                                dragOffset = Offset((tl.x + tr.x) / 2, (tl.y + tr.y) / 2)
+                            }
+                        )
+                        CornerHandle(
+                            offset = midRight,
+                            size = 40.dp,
+                            onDragStart = { draggingHandle = "midRight" },
+                            onDragEnd = { draggingHandle = null },
+                            onDrag = { delta ->
+                                tr = updateOffset(tr, Offset(delta.x, 0f), imageSize)
+                                br = updateOffset(br, Offset(delta.x, 0f), imageSize)
+                                dragOffset = Offset((tr.x + br.x) / 2, (tr.y + br.y) / 2)
+                            }
+                        )
+                        CornerHandle(
+                            offset = midBottom,
+                            size = 40.dp,
+                            onDragStart = { draggingHandle = "midBottom" },
+                            onDragEnd = { draggingHandle = null },
+                            onDrag = { delta ->
+                                br = updateOffset(br, Offset(0f, delta.y), imageSize)
+                                bl = updateOffset(bl, Offset(0f, delta.y), imageSize)
+                                dragOffset = Offset((br.x + bl.x) / 2, (br.y + bl.y) / 2)
+                            }
+                        )
+                        CornerHandle(
+                            offset = midLeft,
+                            size = 40.dp,
+                            onDragStart = { draggingHandle = "midLeft" },
+                            onDragEnd = { draggingHandle = null },
+                            onDrag = { delta ->
+                                tl = updateOffset(tl, Offset(delta.x, 0f), imageSize)
+                                bl = updateOffset(bl, Offset(delta.x, 0f), imageSize)
+                                dragOffset = Offset((bl.x + tl.x) / 2, (bl.y + tl.y) / 2)
+                            }
+                        )
 
-                    // Touch handlers with Magnifier logic
-                    var draggingHandle by remember { mutableStateOf<String?>(null) }
-                    var dragOffset by remember { mutableStateOf(Offset.Zero) }
-
-                    // Corner Handles
-                    CornerHandle(
-                        offset = tl, 
-                        onDragStart = { draggingHandle = "tl" },
-                        onDragEnd = { draggingHandle = null },
-                        onDrag = { 
-                            tl = updateOffset(tl, it, imageSize)
-                            dragOffset = tl
-                        }
-                    )
-                    CornerHandle(
-                        offset = tr, 
-                        onDragStart = { draggingHandle = "tr" },
-                        onDragEnd = { draggingHandle = null },
-                        onDrag = { 
-                            tr = updateOffset(tr, it, imageSize)
-                            dragOffset = tr
-                        }
-                    )
-                    CornerHandle(
-                        offset = br, 
-                        onDragStart = { draggingHandle = "br" },
-                        onDragEnd = { draggingHandle = null },
-                        onDrag = { 
-                            br = updateOffset(br, it, imageSize)
-                            dragOffset = br
-                        }
-                    )
-                    CornerHandle(
-                        offset = bl, 
-                        onDragStart = { draggingHandle = "bl" },
-                        onDragEnd = { draggingHandle = null },
-                        onDrag = { 
-                            bl = updateOffset(bl, it, imageSize)
-                            dragOffset = bl
-                        }
-                    )
-
-                    // Side Handles
-                    CornerHandle(
-                        offset = midTop,
-                        size = 40.dp,
-                        onDragStart = { draggingHandle = "midTop" },
-                        onDragEnd = { draggingHandle = null },
-                        onDrag = { delta ->
-                            tl = updateOffset(tl, Offset(0f, delta.y), imageSize)
-                            tr = updateOffset(tr, Offset(0f, delta.y), imageSize)
-                            dragOffset = Offset((tl.x + tr.x) / 2, (tl.y + tr.y) / 2)
-                        }
-                    )
-                    CornerHandle(
-                        offset = midRight,
-                        size = 40.dp,
-                        onDragStart = { draggingHandle = "midRight" },
-                        onDragEnd = { draggingHandle = null },
-                        onDrag = { delta ->
-                            tr = updateOffset(tr, Offset(delta.x, 0f), imageSize)
-                            br = updateOffset(br, Offset(delta.x, 0f), imageSize)
-                            dragOffset = Offset((tr.x + br.x) / 2, (tr.y + br.y) / 2)
-                        }
-                    )
-                    CornerHandle(
-                        offset = midBottom,
-                        size = 40.dp,
-                        onDragStart = { draggingHandle = "midBottom" },
-                        onDragEnd = { draggingHandle = null },
-                        onDrag = { delta ->
-                            br = updateOffset(br, Offset(0f, delta.y), imageSize)
-                            bl = updateOffset(bl, Offset(0f, delta.y), imageSize)
-                            dragOffset = Offset((br.x + bl.x) / 2, (br.y + bl.y) / 2)
-                        }
-                    )
-                    CornerHandle(
-                        offset = midLeft,
-                        size = 40.dp,
-                        onDragStart = { draggingHandle = "midLeft" },
-                        onDragEnd = { draggingHandle = null },
-                        onDrag = { delta ->
-                            tl = updateOffset(tl, Offset(delta.x, 0f), imageSize)
-                            bl = updateOffset(bl, Offset(delta.x, 0f), imageSize)
-                            dragOffset = Offset((bl.x + tl.x) / 2, (bl.y + tl.y) / 2)
-                        }
-                    )
-
-                    // Improved Magnifier
-                    draggingHandle?.let {
-                        val magnifierSize = 140.dp
-                        val magnifierPos = if (dragOffset.y < imageSize.height / 3) {
-                            Alignment.BottomCenter
-                        } else {
-                            Alignment.TopCenter
-                        }
-                        
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(24.dp),
-                            contentAlignment = magnifierPos
-                        ) {
-                            Card(
-                                shape = RoundedCornerShape(16.dp),
-                                border = androidx.compose.foundation.BorderStroke(2.dp, Color.Cyan),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+                        // Improved Circular Magnifier
+                        draggingHandle?.let {
+                            val magnifierSize = 140.dp
+                            val magnifierPos = if (dragOffset.y < imageSize.height / 3) {
+                                Alignment.BottomCenter
+                            } else {
+                                Alignment.TopCenter
+                            }
+                            
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(24.dp),
+                                contentAlignment = magnifierPos
                             ) {
-                                Box(modifier = Modifier.size(magnifierSize)) {
-                                    val zoom = 4f
-                                    Image(
-                                        bitmap = bmp.asImageBitmap(),
-                                        contentDescription = null,
-                                        modifier = Modifier
-                                            .size(width = (imageSize.width.toFloat() / with(androidx.compose.ui.platform.LocalDensity.current) { 1.dp.toPx() }).dp * zoom, height = (imageSize.height.toFloat() / with(androidx.compose.ui.platform.LocalDensity.current) { 1.dp.toPx() }).dp * zoom)
-                                            .offset(
-                                                x = (-(dragOffset.x * zoom) + (magnifierSize.value / 2 * with(androidx.compose.ui.platform.LocalDensity.current) { density })).dp,
-                                                y = (-(dragOffset.y * zoom) + (magnifierSize.value / 2 * with(androidx.compose.ui.platform.LocalDensity.current) { density })).dp
-                                            ),
-                                        contentScale = ContentScale.FillBounds
-                                    )
-                                    // Crosshair
-                                    Divider(modifier = Modifier.width(30.dp).align(Alignment.Center), color = Color.Cyan, thickness = 1.dp)
-                                    Divider(modifier = Modifier.height(30.dp).width(1.dp).align(Alignment.Center), color = Color.Cyan)
+                                Card(
+                                    shape = CircleShape,
+                                    border = androidx.compose.foundation.BorderStroke(3.dp, Color(0xFF10B981)),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+                                ) {
+                                    Box(modifier = Modifier.size(magnifierSize)) {
+                                        val zoom = 4f
+                                        Image(
+                                            bitmap = bmp.asImageBitmap(),
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .size(width = (imageSize.width.toFloat() / with(androidx.compose.ui.platform.LocalDensity.current) { 1.dp.toPx() }).dp * zoom, height = (imageSize.height.toFloat() / with(androidx.compose.ui.platform.LocalDensity.current) { 1.dp.toPx() }).dp * zoom)
+                                                .offset(
+                                                    x = (-(dragOffset.x * zoom) + (magnifierSize.value / 2 * with(androidx.compose.ui.platform.LocalDensity.current) { density })).dp,
+                                                    y = (-(dragOffset.y * zoom) + (magnifierSize.value / 2 * with(androidx.compose.ui.platform.LocalDensity.current) { density })).dp
+                                                ),
+                                            contentScale = ContentScale.FillBounds
+                                        )
+                                        // Crosshair matching the Emerald brand color
+                                        Divider(modifier = Modifier.width(30.dp).align(Alignment.Center), color = Color(0xFF10B981), thickness = 1.dp)
+                                        Divider(modifier = Modifier.height(30.dp).width(1.dp).align(Alignment.Center), color = Color(0xFF10B981))
+                                    }
                                 }
                             }
                         }
-                    }
                 }
             }
         }
@@ -366,6 +486,7 @@ fun CornerHandle(
     onDragEnd: () -> Unit = {},
     onDrag: (Offset) -> Unit
 ) {
+    val view = LocalView.current
     Box(
         modifier = Modifier
             .offset(
@@ -375,7 +496,10 @@ fun CornerHandle(
             .size(size)
             .pointerInput(Unit) {
                 detectDragGestures(
-                    onDragStart = { onDragStart() },
+                    onDragStart = { 
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        onDragStart() 
+                    },
                     onDragEnd = { onDragEnd() },
                     onDragCancel = { onDragEnd() }
                 ) { change, dragAmount ->
