@@ -2,6 +2,8 @@ package com.safescan.scanner
 
 import android.graphics.Bitmap
 import android.util.Log
+import java.text.SimpleDateFormat
+import java.util.Locale
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlin.math.pow
@@ -208,6 +210,15 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    private fun generateDefaultTitle(mode: ScannerMode): String {
+        val sdf = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault())
+        val timestamp = sdf.format(java.util.Date())
+        return when (mode) {
+            ScannerMode.DOCUMENT -> "Doc_$timestamp"
+            ScannerMode.CARD, ScannerMode.GRID -> "Card_$timestamp"
+        }
+    }
+
     val slots: MutableStateFlow<List<Slot>> = MutableStateFlow(emptyList())
     val selectedSlotId: MutableStateFlow<String?> = MutableStateFlow(null)
 
@@ -251,6 +262,12 @@ class ScannerViewModel @Inject constructor(
                 }
                 selectedSlotId.value = null
                 capturedJpgFiles.clear()
+                
+                // Auto naming logic: set title based on mode for new documents
+                if (openedDocumentId == null) {
+                    val autoName = generateDefaultTitle(mode)
+                    settingsRepository.setPdfFilename(autoName)
+                }
             }
         }
     }
@@ -518,7 +535,7 @@ class ScannerViewModel @Inject constructor(
         selectedSlotId.value = slotId
     }
 
-    fun captureToSlot(bitmap: Bitmap, slotId: String, isCapture: Boolean = false) {
+    fun captureToSlot(bitmap: Bitmap, slotId: String, isCapture: Boolean = false, corners: List<Point>? = null) {
         val currentSlots = slots.value.toMutableList()
         val index = currentSlots.indexOfFirst { it.id == slotId }
         if (index != -1) {
@@ -542,7 +559,8 @@ class ScannerViewModel @Inject constructor(
                 bitmap = thumbnail,
                 originalBitmap = null, // No high-res original in RAM!
                 bitmapPath = processedPath,
-                originalBitmapPath = origPath
+                originalBitmapPath = origPath,
+                corners = corners ?: existing.corners
             )
             slots.value = currentSlots
             
@@ -583,6 +601,7 @@ class ScannerViewModel @Inject constructor(
         if (selectedSlotId.value == slotId) {
             selectedSlotId.value = null
         }
+        checkIfEmptyAndDelete()
     }
 
     fun clearJpgAt(index: Int) {
@@ -604,6 +623,18 @@ class ScannerViewModel @Inject constructor(
                     corners = null
                 )
                 slots.value = currentSlots
+            }
+        }
+        checkIfEmptyAndDelete()
+    }
+
+    private fun checkIfEmptyAndDelete() {
+        val pagesCount = if (capturedJpgFiles.isNotEmpty()) capturedJpgFiles.size else slots.value.count { it.bitmap != null }
+        if (pagesCount == 0 && isDocumentOpenedFromLibrary) {
+            openedDocumentId?.let { docId ->
+                deleteDocument(docId)
+                isDocumentOpenedFromLibrary = false
+                openedDocumentId = null
             }
         }
     }
@@ -891,6 +922,9 @@ class ScannerViewModel @Inject constructor(
                 if (pagesData.isNotEmpty()) {
                     documentRepository.saveDocument(docId, title, currentMode.value.name, pagesData)
                     reloadSavedDocuments()
+                } else {
+                    documentRepository.deleteDocument(docId)
+                    reloadSavedDocuments()
                 }
 
                 // IMPROVEMENT: Using injected pdfExporter to keep a clean Singleton architecture
@@ -1063,7 +1097,7 @@ class ScannerViewModel @Inject constructor(
                     when (val result = scannerEngine.scanDocument(processedBitmap)) {
                         is com.safescan.core.AppResult.Success -> {
                             if (slotId != null) {
-                                captureToSlot(result.data, slotId, isCapture = true)
+                                captureToSlot(result.data.bitmap, slotId, isCapture = true, corners = result.data.corners)
                                 selectedSlotId.value = null
                             }
                             
@@ -1071,7 +1105,7 @@ class ScannerViewModel @Inject constructor(
                                 it.copy(
                                     isLoading = false,
                                     scannedBitmap = null,
-                                    lastCapturedThumbnail = result.data,
+                                    lastCapturedThumbnail = result.data.bitmap,
                                     capturedCount = it.capturedCount + 1,
                                     error = null
                                 )

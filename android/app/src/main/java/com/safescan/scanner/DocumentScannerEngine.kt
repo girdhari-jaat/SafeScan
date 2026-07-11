@@ -25,10 +25,15 @@ interface MLScannerEngine {
     suspend fun detectCorners(bitmap: Bitmap): List<Point>?
 }
 
+data class ScannedDocument(
+    val bitmap: Bitmap,
+    val corners: List<Point>
+)
+
 open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) {
     var engineType: ScannerEngineType = ScannerEngineType.OPENCV
 
-    open suspend fun scanDocument(bitmap: Bitmap): AppResult<Bitmap> = withContext(Dispatchers.Default) {
+    open suspend fun scanDocument(bitmap: Bitmap): AppResult<ScannedDocument> = withContext(Dispatchers.Default) {
         try {
             var corners: List<Point>? = null
 
@@ -101,9 +106,11 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
                 dstMatOfPoint2f.release()
                 transformMatrix.release()
 
-                return@withContext AppResult.Success(outBitmap)
+                return@withContext AppResult.Success(ScannedDocument(outBitmap, orderedCorners))
             }
-            return@withContext AppResult.Success(bitmap)
+            // If it's exactly 4 points but fallback logic above was weird (should not happen), 
+            // return original with fallback quad or similar.
+            return@withContext AppResult.Success(ScannedDocument(bitmap, getFallbackQuad(bitmap.width.toDouble(), bitmap.height.toDouble())))
         } catch (e: Exception) {
             return@withContext AppResult.Error(e.message ?: "Document scanning failed", e)
         }

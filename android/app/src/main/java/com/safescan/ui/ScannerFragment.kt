@@ -260,11 +260,15 @@ class ScannerFragment : Fragment() {
         }
     }
 
+    private var shutterSound: android.media.MediaActionSound? = null
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
         _binding = FragmentScannerBinding.inflate(inflater, container, false)
+        shutterSound = android.media.MediaActionSound()
+        shutterSound?.load(android.media.MediaActionSound.SHUTTER_CLICK)
         return binding.root
     }
 
@@ -723,8 +727,7 @@ class ScannerFragment : Fragment() {
         // Play shutter sound if enabled
         if (viewModel.clickSound.value) {
             try {
-                val sound = android.media.MediaActionSound()
-                sound.play(android.media.MediaActionSound.SHUTTER_CLICK)
+                shutterSound?.play(android.media.MediaActionSound.SHUTTER_CLICK)
             } catch (e: Exception) {
                 Log.e("ScannerFragment", "Failed to play shutter sound", e)
             }
@@ -733,13 +736,19 @@ class ScannerFragment : Fragment() {
         // Trigger vibration/haptic feedback if enabled
         if (viewModel.vibrateOnCapture.value) {
             try {
+                // Use performHapticFeedback for modern devices
+                binding.root.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                
+                // Also use Vibrator for redundancy
                 val vibrator = currentContext.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
                 if (vibrator != null && vibrator.hasVibrator()) {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        vibrator.vibrate(android.os.VibrationEffect.createOneShot(100, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        vibrator.vibrate(android.os.VibrationEffect.createPredefined(android.os.VibrationEffect.EFFECT_CLICK))
+                    } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        vibrator.vibrate(android.os.VibrationEffect.createOneShot(50, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
                     } else {
                         @Suppress("DEPRECATION")
-                        vibrator.vibrate(100)
+                        vibrator.vibrate(50)
                     }
                 }
             } catch (e: Exception) {
@@ -873,6 +882,8 @@ class ScannerFragment : Fragment() {
             Log.e("ScannerFragment", "Failed to release liveEdgeDetectionEngine", e)
         }
         _binding = null
+        shutterSound?.release()
+        shutterSound = null
         imageCapture = null
         cameraControl = null
         cameraInfo = null

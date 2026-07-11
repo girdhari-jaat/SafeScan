@@ -48,7 +48,7 @@ class DocumentRepository @Inject constructor(
     }
 
     /**
-     * Retrieves all saved documents by reading meta.json from each sub-folder.
+     * Retrieves all saved documents by reading metadata.json from each sub-folder.
      */
     fun getDocuments(): List<DocumentMetadata> {
         val root = baseDir ?: return emptyList()
@@ -56,14 +56,14 @@ class DocumentRepository @Inject constructor(
 
         val folders = root.listFiles { file -> file.isDirectory } ?: return emptyList()
         for (folder in folders) {
-            val metaFile = File(folder, "meta.json")
+            val metaFile = File(folder, "metadata.json")
             if (metaFile.exists()) {
                 try {
                     val jsonStr = metaFile.readText()
                     val doc = parseDocumentMetadata(jsonStr)
                     docsList.add(doc)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error reading meta.json in ${folder.name}", e)
+                    Log.e(TAG, "Error reading metadata.json in ${folder.name}", e)
                 }
             }
         }
@@ -138,7 +138,7 @@ class DocumentRepository @Inject constructor(
     ): Boolean {
         val root = baseDir ?: return false
         val docFolder = File(root, docId)
-        val metaFile = File(docFolder, "meta.json")
+        val metaFile = File(docFolder, "metadata.json")
         if (!metaFile.exists()) return false
 
         try {
@@ -175,7 +175,7 @@ class DocumentRepository @Inject constructor(
     fun updatePageOcrText(docId: String, pageId: String, text: String): Boolean {
         val root = baseDir ?: return false
         val docFolder = File(root, docId)
-        val metaFile = File(docFolder, "meta.json")
+        val metaFile = File(docFolder, "metadata.json")
         if (!metaFile.exists()) return false
 
         try {
@@ -238,7 +238,7 @@ class DocumentRepository @Inject constructor(
     }
 
     private fun writeMetaFile(docFolder: File, meta: DocumentMetadata): Boolean {
-        val metaFile = File(docFolder, "meta.json")
+        val metaFile = File(docFolder, "metadata.json")
         return try {
             val json = JSONObject().apply {
                 put("id", meta.id)
@@ -281,7 +281,7 @@ class DocumentRepository @Inject constructor(
             }
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to write meta.json", e)
+            Log.e(TAG, "Failed to write metadata.json", e)
             false
         }
     }
