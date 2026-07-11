@@ -6,8 +6,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("kotlin-kapt")
     id("com.google.dagger.hilt.android")
-    id("io.gitlab.arturbosch.detekt")
-    id("org.jllewellyn.ktlint")
+    id("io.gitlab.arturbosch.detekt") version "1.23.8"
+    id("org.jllewellyn.ktlint") version "12.1.2"
 }
 
 android {
