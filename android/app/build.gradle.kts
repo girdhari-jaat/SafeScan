@@ -7,7 +7,7 @@ plugins {
     id("kotlin-kapt")
     id("com.google.dagger.hilt.android")
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
-    id("org.jllewellyn.ktlint") version "12.1.2"
+    id("org.jlleitschuh.gradle.ktlint") version "13.1.0"
 }
 
 android {
