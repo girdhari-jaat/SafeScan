@@ -1,4 +1,4 @@
-name: Build OpenCV Android (Optimized)
+name: OpenCV (Optimized)
 
 on:
   push:
