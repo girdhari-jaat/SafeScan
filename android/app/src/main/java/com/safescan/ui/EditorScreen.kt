@@ -186,7 +186,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .maxHeight(220.dp)
+                                        .heightIn(max = 220.dp)
                                         .verticalScroll(rememberScrollState())
                                 ) {
                                     Text(

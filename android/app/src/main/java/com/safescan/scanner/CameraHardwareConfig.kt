@@ -181,7 +181,6 @@ object CameraHardwareConfig {
         val resolutionStrategy = ResolutionStrategy(targetSize, ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)
 
         val resolutionSelector = ResolutionSelector.Builder()
-            .setAllowedResolutionMode(ResolutionSelector.ALLOWED_RESOLUTION_MODE_ALL)
             .setAspectRatioStrategy(
                 AspectRatioStrategy(
                     baseAspectRatio,
@@ -221,7 +220,6 @@ object CameraHardwareConfig {
         }
 
         return ResolutionSelector.Builder()
-            .setAllowedResolutionMode(ResolutionSelector.ALLOWED_RESOLUTION_MODE_ALL)
             .setAspectRatioStrategy(
                 AspectRatioStrategy(
                     baseAspectRatio,
@@ -252,7 +250,6 @@ object CameraHardwareConfig {
         }
 
         return ResolutionSelector.Builder()
-            .setAllowedResolutionMode(ResolutionSelector.ALLOWED_RESOLUTION_MODE_ALL)
             .setAspectRatioStrategy(
                 AspectRatioStrategy(
                     baseAspectRatio,
