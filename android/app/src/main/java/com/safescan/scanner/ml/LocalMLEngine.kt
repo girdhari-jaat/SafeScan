@@ -64,6 +64,8 @@ class LocalMLEngine(private val context: Context) {
 
     fun detectCorners(bitmap: Bitmap): Quadrilateral? {
         val tflite = interpreter ?: return null
+        if (bitmap.isRecycled) return null
+        
         var binaryMask: Mat? = null
         var resizedMask: Mat? = null
         var maskMat: Mat? = null
@@ -180,13 +182,20 @@ class LocalMLEngine(private val context: Context) {
     }
 
     private fun orderPoints(pts: List<Point>): List<Point> {
+        if (pts.size < 4) return pts // Should not happen with current logic but protects against crashes
+
         val sums = pts.map { it.x + it.y }
         val diffs = pts.map { it.y - it.x }
 
-        val tl = pts[sums.indexOf(sums.minOrNull()!!)]
-        val br = pts[sums.indexOf(sums.maxOrNull()!!)]
-        val tr = pts[diffs.indexOf(diffs.minOrNull()!!)]
-        val bl = pts[diffs.indexOf(diffs.maxOrNull()!!)]
+        val minSum = sums.minOrNull() ?: 0.0
+        val maxSum = sums.maxOrNull() ?: 0.0
+        val minDiff = diffs.minOrNull() ?: 0.0
+        val maxDiff = diffs.maxOrNull() ?: 0.0
+
+        val tl = pts[sums.indexOf(minSum)]
+        val br = pts[sums.indexOf(maxSum)]
+        val tr = pts[diffs.indexOf(minDiff)]
+        val bl = pts[diffs.indexOf(maxDiff)]
 
         return listOf(tl, tr, br, bl)
     }

@@ -44,6 +44,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         val USE_PHONE_CAMERA = booleanPreferencesKey("use_phone_camera")
         val USE_NATIVE_SCANNER = booleanPreferencesKey("use_native_scanner")
         val HD_MODE = stringPreferencesKey("hd_mode")
+        val AUTO_CAPTURE = booleanPreferencesKey("auto_capture")
     }
 
     private val safeData: Flow<Preferences> = context.dataStore.data
@@ -54,6 +55,16 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
                 throw exception
             }
         }
+
+    val autoCaptureFlow: Flow<Boolean> = safeData
+        .map { it[PreferencesKeys.AUTO_CAPTURE] ?: false }
+
+    suspend fun toggleAutoCapture() {
+        context.dataStore.edit { preferences ->
+            val current = preferences[PreferencesKeys.AUTO_CAPTURE] ?: false
+            preferences[PreferencesKeys.AUTO_CAPTURE] = !current
+        }
+    }
 
     val scannerModeFlow: Flow<ScannerMode> = safeData
         .map { preferences ->

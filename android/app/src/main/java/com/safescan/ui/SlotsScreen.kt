@@ -56,6 +56,7 @@ fun SlotsScreen(
     val flashMode by viewModel.flashMode.collectAsState()
     val doubleFocus by viewModel.doubleFocusEnabled.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
+    val autoCapture by viewModel.autoCapture.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
 
     val showGrid by viewModel.showGrid.collectAsState()
@@ -104,6 +105,21 @@ fun SlotsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    Button(
+                        onClick = { viewModel.toggleAutoCapture() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (autoCapture) Color(0xFF4CAF50) else Color.Black.copy(alpha = 0.5f)
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = if (autoCapture) "Auto Capture ON" else "Auto Capture OFF",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White
+                        )
+                    }
+
                     Button(
                         onClick = { viewModel.toggleAutoCrop(!autoCrop) },
                         colors = ButtonDefaults.buttonColors(
@@ -438,6 +454,12 @@ fun SlotsScreen(
                                 label = "Haptic Feedbk",
                                 checked = vibrateOnCapture,
                                 onCheckedChange = { viewModel.setVibrateOnCapture(it) }
+                            )
+                            PopoverToggleRow(
+                                icon = Icons.Default.CameraAlt,
+                                label = "Auto Capture",
+                                checked = autoCapture,
+                                onCheckedChange = { viewModel.toggleAutoCapture() }
                             )
                             PopoverToggleRow(
                                 icon = Icons.Default.AutoFixHigh,

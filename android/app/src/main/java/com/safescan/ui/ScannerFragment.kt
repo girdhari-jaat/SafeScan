@@ -634,6 +634,7 @@ class ScannerFragment : Fragment() {
                                 activity?.runOnUiThread {
                                     _binding?.overlayView?.updateCorners(mappedPoints)
                                 }
+                                viewModel.onDocumentDetected(corners)
                             }
                         } catch (e: Exception) {
                             Log.e("ScannerFragment", "Live detection error", e)
@@ -836,6 +837,16 @@ class ScannerFragment : Fragment() {
                 viewModel.liveDetect.collect { enabled ->
                     if (!enabled) {
                         _binding?.overlayView?.updateCorners(null)
+                    }
+                }
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.autoCaptureEvent.collect {
+                    if (currentViewMode == FragmentViewMode.SCANNER && !viewModel.isEditing.value && !viewModel.isCropping.value) {
+                        takePhoto()
                     }
                 }
             }

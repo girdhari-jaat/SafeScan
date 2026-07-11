@@ -68,19 +68,32 @@ class OverlayView @JvmOverloads constructor(
     }
 
     fun updateCorners(newCorners: List<PointF>?) {
-        targetCorners = newCorners
         if (newCorners == null || newCorners.size != 4) {
+            targetCorners = null
             animateAlpha(0f)
         } else {
+            val sorted = sortScreenCorners(newCorners)
+            targetCorners = sorted
             if (currentCorners.isEmpty()) {
                 currentCorners.clear()
-                for (pt in newCorners) {
+                for (pt in sorted) {
                     currentCorners.add(PointF(pt.x, pt.y))
                 }
             }
             animateAlpha(1f)
             postInvalidateOnAnimation()
         }
+    }
+
+    private fun sortScreenCorners(pts: List<PointF>): List<PointF> {
+        if (pts.size != 4) return pts
+        val sums = pts.map { it.x + it.y }
+        val diffs = pts.map { it.y - it.x }
+        val tl = pts[sums.indexOf(sums.minOrNull()!!)]
+        val br = pts[sums.indexOf(sums.maxOrNull()!!)]
+        val tr = pts[diffs.indexOf(diffs.minOrNull()!!)]
+        val bl = pts[diffs.indexOf(diffs.maxOrNull()!!)]
+        return listOf(tl, tr, br, bl)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -135,39 +148,39 @@ class OverlayView @JvmOverloads constructor(
     }
 
     private fun drawCornerBrackets(canvas: Canvas, pts: List<PointF>) {
+        if (pts.size != 4) return
         val bracketLength = 48f
         
         for (i in 0..3) {
-            val pt = pts[i]
+            val current = pts[i]
+            val next = pts[(i + 1) % 4]
+            val prev = pts[(i + 3) % 4] // (i - 1 + 4) % 4
             
-            // Determine direction of brackets based on corner index (ordered points: TL, TR, BR, BL)
-            val dirX = when (i) {
-                0 -> 1f   // TL goes Right
-                1 -> -1f  // TR goes Left
-                2 -> -1f  // BR goes Left
-                3 -> 1f   // BL goes Right
-                else -> 1f
-            }
-            val dirY = when (i) {
-                0 -> 1f   // TL goes Down
-                1 -> 1f   // TR goes Down
-                2 -> -1f  // BR goes Up
-                3 -> -1f  // BL goes Up
-                else -> 1f
+            // Draw segment towards next corner
+            val dxNext = next.x - current.x
+            val dyNext = next.y - current.y
+            val distNext = Math.sqrt((dxNext * dxNext + dyNext * dyNext).toDouble()).toFloat()
+            if (distNext > 0) {
+                canvas.drawLine(
+                    current.x, current.y,
+                    current.x + (dxNext / distNext) * bracketLength,
+                    current.y + (dyNext / distNext) * bracketLength,
+                    bracketPaint
+                )
             }
 
-            // Draw horizontal segment of the corner bracket
-            canvas.drawLine(
-                pt.x, pt.y,
-                pt.x + dirX * bracketLength, pt.y,
-                bracketPaint
-            )
-            // Draw vertical segment of the corner bracket
-            canvas.drawLine(
-                pt.x, pt.y,
-                pt.x, pt.y + dirY * bracketLength,
-                bracketPaint
-            )
+            // Draw segment towards previous corner
+            val dxPrev = prev.x - current.x
+            val dyPrev = prev.y - current.y
+            val distPrev = Math.sqrt((dxPrev * dxPrev + dyPrev * dyPrev).toDouble()).toFloat()
+            if (distPrev > 0) {
+                canvas.drawLine(
+                    current.x, current.y,
+                    current.x + (dxPrev / distPrev) * bracketLength,
+                    current.y + (dyPrev / distPrev) * bracketLength,
+                    bracketPaint
+                )
+            }
         }
     }
 }

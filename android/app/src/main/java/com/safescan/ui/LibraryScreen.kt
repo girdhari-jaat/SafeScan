@@ -285,6 +285,22 @@ fun LibraryScreen(
                             items(filteredFiles, key = { it.absolutePath }) { file ->
                                 DocumentItemCard(
                                     file = file,
+                                    onOpen = {
+                                        try {
+                                            val uri = FileProvider.getUriForFile(
+                                                context,
+                                                "${context.packageName}.fileprovider",
+                                                file
+                                            )
+                                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                setDataAndType(uri, "application/pdf")
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "No app found to open PDF", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
                                     onShare = {
                                         try {
                                             val uri = FileProvider.getUriForFile(
@@ -512,6 +528,7 @@ fun OriginalDocumentCard(
 @Composable
 fun DocumentItemCard(
     file: File,
+    onOpen: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -527,7 +544,7 @@ fun DocumentItemCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onShare() },
+            .clickable { onOpen() },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)

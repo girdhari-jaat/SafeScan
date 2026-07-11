@@ -91,11 +91,12 @@ fun CropScreen(viewModel: ScannerViewModel) {
                     TextButton(
                         enabled = !uiState.isAutoRunning,
                         onClick = {
-                            if (imageSize.width > 0 && imageSize.height > 0 && croppingBitmap != null) {
-                                viewModel.detectEdges(croppingBitmap!!) { points ->
+                            val currentBmp = croppingBitmap
+                            if (imageSize.width > 0 && imageSize.height > 0 && currentBmp != null) {
+                                viewModel.detectEdges(currentBmp) { points ->
                                     if (points != null && points.size == 4) {
-                                        val scaleX = imageSize.width.toFloat() / croppingBitmap!!.width.toFloat()
-                                        val scaleY = imageSize.height.toFloat() / croppingBitmap!!.height.toFloat()
+                                        val scaleX = imageSize.width.toFloat() / currentBmp.width.toFloat()
+                                        val scaleY = imageSize.height.toFloat() / currentBmp.height.toFloat()
                                         tl = Offset((points[0].x * scaleX).toFloat(), (points[0].y * scaleY).toFloat())
                                         tr = Offset((points[1].x * scaleX).toFloat(), (points[1].y * scaleY).toFloat())
                                         br = Offset((points[2].x * scaleX).toFloat(), (points[2].y * scaleY).toFloat())

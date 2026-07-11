@@ -44,6 +44,15 @@ class ScannerViewModel @Inject constructor(
     val currentMode: StateFlow<ScannerMode> = settingsRepository.scannerModeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ScannerMode.CARD)
         
+    val autoCapture: StateFlow<Boolean> = settingsRepository.autoCaptureFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun toggleAutoCapture() {
+        viewModelScope.launch {
+            settingsRepository.toggleAutoCapture()
+        }
+    }
+
     val autoCrop: StateFlow<Boolean> = settingsRepository.autoCropFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
         
@@ -128,6 +137,14 @@ class ScannerViewModel @Inject constructor(
     private val highResCache = object : android.util.LruCache<String, Bitmap>(8) {
         override fun entryRemoved(evicted: Boolean, key: String?, oldValue: Bitmap?, newValue: Bitmap?) {
             Log.d("ScannerViewModel", "Disk-Backed Hybrid LRU Cache evicted high-res bitmap for key: $key")
+        }
+    }
+
+    init {
+        viewModelScope.launch {
+            autoCapture.collect { enabled ->
+                _uiState.update { it.copy(isAutoCaptureEnabled = enabled) }
+            }
         }
     }
 
@@ -247,16 +264,74 @@ class ScannerViewModel @Inject constructor(
     }
 
     // IMPROVEMENT: Added async detectEdges runner updating isAutoRunning state Flow
+    private var stableFrameCount = 0
+    private var lastQuadPoints: List<com.safescan.domain.model.Point>? = null
+    private val STABLE_FRAME_THRESHOLD = 5
+    private val STABILITY_TOLERANCE = 30.0
+
+    fun onDocumentDetected(points: List<com.safescan.domain.model.Point>?) {
+        if (!autoCapture.value || points == null || points.size != 4) {
+            stableFrameCount = 0
+            lastQuadPoints = null
+            return
+        }
+
+        if (lastQuadPoints == null) {
+            lastQuadPoints = points
+            stableFrameCount = 1
+            return
+        }
+
+        if (isStable(lastQuadPoints!!, points)) {
+            stableFrameCount++
+        } else {
+            stableFrameCount = 1
+        }
+
+        lastQuadPoints = points
+
+        if (stableFrameCount >= STABLE_FRAME_THRESHOLD) {
+            stableFrameCount = 0
+            lastQuadPoints = null
+            triggerAutoCapture()
+        }
+    }
+
+    private fun isStable(p1: List<com.safescan.domain.model.Point>, p2: List<com.safescan.domain.model.Point>): Boolean {
+        var totalDist = 0.0
+        for (i in 0..3) {
+            val dx = p1[i].x - p2[i].x
+            val dy = p1[i].y - p2[i].y
+            totalDist += kotlin.math.sqrt(dx * dx + dy * dy)
+        }
+        return totalDist < STABILITY_TOLERANCE
+    }
+
+    private fun triggerAutoCapture() {
+        // Trigger capture via event or directly if we have a callback
+        _autoCaptureEvent.tryEmit(Unit)
+    }
+
+    private val _autoCaptureEvent = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val autoCaptureEvent = _autoCaptureEvent.asSharedFlow()
+
     fun detectEdges(bitmap: Bitmap, onResult: (List<Point>?) -> Unit) {
+        if (bitmap.isRecycled) {
+            Log.e("ScannerViewModel", "detectEdges: Provided bitmap is recycled!")
+            onResult(null)
+            return
+        }
         _uiState.update { it.copy(isAutoRunning = true) }
         viewModelScope.launch(Dispatchers.IO) {
             var points: List<Point>? = null
             // Try TFLite Local ML first
             try {
-                val quad = documentScanner.detectDocument(bitmap)
-                if (quad != null) {
-                    points = listOf(quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft)
-                    Log.d("ScannerViewModel", "detectEdges: Successfully detected corners using TFLite")
+                if (!bitmap.isRecycled) {
+                    val quad = documentScanner.detectDocument(bitmap)
+                    if (quad != null) {
+                        points = listOf(quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft)
+                        Log.d("ScannerViewModel", "detectEdges: Successfully detected corners using TFLite")
+                    }
                 }
             } catch (e: Throwable) {
                 Log.e("ScannerViewModel", "detectEdges: TFLite ML detection failed, falling back to OpenCV", e)
@@ -265,8 +340,10 @@ class ScannerViewModel @Inject constructor(
             // Fallback to OpenCV
             if (points == null || points.size != 4) {
                 try {
-                    points = edgeDetectionEngine.detectEdges(bitmap)
-                    Log.d("ScannerViewModel", "detectEdges: Successfully detected corners using OpenCV fallback")
+                    if (!bitmap.isRecycled) {
+                        points = edgeDetectionEngine.detectEdges(bitmap)
+                        Log.d("ScannerViewModel", "detectEdges: Successfully detected corners using OpenCV fallback")
+                    }
                 } catch (e: Throwable) {
                     Log.e("ScannerViewModel", "detectEdges: OpenCV detection fallback failed", e)
                 }
@@ -274,7 +351,11 @@ class ScannerViewModel @Inject constructor(
 
             _uiState.update { it.copy(isAutoRunning = false) }
             withContext(Dispatchers.Main) {
-                onResult(points)
+                try {
+                    onResult(points)
+                } catch (e: Throwable) {
+                    Log.e("ScannerViewModel", "detectEdges: Callback onResult failed", e)
+                }
             }
         }
     }

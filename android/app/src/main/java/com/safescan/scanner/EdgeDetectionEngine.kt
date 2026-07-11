@@ -16,6 +16,7 @@ class EdgeDetectionEngine {
     }
 
     fun detectEdges(bitmap: Bitmap): List<Point>? {
+        if (bitmap.isRecycled) return null
         val src = Mat()
         Utils.bitmapToMat(bitmap, src)
         
@@ -166,13 +167,20 @@ class EdgeDetectionEngine {
     }
 
     private fun orderPoints(pts: List<Point>): List<Point> {
+        if (pts.size < 4) return pts
+
         val sums = pts.map { it.x + it.y }
         val diffs = pts.map { it.y - it.x }
 
-        val tl = pts[sums.indexOf(sums.minOrNull()!!)]
-        val br = pts[sums.indexOf(sums.maxOrNull()!!)]
-        val tr = pts[diffs.indexOf(diffs.minOrNull()!!)]
-        val bl = pts[diffs.indexOf(diffs.maxOrNull()!!)]
+        val minSum = sums.minOrNull() ?: 0.0
+        val maxSum = sums.maxOrNull() ?: 0.0
+        val minDiff = diffs.minOrNull() ?: 0.0
+        val maxDiff = diffs.maxOrNull() ?: 0.0
+
+        val tl = pts[sums.indexOf(minSum)]
+        val br = pts[sums.indexOf(maxSum)]
+        val tr = pts[diffs.indexOf(minDiff)]
+        val bl = pts[diffs.indexOf(maxDiff)]
 
         return listOf(tl, tr, br, bl)
     }
