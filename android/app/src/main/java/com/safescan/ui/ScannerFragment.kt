@@ -1057,7 +1057,7 @@ class ScannerFragment : Fragment() {
                     viewModel.isDocumentOpenedFromLibrary,
                     viewModel.usePhoneCamera,
                     viewModel.useNativeScanner
-                ) { _, _, _, _, _, _ ->
+                ) { _ ->
                     // Trigger state update when any of these change
                 }.collect {
                     updateCameraState()
