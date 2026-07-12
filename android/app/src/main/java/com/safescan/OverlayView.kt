@@ -64,7 +64,7 @@ class OverlayView @JvmOverloads constructor(
         
         path.op(holePath, Path.Op.DIFFERENCE)
         
-        canvas.drawPath(path, backgroundPaint)
+        // canvas.drawPath(path, backgroundPaint)
         canvas.drawRoundRect(holeRect, radius, radius, strokePaint)
     }
 
