@@ -100,10 +100,22 @@ class ScannerFragment : Fragment() {
                 for (uri in list) {
                     try {
                         val inputStream = requireContext().contentResolver.openInputStream(uri)
-                        val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                        var importedBitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
                         inputStream?.close()
-                        if (bitmap != null) {
-                            viewModel.onCapture(bitmap, forceSkipEditor = list.size > 1)
+                        if (importedBitmap != null) {
+                            // Always apply EXIF orientation correction so images display upright
+                            val exifRotation = getExifRotation(requireContext(), uri)
+                            if (exifRotation != 0) {
+                                val matrix = android.graphics.Matrix().apply { postRotate(exifRotation.toFloat()) }
+                                val rotated = android.graphics.Bitmap.createBitmap(importedBitmap, 0, 0, importedBitmap.width, importedBitmap.height, matrix, true)
+                                importedBitmap.recycle()
+                                importedBitmap = rotated
+                            }
+                            // If Auto-Rotation is enabled, apply intelligent mode-based aspect ratio correction
+                            if (viewModel.autoRotation.value) {
+                                importedBitmap = autoRotateForMode(importedBitmap, viewModel.currentMode.value)
+                            }
+                            viewModel.onCapture(importedBitmap, forceSkipEditor = list.size > 1)
                             successCount++
                         }
                     } catch (e: Exception) {
@@ -136,7 +148,21 @@ class ScannerFragment : Fragment() {
                         android.provider.MediaStore.Images.Media.getBitmap(requireContext().contentResolver, uri)
                     }
                     // It returns a hardware bitmap on P+. We might need to copy it to a software bitmap to process it.
-                    val softwareBitmap = bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
+                    var softwareBitmap = bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
+                    
+                    // Always apply EXIF orientation correction so images display upright
+                    val exifRotation = getExifRotation(requireContext(), uri)
+                    if (exifRotation != 0) {
+                        val matrix = android.graphics.Matrix().apply { postRotate(exifRotation.toFloat()) }
+                        val rotated = android.graphics.Bitmap.createBitmap(softwareBitmap, 0, 0, softwareBitmap.width, softwareBitmap.height, matrix, true)
+                        softwareBitmap.recycle()
+                        softwareBitmap = rotated
+                    }
+                    // If Auto-Rotation is enabled, apply intelligent mode-based aspect ratio correction
+                    if (viewModel.autoRotation.value) {
+                        softwareBitmap = autoRotateForMode(softwareBitmap, viewModel.currentMode.value)
+                    }
+                    
                     viewModel.onCapture(softwareBitmap, isNativeScanned = true)
                 } catch (e: Exception) {
                     Log.e("ScannerFragment", "Failed to process captured image", e)
@@ -156,10 +182,22 @@ class ScannerFragment : Fragment() {
                         try {
                             val uri = page.imageUri
                             val inputStream = requireContext().contentResolver.openInputStream(uri)
-                            val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                            var scanBitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
                             inputStream?.close()
-                            if (bitmap != null) {
-                                viewModel.onCapture(bitmap, isNativeScanned = true, forceSkipEditor = true)
+                            if (scanBitmap != null) {
+                                // Always apply EXIF orientation correction so images display upright
+                                val exifRotation = getExifRotation(requireContext(), uri)
+                                if (exifRotation != 0) {
+                                    val matrix = android.graphics.Matrix().apply { postRotate(exifRotation.toFloat()) }
+                                    val rotated = android.graphics.Bitmap.createBitmap(scanBitmap, 0, 0, scanBitmap.width, scanBitmap.height, matrix, true)
+                                    scanBitmap.recycle()
+                                    scanBitmap = rotated
+                                }
+                                // If Auto-Rotation is enabled, apply intelligent mode-based aspect ratio correction
+                                if (viewModel.autoRotation.value) {
+                                    scanBitmap = autoRotateForMode(scanBitmap, viewModel.currentMode.value)
+                                }
+                                viewModel.onCapture(scanBitmap, isNativeScanned = true, forceSkipEditor = true)
                             }
                         } catch (e: Exception) {
                             Log.e("ScannerFragment", "Error processing scanned image", e)
@@ -576,19 +614,67 @@ class ScannerFragment : Fragment() {
     private fun getOverlayHoleRect(pw: Float, ph: Float): android.graphics.RectF {
         val mode = viewModel.currentMode.value
         val baseRatio = com.safescan.scanner.CameraHardwareConfig.getTargetRatio(requireContext(), mode)
-        val finalRatio = if (mode == com.safescan.data.ScannerMode.GRID && baseRatio > 1.0f) {
-            baseRatio 
-        } else if (baseRatio > 1.0f) {
-            1f / baseRatio 
-        } else {
-            baseRatio 
+        val finalRatio = when (mode) {
+            com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> {
+                1.586f
+            }
+            com.safescan.data.ScannerMode.DOCUMENT -> {
+                if (baseRatio > 1.0f) 1f / baseRatio else baseRatio
+            }
         }
-        val density = resources.displayMetrics.density
-        val rectWidth = pw * 0.98f
-        val rectHeight = rectWidth / finalRatio
+
+        val maxWidth = pw * 0.90f
+        val maxHeight = ph * 0.85f
+
+        var rectWidth = maxWidth
+        var rectHeight = rectWidth / finalRatio
+
+        if (rectHeight > maxHeight) {
+            rectHeight = maxHeight
+            rectWidth = rectHeight * finalRatio
+        }
+
         val rectLeft = (pw - rectWidth) / 2f
-        val rectTop = ((ph - rectHeight) / 2f) - (60f * density)
+        val rectTop = (ph - rectHeight) / 2f
         return android.graphics.RectF(rectLeft, rectTop, rectLeft + rectWidth, rectTop + rectHeight)
+    }
+
+    private fun getExifRotation(context: android.content.Context, uri: android.net.Uri): Int {
+        var rotation = 0
+        try {
+            context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                val exifInterface = android.media.ExifInterface(inputStream)
+                val orientation = exifInterface.getAttributeInt(
+                    android.media.ExifInterface.TAG_ORIENTATION,
+                    android.media.ExifInterface.ORIENTATION_NORMAL
+                )
+                rotation = when (orientation) {
+                    android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                    android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                    android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                    else -> 0
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ScannerFragment", "Failed to read EXIF rotation for uri: $uri", e)
+        }
+        return rotation
+    }
+
+    private fun autoRotateForMode(bitmap: android.graphics.Bitmap, mode: com.safescan.data.ScannerMode): android.graphics.Bitmap {
+        val isLandscape = bitmap.width > bitmap.height
+        val needsRotation = when (mode) {
+            com.safescan.data.ScannerMode.DOCUMENT -> isLandscape // DOCUMENT should be portrait
+            com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> !isLandscape // CARD/GRID should be landscape
+        }
+        return if (needsRotation) {
+            val matrix = android.graphics.Matrix().apply { postRotate(90f) }
+            val rotated = android.graphics.Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            bitmap.recycle()
+            rotated
+        } else {
+            bitmap
+        }
     }
 
     private fun updateCameraState() {
@@ -942,11 +1028,9 @@ class ScannerFragment : Fragment() {
                 override fun onCaptureSuccess(imageProxy: ImageProxy) {
                     cameraControl?.cancelFocusAndMetering()
                     val rawBitmap = imageProxy.toBitmap()
-                    val rotationDegrees = if (viewModel.autoRotation.value) {
-                        imageProxy.imageInfo.rotationDegrees
-                    } else {
-                        0
-                    }
+                    // ALWAYS rotate the raw camera sensor bitmap by imageProxy.imageInfo.rotationDegrees
+                    // so it displays in standard upright portrait/landscape orientation matching the screen preview.
+                    val rotationDegrees = imageProxy.imageInfo.rotationDegrees
                     val bitmap = if (rotationDegrees != 0) {
                         val matrix = android.graphics.Matrix().apply { postRotate(rotationDegrees.toFloat()) }
                         val rotated = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
@@ -956,7 +1040,48 @@ class ScannerFragment : Fragment() {
                         rawBitmap
                     }
 
-                    val finalBitmap = bitmap
+                    // Precisely crop the high-resolution photo to match the visual cutout frame before processing
+                    val binding = _binding
+                    var finalBitmap = if (binding != null) {
+                        val pw = binding.previewView.width.toFloat()
+                        val ph = binding.previewView.height.toFloat()
+                        val holeRect = getOverlayHoleRect(pw, ph)
+                        if (pw > 0f && ph > 0f && !holeRect.isEmpty) {
+                            val bw = bitmap.width.toFloat()
+                            val bh = bitmap.height.toFloat()
+                            
+                            val scale = maxOf(pw / bw, ph / bh)
+                            val scaledBw = bw * scale
+                            val scaledBh = bh * scale
+                            
+                            val leftOffset = (scaledBw - pw) / 2f
+                            val topOffset = (scaledBh - ph) / 2f
+                            
+                            val cropLeft = ((holeRect.left + leftOffset) / scale).toInt().coerceIn(0, bitmap.width)
+                            val cropTop = ((holeRect.top + topOffset) / scale).toInt().coerceIn(0, bitmap.height)
+                            val cropRight = ((holeRect.right + leftOffset) / scale).toInt().coerceIn(0, bitmap.width)
+                            val cropBottom = ((holeRect.bottom + topOffset) / scale).toInt().coerceIn(0, bitmap.height)
+                            
+                            val cropWidth = (cropRight - cropLeft).coerceAtLeast(100)
+                            val cropHeight = (cropBottom - cropTop).coerceAtLeast(100)
+                            
+                            val safeWidth = cropWidth.coerceAtMost(bitmap.width - cropLeft)
+                            val safeHeight = cropHeight.coerceAtMost(bitmap.height - cropTop)
+                            
+                            val cropped = Bitmap.createBitmap(bitmap, cropLeft, cropTop, safeWidth, safeHeight)
+                            bitmap.recycle()
+                            cropped
+                        } else {
+                            bitmap
+                        }
+                    } else {
+                        bitmap
+                    }
+
+                    // If Auto-Rotation is enabled, apply intelligent mode-based aspect ratio/layout correction
+                    if (viewModel.autoRotation.value) {
+                        finalBitmap = autoRotateForMode(finalBitmap, viewModel.currentMode.value)
+                    }
 
                     viewModel.onCapture(finalBitmap)
                     viewModel.isFocusing = false

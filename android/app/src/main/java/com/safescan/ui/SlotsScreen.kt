@@ -642,17 +642,13 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean, modifier: Modifier =
         
         // Safely determine target aspect ratio (width / height) based on actual document mode
         val finalRatio = when (mode) {
-            ScannerMode.CARD -> {
+            ScannerMode.CARD, ScannerMode.GRID -> {
                 // ID Card / CNIC is standard landscape (ID-1 ratio is 1.586)
                 1.586f
             }
             ScannerMode.DOCUMENT -> {
                 // A4 Paper is portrait (baseRatio is usually landscape, e.g. 1.4142f, so we invert)
                 if (baseRatio > 1.0f) 1f / baseRatio else baseRatio
-            }
-            ScannerMode.GRID -> {
-                // CNIC grid is portrait (baseRatio is portrait, e.g. 0.6306f or 0.75f)
-                if (baseRatio < 1.0f) baseRatio else 1f / baseRatio
             }
         }
 
