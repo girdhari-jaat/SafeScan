@@ -313,31 +313,15 @@ class ScannerFragment : Fragment() {
 
     private fun updateViewMode(mode: FragmentViewMode) {
         currentViewMode = mode
+        updateCameraState()
         if (mode == FragmentViewMode.LIBRARY) {
             // Hide camera-related XML views entirely
-            binding.previewView.visibility = View.GONE
             binding.btnCapture.visibility = View.GONE
             binding.btnFlash.visibility = View.GONE
             binding.btnSwitchEngine.visibility = View.GONE
             binding.resultImageView.visibility = View.GONE
-
-            // Release Camera Resources immediately
-            val currentContext = context
-            if (currentContext != null) {
-                try {
-                    val cameraProviderFuture = ProcessCameraProvider.getInstance(currentContext)
-                    cameraProviderFuture.addListener({
-                        try {
-                            val cameraProvider = cameraProviderFuture.get()
-                            cameraProvider.unbindAll()
-                        } catch (e: Exception) {
-                            Log.e("ScannerFragment", "Failed to release camera", e)
-                        }
-                    }, ContextCompat.getMainExecutor(currentContext))
-                } catch (e: Exception) {
-                    Log.e("ScannerFragment", "Error requesting camera provider", e)
-                }
-            }
+            binding.overlayView.visibility = View.GONE
+            binding.overlayView.updateCorners(null)
 
             // Bind Compose View to LibraryScreen
             binding.composeView.apply {
@@ -347,7 +331,7 @@ class ScannerFragment : Fragment() {
                         LibraryScreen(
                             viewModel = viewModel,
                             onStartScan = {
-                                viewModel.isDocumentOpenedFromLibrary = false
+                                viewModel.isDocumentOpenedFromLibrary.value = false
                                 viewModel.openedDocumentId = null
                                 checkPermissionAndStartScanner()
                             },
@@ -361,13 +345,6 @@ class ScannerFragment : Fragment() {
             }
         } else {
             // Show camera-related XML views (only previewView, hide old buttons)
-            if (viewModel.isDocumentOpenedFromLibrary) {
-                binding.previewView.visibility = View.GONE
-            } else {
-                binding.previewView.visibility = View.VISIBLE
-                // Start live CameraX preview
-                startCamera()
-            }
             binding.btnCapture.visibility = View.GONE
             binding.btnFlash.visibility = View.GONE
             binding.btnSwitchEngine.visibility = View.GONE
@@ -380,6 +357,16 @@ class ScannerFragment : Fragment() {
                         val isEditing by viewModel.isEditing.collectAsState()
                         val isCropping by viewModel.isCropping.collectAsState()
                         val isSettingsOpen by viewModel.isSettingsOpen.collectAsState()
+                        val isDocOpenFromLib by viewModel.isDocumentOpenedFromLibrary.collectAsState()
+
+                        val showOverlay = !isSettingsOpen && !isCropping && !isEditing && !isDocOpenFromLib
+                        androidx.compose.runtime.LaunchedEffect(showOverlay) {
+                            binding.overlayView.visibility = if (showOverlay) View.VISIBLE else View.GONE
+                            if (!showOverlay) {
+                                binding.overlayView.updateCorners(null)
+                            }
+                        }
+
                         if (isSettingsOpen) {
                             com.safescan.ui.SettingsScreen(
                                 viewModel = viewModel,
@@ -389,11 +376,11 @@ class ScannerFragment : Fragment() {
                             com.safescan.ui.CropScreen(viewModel = viewModel)
                         } else if (isEditing) {
                             com.safescan.ui.EditorScreen(viewModel = viewModel)
-                        } else if (viewModel.isDocumentOpenedFromLibrary) {
+                        } else if (isDocOpenFromLib) {
                             com.safescan.ui.DocumentGridView(
                                 viewModel = viewModel,
                                 onDismiss = {
-                                    viewModel.isDocumentOpenedFromLibrary = false
+                                    viewModel.isDocumentOpenedFromLibrary.value = false
                                     updateViewMode(FragmentViewMode.LIBRARY)
                                 }
                             )
@@ -604,6 +591,48 @@ class ScannerFragment : Fragment() {
         return android.graphics.RectF(rectLeft, rectTop, rectLeft + rectWidth, rectTop + rectHeight)
     }
 
+    private fun updateCameraState() {
+        if (!isAdded) return
+        val currentContext = context ?: return
+        val binding = _binding ?: return
+        
+        val isEditing = viewModel.isEditing.value
+        val isCropping = viewModel.isCropping.value
+        val isSettingsOpen = viewModel.isSettingsOpen.value
+        val isDocOpenFromLib = viewModel.isDocumentOpenedFromLibrary.value
+        val isScannerMode = currentViewMode == FragmentViewMode.SCANNER
+        val usePhoneCam = viewModel.usePhoneCamera.value
+        val useNativeScan = viewModel.useNativeScanner.value
+        
+        val shouldCameraBeOn = isScannerMode && 
+                               !isDocOpenFromLib && 
+                               !isEditing && 
+                               !isCropping && 
+                               !isSettingsOpen && 
+                               !usePhoneCam && 
+                               !useNativeScan &&
+                               allPermissionsGranted()
+                               
+        if (shouldCameraBeOn) {
+            startCamera()
+        } else {
+            binding.previewView.visibility = View.GONE
+            try {
+                val cameraProviderFuture = ProcessCameraProvider.getInstance(currentContext)
+                cameraProviderFuture.addListener({
+                    try {
+                        val cameraProvider = cameraProviderFuture.get()
+                        cameraProvider.unbindAll()
+                    } catch (e: Exception) {
+                        Log.e("ScannerFragment", "Failed to unbind camera in updateCameraState", e)
+                    }
+                }, ContextCompat.getMainExecutor(currentContext))
+            } catch (e: Exception) {
+                Log.e("ScannerFragment", "Error getting camera provider in updateCameraState", e)
+            }
+        }
+    }
+
     private fun startCamera() {
         if (!isAdded) return
         val currentContext = context ?: return
@@ -658,7 +687,8 @@ class ScannerFragment : Fragment() {
                 imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
                     val isLiveDetectOn = viewModel.liveDetect.value
                     val isBatterySaverOn = viewModel.batterySaver.value
-                    if (isLiveDetectOn && !isBatterySaverOn) {
+                    val isOverlayActive = !viewModel.isEditing.value && !viewModel.isCropping.value && !viewModel.isSettingsOpen.value && !viewModel.isDocumentOpenedFromLibrary.value
+                    if (isLiveDetectOn && !isBatterySaverOn && isOverlayActive) {
                         try {
                             val rotationDegrees = imageProxy.imageInfo.rotationDegrees
                             val width = imageProxy.width
@@ -698,8 +728,12 @@ class ScannerFragment : Fragment() {
                                 }
                             }
                             
-                            liveEdgeDetectionEngine.process(imageProxy, viewModel.documentScanner) { corners ->
-                                val mappedPoints = mapPointsToPreviewView(corners, width, height, rotationDegrees)
+                            liveEdgeDetectionEngine.process(imageProxy, viewModel.documentScanner, viewModel.uiState.value.currentEngine) { corners ->
+                                val mappedPoints = if (corners != null && corners.isNotEmpty()) {
+                                    mapPointsToPreviewView(corners, width, height, rotationDegrees)
+                                } else {
+                                    null
+                                }
                                 activity?.runOnUiThread {
                                     val bindingObj = _binding
                                     bindingObj?.overlayView?.updateCorners(mappedPoints)
@@ -756,11 +790,7 @@ class ScannerFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        if (currentViewMode == FragmentViewMode.SCANNER && allPermissionsGranted()) {
-            if (!viewModel.isDocumentOpenedFromLibrary) {
-                startCamera()
-            }
-        }
+        updateCameraState()
     }
 
     private fun allPermissionsGranted(): Boolean {
@@ -782,8 +812,12 @@ class ScannerFragment : Fragment() {
     }
 
     private fun focusAndTakePhoto() {
+        if (viewModel.isFocusing) return
+        viewModel.isFocusing = true
+
         val binding = _binding
         if (binding == null) {
+            viewModel.isFocusing = false
             takePhoto()
             return
         }
@@ -812,19 +846,40 @@ class ScannerFragment : Fragment() {
             androidx.camera.core.FocusMeteringAction.FLAG_AF or androidx.camera.core.FocusMeteringAction.FLAG_AE
         ).build()
         
-        viewModel.isFocusing = true
-        cameraControl?.startFocusAndMetering(action)?.addListener({
+        val future = cameraControl?.startFocusAndMetering(action)
+        if (future == null) {
             viewModel.isFocusing = false
             takePhoto()
+            return
+        }
+
+        future.addListener({
+            try {
+                val result = future.get()
+                if (result.isFocusSuccessful) {
+                    Log.d("ScannerFragment", "Focus locked and successful. Triggering photo capture.")
+                    takePhoto()
+                } else {
+                    Log.d("ScannerFragment", "Focus lock failed. Resetting isFocusing.")
+                    cameraControl?.cancelFocusAndMetering()
+                    viewModel.isFocusing = false
+                }
+            } catch (e: Exception) {
+                Log.e("ScannerFragment", "Focus metering listener exception", e)
+                cameraControl?.cancelFocusAndMetering()
+                viewModel.isFocusing = false
+            }
         }, androidx.core.content.ContextCompat.getMainExecutor(requireContext()))
     }
 
     private fun takePhoto() {
         if (viewModel.usePhoneCamera.value) {
+            viewModel.isFocusing = false
             openPhoneCamera()
             return
         }
         if (viewModel.useNativeScanner.value) {
+            viewModel.isFocusing = false
             val maxPages = when (viewModel.currentMode.value) {
                 com.safescan.data.ScannerMode.CARD -> 2
                 com.safescan.data.ScannerMode.GRID -> 8
@@ -834,9 +889,18 @@ class ScannerFragment : Fragment() {
             return
         }
 
-        val imageCapture = imageCapture ?: return
-        val currentContext = context ?: return
-        val binding = _binding ?: return
+        val imageCapture = imageCapture ?: run {
+            viewModel.isFocusing = false
+            return
+        }
+        val currentContext = context ?: run {
+            viewModel.isFocusing = false
+            return
+        }
+        val binding = _binding ?: run {
+            viewModel.isFocusing = false
+            return
+        }
 
         binding.progressBar.visibility = View.VISIBLE
 
@@ -892,45 +956,16 @@ class ScannerFragment : Fragment() {
                         rawBitmap
                     }
 
-                    val finalBitmap = _binding?.let { bindingObj ->
-                        val previewView = bindingObj.previewView
-                        val pw = previewView.width.toFloat()
-                        val ph = previewView.height.toFloat()
-                        val holeRect = getOverlayHoleRect(pw, ph)
-                        
-                        val bw = bitmap.width.toFloat()
-                        val bh = bitmap.height.toFloat()
-                        
-                        if (pw > 0 && ph > 0 && bw > 0 && bh > 0 && !holeRect.isEmpty) {
-                            val scale = maxOf(pw / bw, ph / bh)
-                            val scaledBw = bw * scale
-                            val scaledBh = bh * scale
-                            
-                            val leftOffset = (scaledBw - pw) / 2f
-                            val topOffset = (scaledBh - ph) / 2f
-                            
-                            val cropLeft = ((holeRect.left + leftOffset) / scale).toInt()
-                            val cropTop = ((holeRect.top + topOffset) / scale).toInt()
-                            val cropRight = ((holeRect.right + leftOffset) / scale).toInt()
-                            val cropBottom = ((holeRect.bottom + topOffset) / scale).toInt()
-                            
-                            val safeLeft = cropLeft.coerceIn(0, bitmap.width)
-                            val safeTop = cropTop.coerceIn(0, bitmap.height)
-                            val safeWidth = (cropRight - cropLeft).coerceIn(0, bitmap.width - safeLeft)
-                            val safeHeight = (cropBottom - cropTop).coerceIn(0, bitmap.height - safeTop)
-                            
-                            if (safeWidth > 0 && safeHeight > 0) {
-                                Bitmap.createBitmap(bitmap, safeLeft, safeTop, safeWidth, safeHeight)
-                            } else bitmap
-                        } else bitmap
-                    } ?: bitmap
+                    val finalBitmap = bitmap
 
                     viewModel.onCapture(finalBitmap)
+                    viewModel.isFocusing = false
                     imageProxy.close()
                 }
 
                 override fun onError(exception: ImageCaptureException) {
                     cameraControl?.cancelFocusAndMetering()
+                    viewModel.isFocusing = false
                     Log.e("ScannerFragment", "Photo capture failed: ${exception.message}", exception)
                     _binding?.progressBar?.visibility = View.GONE
                     context?.let { ctx ->
@@ -1018,40 +1053,14 @@ class ScannerFragment : Fragment() {
                 kotlinx.coroutines.flow.combine(
                     viewModel.isEditing,
                     viewModel.isCropping,
-                    viewModel.isSettingsOpen
-                ) { editing, cropping, settingsOpen ->
-                    editing || cropping || settingsOpen
-                }.collect { isOverlayOpen ->
-                    if (currentViewMode == FragmentViewMode.SCANNER && !viewModel.isDocumentOpenedFromLibrary) {
-                        if (isOverlayOpen) {
-                            val currentContext = context
-                            if (currentContext != null) {
-                                try {
-                                    val cameraProviderFuture = ProcessCameraProvider.getInstance(currentContext)
-                                    cameraProviderFuture.addListener({
-                                        try {
-                                            val cameraProvider = cameraProviderFuture.get()
-                                            cameraProvider.unbindAll()
-                                        } catch (e: Exception) {}
-                                    }, ContextCompat.getMainExecutor(currentContext))
-                                } catch (e: Exception) {}
-                            }
-                        } else {
-                            startCamera()
-                        }
-                    }
-                }
-            }
-        }
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                kotlinx.coroutines.flow.combine(viewModel.usePhoneCamera, viewModel.useNativeScanner) { a, b ->
-                    Pair(a, b)
+                    viewModel.isSettingsOpen,
+                    viewModel.isDocumentOpenedFromLibrary,
+                    viewModel.usePhoneCamera,
+                    viewModel.useNativeScanner
+                ) { _, _, _, _, _, _ ->
+                    // Trigger state update when any of these change
                 }.collect {
-                    if (currentViewMode == FragmentViewMode.SCANNER && !viewModel.isDocumentOpenedFromLibrary) {
-                        startCamera()
-                    }
+                    updateCameraState()
                 }
             }
         }

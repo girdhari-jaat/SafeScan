@@ -55,7 +55,12 @@ class LiveEdgeDetectionEngine {
         }
     }
 
-    fun process(imageProxy: ImageProxy, documentScanner: DocumentScanner?, onResult: (List<Point>) -> Unit) = synchronized(this) {
+    fun process(
+        imageProxy: ImageProxy, 
+        documentScanner: DocumentScanner?, 
+        engineType: ScannerEngineType, 
+        onResult: (List<Point>?) -> Unit
+    ) = synchronized(this) {
         initMatsIfNeeded()
         var bitmap: android.graphics.Bitmap? = null
         val contours = ArrayList<MatOfPoint>()
@@ -67,21 +72,21 @@ class LiveEdgeDetectionEngine {
             
             var foundCorners: List<Point>? = null
             
-            // 1. Try TFLite ML first
-            if (documentScanner != null) {
-                try {
-                    val quad = documentScanner.detectDocument(bitmap, true)
-                    if (quad != null) {
-                        foundCorners = listOf(quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft)
-                        Log.d("LiveEdgeDetectionEngine", "Successfully detected document corners using TFLite ML on live feed")
+            if (engineType == ScannerEngineType.LOCAL_ML) {
+                // 1. Try TFLite ML first
+                if (documentScanner != null) {
+                    try {
+                        val quad = documentScanner.detectDocument(bitmap, true)
+                        if (quad != null) {
+                            foundCorners = listOf(quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft)
+                            Log.d("LiveEdgeDetectionEngine", "Successfully detected document corners using TFLite ML on live feed")
+                        }
+                    } catch (e: Throwable) {
+                        Log.e("LiveEdgeDetectionEngine", "TFLite ML detection failed in live feed", e)
                     }
-                } catch (e: Throwable) {
-                    Log.e("LiveEdgeDetectionEngine", "TFLite ML detection failed in live feed, falling back to OpenCV", e)
                 }
-            }
-            
-            // 2. Fallback to OpenCV if TFLite didn't find corners
-            if (foundCorners == null) {
+            } else {
+                // 2. Use OpenCV directly
                 Utils.bitmapToMat(bitmap, src!!)
                 
                 // Fast downscale for live detection (much faster FPS)
@@ -159,9 +164,7 @@ class LiveEdgeDetectionEngine {
                 }
             }
             
-            if (foundCorners != null) {
-                onResult(foundCorners)
-            }
+            onResult(foundCorners)
         } catch (e: Throwable) {
             Log.e("LiveEdgeDetectionEngine", "Live edge detection processing error", e)
         } finally {

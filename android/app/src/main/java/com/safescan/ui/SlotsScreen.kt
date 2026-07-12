@@ -640,22 +640,37 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean, modifier: Modifier =
 
         val baseRatio = com.safescan.scanner.CameraHardwareConfig.getTargetRatio(context, mode)
         
-        // Determine correct ratio for width/height division
-        val finalRatio = if (mode == ScannerMode.GRID && baseRatio > 1.0f) {
-            baseRatio // Landscape for Grid (width > height)
-        } else if (baseRatio > 1.0f) {
-            1f / baseRatio // Portrait for Paper/Card (height > width)
-        } else {
-            baseRatio // Already portrait format (< 1.0)
+        // Safely determine target aspect ratio (width / height) based on actual document mode
+        val finalRatio = when (mode) {
+            ScannerMode.CARD -> {
+                // ID Card / CNIC is standard landscape (ID-1 ratio is 1.586)
+                1.586f
+            }
+            ScannerMode.DOCUMENT -> {
+                // A4 Paper is portrait (baseRatio is usually landscape, e.g. 1.4142f, so we invert)
+                if (baseRatio > 1.0f) 1f / baseRatio else baseRatio
+            }
+            ScannerMode.GRID -> {
+                // CNIC grid is portrait (baseRatio is portrait, e.g. 0.6306f or 0.75f)
+                if (baseRatio < 1.0f) baseRatio else 1f / baseRatio
+            }
         }
 
-        // Use 98% of screen width and calculate height dynamically
-        val rectWidth = width * 0.98f
-        val rectHeight = rectWidth / finalRatio
+        // Limit the cutout bounds to prevent overflowing the preview viewport
+        val maxWidth = width * 0.90f
+        val maxHeight = height * 0.85f
+
+        var rectWidth = maxWidth
+        var rectHeight = rectWidth / finalRatio
+
+        if (rectHeight > maxHeight) {
+            rectHeight = maxHeight
+            rectWidth = rectHeight * finalRatio
+        }
 
         if (rectWidth > 0f && rectHeight > 0f) {
             val left = (width - rectWidth) / 2f
-            val top = ((height - rectHeight) / 2f) - 60.dp.toPx() // Shifted up so it doesn't overlap with thumbnails
+            val top = (height - rectHeight) / 2f
 
             // 1. Draw outer darkened scrim rectangles
             drawRect(

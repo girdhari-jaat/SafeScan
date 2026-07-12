@@ -117,13 +117,9 @@ class PdfExporter(private val context: Context) {
                     positions.add(Pair(startX, startY + (r * (cardH + gutterY))))
                 }
 
-                // Fill slots. In CARD mode, length is 2. In GRID mode, length is 8.
+                // Fill slots using ExportHelper. In CARD mode, the front and back images are repeated 4 times on the A4 page.
                 for (i in 0 until 4) {
-                    val frontIdx = i * 2
-                    val backIdx = i * 2 + 1
-
-                    val frontItem = if (frontIdx < slots.size) slots[frontIdx] else null
-                    val backItem = if (backIdx < slots.size) slots[backIdx] else null
+                    val (frontItem, backItem) = ExportHelper.getSlotsForGridRow(slots, mode, i)
 
                     val (x, y) = positions[i]
 

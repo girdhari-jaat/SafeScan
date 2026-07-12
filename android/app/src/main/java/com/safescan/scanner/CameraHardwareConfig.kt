@@ -176,12 +176,8 @@ object CameraHardwareConfig {
             else -> Pair(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY, "High-fidelity resolution with maximum textual details.")
         }
 
-        // Determine base aspect ratio strategy for CameraX
-        val baseAspectRatio = if (kotlin.math.abs(targetRatio - 0.6306f) <= 0.05f) {
-            AspectRatio.RATIO_16_9
-        } else {
-            AspectRatio.RATIO_4_3
-        }
+        // Determine base aspect ratio strategy for CameraX (always RATIO_4_3 as requested for better hardware support and layout)
+        val baseAspectRatio = AspectRatio.RATIO_4_3
 
         val resolutionStrategy = ResolutionStrategy(targetSize, ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)
 
@@ -212,17 +208,8 @@ object CameraHardwareConfig {
      */
     fun getPreviewResolutionSelector(context: Context?, mode: ScannerMode): ResolutionSelector {
         val targetRatio = getTargetRatio(context, mode)
-        val baseAspectRatio = if (kotlin.math.abs(targetRatio - 0.6306f) <= 0.05f) {
-            AspectRatio.RATIO_16_9
-        } else {
-            AspectRatio.RATIO_4_3
-        }
-
-        val targetSize = if (baseAspectRatio == AspectRatio.RATIO_16_9) {
-            Size(1920, 1080)
-        } else {
-            Size(1440, 1080)
-        }
+        val baseAspectRatio = AspectRatio.RATIO_4_3
+        val targetSize = Size(1440, 1080)
 
         return ResolutionSelector.Builder()
             .setAspectRatioStrategy(
@@ -242,17 +229,8 @@ object CameraHardwareConfig {
      */
     fun getImageAnalysisResolutionSelector(context: Context?, mode: ScannerMode): ResolutionSelector {
         val targetRatio = getTargetRatio(context, mode)
-        val baseAspectRatio = if (kotlin.math.abs(targetRatio - 0.6306f) <= 0.05f) {
-            AspectRatio.RATIO_16_9
-        } else {
-            AspectRatio.RATIO_4_3
-        }
-
-        val targetSize = if (baseAspectRatio == AspectRatio.RATIO_16_9) {
-            Size(1280, 720)
-        } else {
-            Size(960, 720)
-        }
+        val baseAspectRatio = AspectRatio.RATIO_4_3
+        val targetSize = Size(960, 720)
 
         return ResolutionSelector.Builder()
             .setAspectRatioStrategy(

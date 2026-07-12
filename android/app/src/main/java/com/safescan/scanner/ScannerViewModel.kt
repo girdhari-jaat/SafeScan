@@ -226,7 +226,7 @@ class ScannerViewModel @Inject constructor(
     val selectedSlotId: MutableStateFlow<String?> = MutableStateFlow(null)
 
     val isEditing: MutableStateFlow<Boolean> = MutableStateFlow(false)
-    var isDocumentOpenedFromLibrary: Boolean = false
+    val isDocumentOpenedFromLibrary: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val editingSlotId: MutableStateFlow<String?> = MutableStateFlow(null)
     val editingBitmapOriginal: MutableStateFlow<Bitmap?> = MutableStateFlow(null)
     val editingBitmapPreview: MutableStateFlow<Bitmap?> = MutableStateFlow(null)
@@ -333,6 +333,7 @@ class ScannerViewModel @Inject constructor(
 
     private fun triggerAutoCapture() {
         // Trigger capture via event or directly if we have a callback
+        isFocusing = true
         _autoCaptureEvent.tryEmit(Unit)
     }
 
@@ -671,10 +672,10 @@ class ScannerViewModel @Inject constructor(
 
     private fun checkIfEmptyAndDelete() {
         val pagesCount = if (capturedJpgFiles.isNotEmpty()) capturedJpgFiles.size else slots.value.count { it.bitmap != null }
-        if (pagesCount == 0 && isDocumentOpenedFromLibrary) {
+        if (pagesCount == 0 && isDocumentOpenedFromLibrary.value) {
             openedDocumentId?.let { docId ->
                 deleteDocument(docId)
-                isDocumentOpenedFromLibrary = false
+                isDocumentOpenedFromLibrary.value = false
                 openedDocumentId = null
             }
         }
@@ -1116,7 +1117,7 @@ class ScannerViewModel @Inject constructor(
     }
 
     fun loadDocumentIntoSlots(doc: com.safescan.data.DocumentMetadata) {
-        isDocumentOpenedFromLibrary = true
+        isDocumentOpenedFromLibrary.value = true
         openedDocumentId = doc.id
         capturedJpgFiles.clear()
         originalJpgBitmaps.clear()

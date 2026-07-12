@@ -66,6 +66,8 @@ class LocalMLEngine(private val context: Context) {
     private var stableFrameCount = 0
     private val STABLE_THRESHOLD = 3
     private val TOLERANCE = 20.0
+    private var lastBitmapWidth = 0
+    private var lastBitmapHeight = 0
 
     private fun isSimilar(current: List<Point>, previous: List<Point>): Boolean {
         if (current.size != previous.size) return false
@@ -82,6 +84,13 @@ class LocalMLEngine(private val context: Context) {
     fun detectCorners(bitmap: Bitmap, isLive: Boolean = false): Quadrilateral? {
         val tflite = interpreter ?: return null
         if (bitmap.isRecycled) return null
+        
+        if (bitmap.width != lastBitmapWidth || bitmap.height != lastBitmapHeight) {
+            lastStableCorners = null
+            stableFrameCount = 0
+            lastBitmapWidth = bitmap.width
+            lastBitmapHeight = bitmap.height
+        }
         
         var binaryMask: Mat? = null
         var resizedMask: Mat? = null
