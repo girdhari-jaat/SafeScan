@@ -77,6 +77,7 @@ class ScannerFragment : Fragment() {
     }
     private var currentViewMode = FragmentViewMode.LIBRARY
     private var isTargetLocked = false
+    private var lastBackPressedTime = 0L
 
     // On-demand permission launcher
     private val requestPermissionLauncher = registerForActivityResult(
@@ -337,9 +338,15 @@ class ScannerFragment : Fragment() {
                     viewModel.isEditing.value = false
                 } else if (currentViewMode == FragmentViewMode.SCANNER) {
                     updateViewMode(FragmentViewMode.LIBRARY)
-                    isEnabled = false
-                    requireActivity().onBackPressedDispatcher.onBackPressed()
-                    isEnabled = true
+                } else if (currentViewMode == FragmentViewMode.LIBRARY) {
+                    val currentTime = System.currentTimeMillis()
+                    if (currentTime - lastBackPressedTime < 2000) {
+                        isEnabled = false
+                        requireActivity().finish()
+                    } else {
+                        lastBackPressedTime = currentTime
+                        Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
