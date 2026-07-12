@@ -586,6 +586,24 @@ class ScannerFragment : Fragment() {
         }
     }
 
+    private fun getOverlayHoleRect(pw: Float, ph: Float): android.graphics.RectF {
+        val mode = viewModel.scannerMode.value
+        val baseRatio = com.safescan.scanner.CameraHardwareConfig.getTargetRatio(requireContext(), mode)
+        val finalRatio = if (mode == com.safescan.data.ScannerMode.GRID && baseRatio > 1.0f) {
+            baseRatio 
+        } else if (baseRatio > 1.0f) {
+            1f / baseRatio 
+        } else {
+            baseRatio 
+        }
+        val density = resources.displayMetrics.density
+        val rectWidth = pw * 0.98f
+        val rectHeight = rectWidth / finalRatio
+        val rectLeft = (pw - rectWidth) / 2f
+        val rectTop = ((ph - rectHeight) / 2f) - (60f * density)
+        return android.graphics.RectF(rectLeft, rectTop, rectLeft + rectWidth, rectTop + rectHeight)
+    }
+
     private fun startCamera() {
         if (!isAdded) return
         val currentContext = context ?: return
@@ -648,7 +666,7 @@ class ScannerFragment : Fragment() {
                             _binding?.let { bindingObj ->
                                 val pw = bindingObj.previewView.width.toFloat()
                                 val ph = bindingObj.previewView.height.toFloat()
-                                val holeRect = bindingObj.overlayView.getHoleRect()
+                                val holeRect = getOverlayHoleRect(pw, ph)
                                 if (pw > 0 && ph > 0 && !holeRect.isEmpty) {
                                     val isRotated = rotationDegrees == 90 || rotationDegrees == 270
                                     val bw = if (isRotated) height.toFloat() else width.toFloat()
@@ -876,9 +894,10 @@ class ScannerFragment : Fragment() {
 
                     val finalBitmap = _binding?.let { bindingObj ->
                         val previewView = bindingObj.previewView
-                        val holeRect = bindingObj.overlayView.getHoleRect()
                         val pw = previewView.width.toFloat()
                         val ph = previewView.height.toFloat()
+                        val holeRect = getOverlayHoleRect(pw, ph)
+                        
                         val bw = bitmap.width.toFloat()
                         val bh = bitmap.height.toFloat()
                         

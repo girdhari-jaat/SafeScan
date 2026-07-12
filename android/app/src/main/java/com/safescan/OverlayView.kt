@@ -25,6 +25,8 @@ class OverlayView @JvmOverloads constructor(
     private var targetRatio: Float = 1.4142f // Default A4
     private val holeRect = RectF()
 
+    private var corners: List<PointF>? = null
+
     fun setAspectRatio(ratio: Float) {
         if (targetRatio != ratio) {
             targetRatio = ratio
@@ -37,13 +39,26 @@ class OverlayView @JvmOverloads constructor(
     }
 
     override fun onDraw(canvas: Canvas) {
-        // Overlay visuals are now handled by ViewfinderOverlay in Compose
         super.onDraw(canvas)
+
+        // Draw live edge detection corners if available
+        corners?.let { pts ->
+            if (pts.size == 4) {
+                val edgePath = Path()
+                edgePath.moveTo(pts[0].x, pts[0].y)
+                edgePath.lineTo(pts[1].x, pts[1].y)
+                edgePath.lineTo(pts[2].x, pts[2].y)
+                edgePath.lineTo(pts[3].x, pts[3].y)
+                edgePath.close()
+                canvas.drawPath(edgePath, strokePaint)
+            }
+        }
     }
 
     // Keep these to prevent compilation errors if called from Fragment
-    fun getCorners(): List<PointF>? = null
+    fun getCorners(): List<PointF>? = corners
     fun updateCorners(newCorners: List<PointF>?) {
-        // Ignored for fixed overlay
+        corners = newCorners
+        invalidate()
     }
 }

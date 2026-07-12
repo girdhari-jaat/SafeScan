@@ -486,6 +486,10 @@ fun CornerHandle(
     onDragEnd: () -> Unit = {},
     onDrag: (Offset) -> Unit
 ) {
+    val currentOnDrag by rememberUpdatedState(onDrag)
+    val currentOnDragStart by rememberUpdatedState(onDragStart)
+    val currentOnDragEnd by rememberUpdatedState(onDragEnd)
+    
     val view = LocalView.current
     Box(
         modifier = Modifier
@@ -498,13 +502,13 @@ fun CornerHandle(
                 detectDragGestures(
                     onDragStart = { 
                         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        onDragStart() 
+                        currentOnDragStart() 
                     },
-                    onDragEnd = { onDragEnd() },
-                    onDragCancel = { onDragEnd() }
+                    onDragEnd = { currentOnDragEnd() },
+                    onDragCancel = { currentOnDragEnd() }
                 ) { change, dragAmount ->
                     change.consume()
-                    onDrag(dragAmount)
+                    currentOnDrag(dragAmount)
                 }
             }
     )

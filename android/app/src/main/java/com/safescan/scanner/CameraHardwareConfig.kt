@@ -42,7 +42,7 @@ object CameraHardwareConfig {
     fun isCnicSupported(context: Context?): Boolean {
         if (context == null) return true // Default true for in-memory crop fallback
         isCnicSupportedCache?.let { return it }
-        val supported = checkRatioSupport(context, 1.5857f, 0.05f)
+        val supported = checkRatioSupport(context, 0.6306f, 0.05f)
         isCnicSupportedCache = supported
         return supported
     }
@@ -59,9 +59,12 @@ object CameraHardwareConfig {
             val map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) ?: return false
             val sizes = map.getOutputSizes(android.graphics.ImageFormat.JPEG) ?: return false
 
+            // Cameras generally output landscape sizes. We should check against max(w,h) / min(w,h)
+            val checkRatio = if (targetRatio < 1.0f) 1.0f / targetRatio else targetRatio
+
             for (size in sizes) {
-                val aspect = size.width.toFloat() / size.height.toFloat() // width is always greater in camera sizes
-                if (kotlin.math.abs(aspect - targetRatio) <= tolerance) {
+                val aspect = Math.max(size.width, size.height).toFloat() / Math.min(size.width, size.height).toFloat()
+                if (kotlin.math.abs(aspect - checkRatio) <= tolerance) {
                     return true
                 }
             }
@@ -89,7 +92,7 @@ object CameraHardwareConfig {
                 if (isA4Supported(context)) 1.4142f else 1.3333f // A4 (1.4142) vs 4:3 (1.3333) fallback
             }
             ScannerMode.GRID -> {
-                if (isCnicSupported(context)) 1.5857f else 0.75f // Pakistani CNIC (1.5857) vs 3:4 Portrait (0.75) fallback
+                if (isCnicSupported(context)) 0.6306f else 0.75f // Pakistani CNIC Portrait (0.6306) vs 3:4 Portrait (0.75) fallback
             }
         }
     }
@@ -99,7 +102,7 @@ object CameraHardwareConfig {
             if (maxMegapixels <= 2.5f) Size(1696, 1200) // approx 2.0 MP
             else if (maxMegapixels <= 5.5f) Size(2592, 1832) // approx 4.7 MP
             else Size(3264, 2304) // approx 7.5 MP
-        } else if (kotlin.math.abs(targetRatio - 1.5857f) <= 0.05f) { // ID Card / CNIC
+        } else if (kotlin.math.abs(targetRatio - 0.6306f) <= 0.05f) { // ID Card / CNIC
             if (maxMegapixels <= 2.5f) Size(1920, 1200) // approx 2.3 MP
             else if (maxMegapixels <= 5.5f) Size(2880, 1800) // approx 5.1 MP
             else Size(3584, 2240) // approx 8.0 MP
@@ -131,9 +134,11 @@ object CameraHardwareConfig {
             val sizes = map.getOutputSizes(android.graphics.ImageFormat.JPEG) ?: return getDefaultSize(targetRatio, maxMegapixels)
 
             val targetPixels = maxMegapixels * 1_000_000f
+            val checkRatio = if (targetRatio < 1.0f) 1.0f / targetRatio else targetRatio
+
             val matchingSizes = sizes.filter { size ->
-                val aspect = size.width.toFloat() / size.height.toFloat()
-                kotlin.math.abs(aspect - targetRatio) <= tolerance
+                val aspect = Math.max(size.width, size.height).toFloat() / Math.min(size.width, size.height).toFloat()
+                kotlin.math.abs(aspect - checkRatio) <= tolerance
             }
 
             if (matchingSizes.isNotEmpty()) {
@@ -172,7 +177,7 @@ object CameraHardwareConfig {
         }
 
         // Determine base aspect ratio strategy for CameraX
-        val baseAspectRatio = if (kotlin.math.abs(targetRatio - 1.5857f) <= 0.05f) {
+        val baseAspectRatio = if (kotlin.math.abs(targetRatio - 0.6306f) <= 0.05f) {
             AspectRatio.RATIO_16_9
         } else {
             AspectRatio.RATIO_4_3
@@ -207,7 +212,7 @@ object CameraHardwareConfig {
      */
     fun getPreviewResolutionSelector(context: Context?, mode: ScannerMode): ResolutionSelector {
         val targetRatio = getTargetRatio(context, mode)
-        val baseAspectRatio = if (kotlin.math.abs(targetRatio - 1.5857f) <= 0.05f) {
+        val baseAspectRatio = if (kotlin.math.abs(targetRatio - 0.6306f) <= 0.05f) {
             AspectRatio.RATIO_16_9
         } else {
             AspectRatio.RATIO_4_3
@@ -237,7 +242,7 @@ object CameraHardwareConfig {
      */
     fun getImageAnalysisResolutionSelector(context: Context?, mode: ScannerMode): ResolutionSelector {
         val targetRatio = getTargetRatio(context, mode)
-        val baseAspectRatio = if (kotlin.math.abs(targetRatio - 1.5857f) <= 0.05f) {
+        val baseAspectRatio = if (kotlin.math.abs(targetRatio - 0.6306f) <= 0.05f) {
             AspectRatio.RATIO_16_9
         } else {
             AspectRatio.RATIO_4_3

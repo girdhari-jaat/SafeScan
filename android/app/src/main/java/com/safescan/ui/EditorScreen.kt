@@ -54,31 +54,16 @@ fun EditorScreen(viewModel: ScannerViewModel) {
     val currentMode by viewModel.currentMode.collectAsState()
     val pageSize by viewModel.pageSize.collectAsState()
 
-    // Date/Time for TopBar
-    val formattedDateTime = remember {
-        val sdfDate = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-        val sdfTime = SimpleDateFormat("hh:mm:ss a", Locale.getDefault())
-        val now = Date()
-        Pair(sdfDate.format(now), sdfTime.format(now).uppercase())
-    }
-
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = formattedDateTime.first,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = formattedDateTime.second,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = "Edit Document",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.closeEditor(save = false) }) {
@@ -104,6 +89,10 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                     // Save Button
                     IconButton(onClick = { viewModel.closeEditor(save = true) }) {
                         Icon(Icons.Default.Check, contentDescription = stringResource(id = R.string.save), tint = MaterialTheme.colorScheme.primary)
+                    }
+                    // Next Button
+                    TextButton(onClick = { viewModel.saveAndNext() }) {
+                        Text("Next", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(

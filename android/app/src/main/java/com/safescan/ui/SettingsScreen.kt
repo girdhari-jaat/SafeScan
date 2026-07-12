@@ -143,6 +143,15 @@ fun SettingsScreen(
                                 checked = showGrid,
                                 onCheckedChange = { viewModel.toggleShowGrid(it) }
                             )
+
+                            val useNativeScanner by viewModel.useNativeScanner.collectAsState()
+                            SettingsToggleItem(
+                                icon = Icons.Default.DocumentScanner,
+                                title = "Native Scanner",
+                                description = "Use ML Kit Document Scanner API if available",
+                                checked = useNativeScanner,
+                                onCheckedChange = { viewModel.toggleUseNativeScanner(it) }
+                            )
                         }
                     }
                 }
@@ -315,15 +324,6 @@ fun SettingsScreen(
                                 description = "Reduce UI animations and camera frequency",
                                 checked = batterySaver,
                                 onCheckedChange = { viewModel.toggleBatterySaver(it) }
-                            )
-
-                            val useNativeScanner by viewModel.useNativeScanner.collectAsState()
-                            SettingsToggleItem(
-                                icon = Icons.Default.DocumentScanner,
-                                title = "Native Scanner",
-                                description = "Use ML Kit Document Scanner API if available",
-                                checked = useNativeScanner,
-                                onCheckedChange = { viewModel.toggleUseNativeScanner(it) }
                             )
                         }
                     }

@@ -62,7 +62,11 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     suspend fun toggleAutoCapture() {
         context.dataStore.edit { preferences ->
             val current = preferences[PreferencesKeys.AUTO_CAPTURE] ?: false
-            preferences[PreferencesKeys.AUTO_CAPTURE] = !current
+            val newState = !current
+            preferences[PreferencesKeys.AUTO_CAPTURE] = newState
+            if (newState) {
+                preferences[PreferencesKeys.LIVE_DETECT] = true
+            }
         }
     }
 

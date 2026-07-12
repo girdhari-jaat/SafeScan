@@ -62,7 +62,6 @@ fun SlotsScreen(
 
     val showGrid by viewModel.showGrid.collectAsState()
     val clickSound by viewModel.clickSound.collectAsState()
-    val vibrateOnCapture by viewModel.vibrateOnCapture.collectAsState()
     val liveDetect by viewModel.liveDetect.collectAsState()
     val shadowRemove by viewModel.shadowRemove.collectAsState()
     val batterySaver by viewModel.batterySaver.collectAsState()
@@ -450,10 +449,10 @@ fun SlotsScreen(
                                 onCheckedChange = { viewModel.toggleClickSound(it) }
                             )
                             PopoverToggleRow(
-                                icon = Icons.Default.Vibration,
-                                label = "Haptic Feedbk",
-                                checked = vibrateOnCapture,
-                                onCheckedChange = { viewModel.setVibrateOnCapture(it) }
+                                icon = Icons.Default.DocumentScanner,
+                                label = "Live Detect",
+                                checked = liveDetect,
+                                onCheckedChange = { viewModel.toggleLiveDetect(it) }
                             )
                             PopoverToggleRow(
                                 icon = Icons.Default.CameraAlt,
@@ -466,12 +465,6 @@ fun SlotsScreen(
                                 label = "Auto Crop",
                                 checked = autoCrop,
                                 onCheckedChange = { viewModel.toggleAutoCrop(it) }
-                            )
-                            PopoverToggleRow(
-                                icon = Icons.Default.DocumentScanner,
-                                label = "Live Detect",
-                                checked = liveDetect,
-                                onCheckedChange = { viewModel.toggleLiveDetect(it) }
                             )
                             PopoverToggleRow(
                                 icon = Icons.Default.BrightnessMedium,
@@ -504,16 +497,16 @@ fun SlotsScreen(
                                 onCheckedChange = { viewModel.toggleAutoRotation(it) }
                             )
                             PopoverToggleRow(
-                                icon = Icons.Default.CameraAlt,
-                                label = "Phone Camera",
-                                checked = usePhoneCamera,
-                                onCheckedChange = { viewModel.toggleUsePhoneCamera(it) }
-                            )
-                            PopoverToggleRow(
                                 icon = Icons.Default.DocumentScanner,
                                 label = "Native Scanner",
                                 checked = useNativeScanner,
                                 onCheckedChange = { viewModel.toggleUseNativeScanner(it) }
+                            )
+                            PopoverToggleRow(
+                                icon = Icons.Default.CameraAlt,
+                                label = "Phone Camera",
+                                checked = usePhoneCamera,
+                                onCheckedChange = { viewModel.toggleUsePhoneCamera(it) }
                             )
                         }
 
@@ -645,37 +638,20 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean, modifier: Modifier =
         val width = size.width
         val height = size.height
 
-        var rectWidth = 0f
-        var rectHeight = 0f
-        val isBookMode = false
-
-        when (mode) {
-            ScannerMode.CARD, ScannerMode.DOCUMENT -> {
-                // DOCUMENT and CARD: Try A4 ratio first, fallback to 4:3
-                val targetRatio = if (isA4) 1.4142f else 1.3333f
-                
-                // Use maximum width (100%) and calculate height dynamically
-                rectWidth = width
-                rectHeight = rectWidth * targetRatio
-            }
-            ScannerMode.GRID -> {
-                // GRID: Try Pakistani CNIC / ID Card horizontal ratio first, fallback to 3:4 portrait
-                if (isCnic) {
-                    val targetRatio = 1.5857f // landscape card ratio
-                    
-                    // Use maximum width (100%) and calculate height dynamically
-                    rectWidth = width
-                    rectHeight = rectWidth / targetRatio
-                } else {
-                    // Fallback to 3:4 portrait
-                    val targetRatio = 1.3333f // 4/3 ratio
-                    
-                    // Use maximum width (100%) and calculate height dynamically
-                    rectWidth = width
-                    rectHeight = rectWidth * targetRatio
-                }
-            }
+        val baseRatio = com.safescan.scanner.CameraHardwareConfig.getTargetRatio(context, mode)
+        
+        // Determine correct ratio for width/height division
+        val finalRatio = if (mode == ScannerMode.GRID && baseRatio > 1.0f) {
+            baseRatio // Landscape for Grid (width > height)
+        } else if (baseRatio > 1.0f) {
+            1f / baseRatio // Portrait for Paper/Card (height > width)
+        } else {
+            baseRatio // Already portrait format (< 1.0)
         }
+
+        // Use 98% of screen width and calculate height dynamically
+        val rectWidth = width * 0.98f
+        val rectHeight = rectWidth / finalRatio
 
         if (rectWidth > 0f && rectHeight > 0f) {
             val left = (width - rectWidth) / 2f

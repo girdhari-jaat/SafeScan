@@ -873,11 +873,85 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    fun saveAndNext() {
+        // Save current changes
+        editingBitmapPreview.value?.let { processed ->
+            editingSlotId.value?.let { slotId ->
+                captureToSlot(processed, slotId)
+                
+                // Sync to persistent library JSON if we are editing a saved document
+                openedDocumentId?.let { docId ->
+                    val currentState = editorState.value
+                    documentRepository.updatePageEdits(
+                        docId = docId,
+                        pageId = slotId,
+                        filter = currentState.filter.name,
+                        brightness = currentState.brightness,
+                        contrast = currentState.contrast,
+                        sharpness = currentState.sharpness,
+                        saturation = currentState.saturation,
+                        rotation = 0,
+                        corners = null,
+                        newPreview = processed
+                    )
+                }
+            }
+            editingJpgIndex.value?.let { index ->
+                val file = capturedJpgFiles.getOrNull(index)
+                if (file != null) {
+                    try {
+                        val out = java.io.FileOutputStream(file)
+                        processed.compress(Bitmap.CompressFormat.JPEG, jpegQuality.value.toInt(), out)
+                        out.flush()
+                        out.close()
+                    } catch (e: Exception) {}
+                }
+            }
+        }
+        
+        // Attempt to open the next image
+        val currentJpgIndex = editingJpgIndex.value
+        if (currentJpgIndex != null && currentJpgIndex + 1 < capturedJpgFiles.size) {
+            // Document flow: load next page
+            openEditorForJpg(currentJpgIndex + 1)
+        } else {
+            val currentSlotId = editingSlotId.value
+            if (currentSlotId != null) {
+                // Slots flow: find current index, try to open next slot
+                val currentIndex = slots.value.indexOfFirst { it.id == currentSlotId }
+                if (currentIndex >= 0 && currentIndex + 1 < slots.value.size) {
+                    openEditor(slots.value[currentIndex + 1].id)
+                } else {
+                    closeEditor(save = false) // already saved
+                }
+            } else {
+                closeEditor(save = false)
+            }
+        }
+    }
+
     fun closeEditor(save: Boolean) {
         if (save) {
             editingBitmapPreview.value?.let { processed ->
                 editingSlotId.value?.let { slotId ->
                     captureToSlot(processed, slotId)
+                    
+                    // Sync to persistent library JSON if we are editing a saved document
+                    openedDocumentId?.let { docId ->
+                        val currentState = editorState.value
+                        documentRepository.updatePageEdits(
+                            docId = docId,
+                            pageId = slotId,
+                            filter = currentState.filter.name,
+                            brightness = currentState.brightness,
+                            contrast = currentState.contrast,
+                            sharpness = currentState.sharpness,
+                            saturation = currentState.saturation,
+                            rotation = 0,
+                            corners = null,
+                            newPreview = processed
+                        )
+                    }
                 }
                 editingJpgIndex.value?.let { index ->
                     val file = capturedJpgFiles.getOrNull(index)
