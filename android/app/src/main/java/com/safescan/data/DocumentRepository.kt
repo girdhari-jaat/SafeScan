@@ -205,6 +205,23 @@ class DocumentRepository @Inject constructor(
         return false
     }
 
+    fun renameDocument(docId: String, newTitle: String): Boolean {
+        val root = baseDir ?: return false
+        val docFolder = File(root, docId)
+        val metaFile = File(docFolder, "metadata.json")
+        if (!metaFile.exists()) return false
+
+        try {
+            val jsonStr = metaFile.readText()
+            val doc = parseDocumentMetadata(jsonStr)
+            val updatedDoc = doc.copy(title = newTitle)
+            return writeMetaFile(docFolder, updatedDoc)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to rename document $docId", e)
+            return false
+        }
+    }
+
     fun loadOriginalBitmap(docId: String, pageId: String): Bitmap? {
         val root = baseDir ?: return null
         val file = File(root, "$docId/pages/$pageId.jpg")

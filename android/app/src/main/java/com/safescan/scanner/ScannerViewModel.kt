@@ -289,8 +289,10 @@ class ScannerViewModel @Inject constructor(
     private var lastQuadPoints: List<com.safescan.domain.model.Point>? = null
     private val STABLE_FRAME_THRESHOLD = 5
     private val STABILITY_TOLERANCE = 30.0
+    var isFocusing = false
 
     fun onDocumentDetected(points: List<com.safescan.domain.model.Point>?) {
+        if (isFocusing) return
         isDocumentDetected.value = (points != null && points.size == 4)
         if (!autoCapture.value || points == null || points.size != 4) {
             stableFrameCount = 0
@@ -1091,6 +1093,13 @@ class ScannerViewModel @Inject constructor(
     fun deleteDocument(docId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             documentRepository.deleteDocument(docId)
+            reloadSavedDocuments()
+        }
+    }
+
+    fun renameDocument(docId: String, newTitle: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            documentRepository.renameDocument(docId, newTitle)
             reloadSavedDocuments()
         }
     }

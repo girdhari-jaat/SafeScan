@@ -189,39 +189,70 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                                         .heightIn(max = 220.dp)
                                         .verticalScroll(rememberScrollState())
                                 ) {
-                                    Text(
-                                        text = "Manual Adjustments",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(bottom = 8.dp)
-                                    )
-                                    AdjustmentSlider(
-                                        label = stringResource(id = R.string.brightness),
-                                        value = editorState.brightness,
-                                        valueRange = -100f..100f,
-                                        onValueChange = { viewModel.updateEditorState(editorState.copy(brightness = it)) }
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    AdjustmentSlider(
-                                        label = stringResource(id = R.string.contrast),
-                                        value = editorState.contrast,
-                                        valueRange = 0.5f..3.0f,
-                                        onValueChange = { viewModel.updateEditorState(editorState.copy(contrast = it)) }
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    AdjustmentSlider(
-                                        label = stringResource(id = R.string.sharpness),
-                                        value = editorState.sharpness,
-                                        valueRange = 0.0f..3.0f,
-                                        onValueChange = { viewModel.updateEditorState(editorState.copy(sharpness = it)) }
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    AdjustmentSlider(
-                                        label = stringResource(id = R.string.saturation),
-                                        value = editorState.saturation,
-                                        valueRange = -100f..100f,
-                                        onValueChange = { viewModel.updateEditorState(editorState.copy(saturation = it)) }
-                                    )
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Manual Adjustments",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        TextButton(
+                                            onClick = {
+                                                viewModel.updateEditorState(
+                                                    editorState.copy(
+                                                        brightness = 0f,
+                                                        contrast = 1.0f,
+                                                        sharpness = 0.0f,
+                                                        saturation = 0f
+                                                    )
+                                                )
+                                            },
+                                            contentPadding = PaddingValues(0.dp),
+                                            modifier = Modifier.height(24.dp)
+                                        ) {
+                                            Text("Reset", style = MaterialTheme.typography.labelMedium)
+                                        }
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            AdjustmentSlider(
+                                                label = stringResource(id = R.string.brightness),
+                                                value = editorState.brightness,
+                                                valueRange = -50f..50f, // Reduced brightness range to prevent overexposure
+                                                onValueChange = { viewModel.updateEditorState(editorState.copy(brightness = it)) }
+                                            )
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            AdjustmentSlider(
+                                                label = stringResource(id = R.string.contrast),
+                                                value = editorState.contrast,
+                                                valueRange = 0.5f..3.0f,
+                                                onValueChange = { viewModel.updateEditorState(editorState.copy(contrast = it)) }
+                                            )
+                                        }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            AdjustmentSlider(
+                                                label = stringResource(id = R.string.sharpness),
+                                                value = editorState.sharpness,
+                                                valueRange = 0.0f..3.0f,
+                                                onValueChange = { viewModel.updateEditorState(editorState.copy(sharpness = it)) }
+                                            )
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            AdjustmentSlider(
+                                                label = stringResource(id = R.string.saturation),
+                                                value = editorState.saturation,
+                                                valueRange = -100f..100f,
+                                                onValueChange = { viewModel.updateEditorState(editorState.copy(saturation = it)) }
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

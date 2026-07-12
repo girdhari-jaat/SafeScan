@@ -70,7 +70,7 @@ class LiveEdgeDetectionEngine {
             // 1. Try TFLite ML first
             if (documentScanner != null) {
                 try {
-                    val quad = documentScanner.detectDocument(bitmap)
+                    val quad = documentScanner.detectDocument(bitmap, true)
                     if (quad != null) {
                         foundCorners = listOf(quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft)
                         Log.d("LiveEdgeDetectionEngine", "Successfully detected document corners using TFLite ML on live feed")

@@ -102,41 +102,11 @@ fun SlotsScreen(
                     Icon(Icons.Default.ArrowBack, contentDescription = "Close Scanner", tint = Color.White)
                 }
 
-                // Center: Flash & Auto Crop Toggles
+                // Center: Flash Toggle
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
-                        onClick = { viewModel.toggleAutoCapture() },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (autoCapture) Color(0xFF4CAF50) else Color.Black.copy(alpha = 0.5f)
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = if (autoCapture) "Auto Capture ON" else "Auto Capture OFF",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White
-                        )
-                    }
-
-                    Button(
-                        onClick = { viewModel.toggleAutoCrop(!autoCrop) },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (autoCrop) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.5f)
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = if (autoCrop) "Auto Crop ON" else "Auto Crop OFF",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White
-                        )
-                    }
-
                     IconButton(
                         onClick = onFlashToggle,
                         modifier = Modifier.background(

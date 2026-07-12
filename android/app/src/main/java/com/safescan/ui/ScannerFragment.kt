@@ -611,6 +611,8 @@ class ScannerFragment : Fragment() {
 
                 val mode = viewModel.currentMode.value
                 val hdModeStr = viewModel.hdMode.value
+                val currentRatio = getTargetRatio(currentContext, mode)
+                binding.overlayView.setAspectRatio(currentRatio)
 
                 // 1. Dynamic Hardware Negotiation & Mood Alignment (configured in CameraHardwareConfig)
                 val captureSettings = com.safescan.scanner.CameraHardwareConfig.getCaptureSettings(currentContext, mode, hdModeStr)
@@ -643,6 +645,40 @@ class ScannerFragment : Fragment() {
                             val rotationDegrees = imageProxy.imageInfo.rotationDegrees
                             val width = imageProxy.width
                             val height = imageProxy.height
+                            _binding?.let { bindingObj ->
+                                val pw = bindingObj.previewView.width.toFloat()
+                                val ph = bindingObj.previewView.height.toFloat()
+                                val holeRect = bindingObj.overlayView.getHoleRect()
+                                if (pw > 0 && ph > 0 && !holeRect.isEmpty) {
+                                    val isRotated = rotationDegrees == 90 || rotationDegrees == 270
+                                    val bw = if (isRotated) height.toFloat() else width.toFloat()
+                                    val bh = if (isRotated) width.toFloat() else height.toFloat()
+                                    
+                                    val scale = maxOf(pw / bw, ph / bh)
+                                    val scaledBw = bw * scale
+                                    val scaledBh = bh * scale
+                                    
+                                    val leftOffset = (scaledBw - pw) / 2f
+                                    val topOffset = (scaledBh - ph) / 2f
+                                    
+                                    val cropLeft = ((holeRect.left + leftOffset) / scale).toInt()
+                                    val cropTop = ((holeRect.top + topOffset) / scale).toInt()
+                                    val cropRight = ((holeRect.right + leftOffset) / scale).toInt()
+                                    val cropBottom = ((holeRect.bottom + topOffset) / scale).toInt()
+                                    
+                                    val safeLeft = cropLeft.coerceIn(0, bw.toInt())
+                                    val safeTop = cropTop.coerceIn(0, bh.toInt())
+                                    val safeRight = cropRight.coerceIn(0, bw.toInt())
+                                    val safeBottom = cropBottom.coerceIn(0, bh.toInt())
+                                    
+                                    val rect = if (isRotated) {
+                                        android.graphics.Rect(safeTop, safeLeft, safeBottom, safeRight)
+                                    } else {
+                                        android.graphics.Rect(safeLeft, safeTop, safeRight, safeBottom)
+                                    }
+                                    imageProxy.setCropRect(rect)
+                                }
+                            }
                             
                             liveEdgeDetectionEngine.process(imageProxy, viewModel.documentScanner) { corners ->
                                 val mappedPoints = mapPointsToPreviewView(corners, width, height, rotationDegrees)
@@ -727,6 +763,44 @@ class ScannerFragment : Fragment() {
         takePictureLauncher.launch(photoUri)
     }
 
+    private fun focusAndTakePhoto() {
+        val binding = _binding
+        if (binding == null) {
+            takePhoto()
+            return
+        }
+        
+        val previewView = binding.previewView
+        val mappedCorners = binding.overlayView.getCorners()
+        
+        var centerX = previewView.width / 2f
+        var centerY = previewView.height / 2f
+        
+        if (mappedCorners != null && mappedCorners.size == 4) {
+            var sumX = 0f
+            var sumY = 0f
+            for (p in mappedCorners) {
+                sumX += p.x
+                sumY += p.y
+            }
+            centerX = sumX / 4f
+            centerY = sumY / 4f
+        }
+
+        val factory = previewView.meteringPointFactory
+        val point = factory.createPoint(centerX, centerY)
+        val action = androidx.camera.core.FocusMeteringAction.Builder(
+            point, 
+            androidx.camera.core.FocusMeteringAction.FLAG_AF or androidx.camera.core.FocusMeteringAction.FLAG_AE
+        ).build()
+        
+        viewModel.isFocusing = true
+        cameraControl?.startFocusAndMetering(action)?.addListener({
+            viewModel.isFocusing = false
+            takePhoto()
+        }, androidx.core.content.ContextCompat.getMainExecutor(requireContext()))
+    }
+
     private fun takePhoto() {
         if (viewModel.usePhoneCamera.value) {
             openPhoneCamera()
@@ -784,6 +858,7 @@ class ScannerFragment : Fragment() {
             ContextCompat.getMainExecutor(currentContext),
             object : ImageCapture.OnImageCapturedCallback() {
                 override fun onCaptureSuccess(imageProxy: ImageProxy) {
+                    cameraControl?.cancelFocusAndMetering()
                     val rawBitmap = imageProxy.toBitmap()
                     val rotationDegrees = if (viewModel.autoRotation.value) {
                         imageProxy.imageInfo.rotationDegrees
@@ -798,11 +873,45 @@ class ScannerFragment : Fragment() {
                     } else {
                         rawBitmap
                     }
-                    viewModel.onCapture(bitmap)
+
+                    val finalBitmap = _binding?.let { bindingObj ->
+                        val previewView = bindingObj.previewView
+                        val holeRect = bindingObj.overlayView.getHoleRect()
+                        val pw = previewView.width.toFloat()
+                        val ph = previewView.height.toFloat()
+                        val bw = bitmap.width.toFloat()
+                        val bh = bitmap.height.toFloat()
+                        
+                        if (pw > 0 && ph > 0 && bw > 0 && bh > 0 && !holeRect.isEmpty) {
+                            val scale = maxOf(pw / bw, ph / bh)
+                            val scaledBw = bw * scale
+                            val scaledBh = bh * scale
+                            
+                            val leftOffset = (scaledBw - pw) / 2f
+                            val topOffset = (scaledBh - ph) / 2f
+                            
+                            val cropLeft = ((holeRect.left + leftOffset) / scale).toInt()
+                            val cropTop = ((holeRect.top + topOffset) / scale).toInt()
+                            val cropRight = ((holeRect.right + leftOffset) / scale).toInt()
+                            val cropBottom = ((holeRect.bottom + topOffset) / scale).toInt()
+                            
+                            val safeLeft = cropLeft.coerceIn(0, bitmap.width)
+                            val safeTop = cropTop.coerceIn(0, bitmap.height)
+                            val safeWidth = (cropRight - cropLeft).coerceIn(0, bitmap.width - safeLeft)
+                            val safeHeight = (cropBottom - cropTop).coerceIn(0, bitmap.height - safeTop)
+                            
+                            if (safeWidth > 0 && safeHeight > 0) {
+                                Bitmap.createBitmap(bitmap, safeLeft, safeTop, safeWidth, safeHeight)
+                            } else bitmap
+                        } else bitmap
+                    } ?: bitmap
+
+                    viewModel.onCapture(finalBitmap)
                     imageProxy.close()
                 }
 
                 override fun onError(exception: ImageCaptureException) {
+                    cameraControl?.cancelFocusAndMetering()
                     Log.e("ScannerFragment", "Photo capture failed: ${exception.message}", exception)
                     _binding?.progressBar?.visibility = View.GONE
                     context?.let { ctx ->
@@ -879,7 +988,38 @@ class ScannerFragment : Fragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.autoCaptureEvent.collect {
                     if (currentViewMode == FragmentViewMode.SCANNER && !viewModel.isEditing.value && !viewModel.isCropping.value) {
-                        takePhoto()
+                        focusAndTakePhoto()
+                    }
+                }
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                kotlinx.coroutines.flow.combine(
+                    viewModel.isEditing,
+                    viewModel.isCropping,
+                    viewModel.isSettingsOpen
+                ) { editing, cropping, settingsOpen ->
+                    editing || cropping || settingsOpen
+                }.collect { isOverlayOpen ->
+                    if (currentViewMode == FragmentViewMode.SCANNER && !viewModel.isDocumentOpenedFromLibrary) {
+                        if (isOverlayOpen) {
+                            val currentContext = context
+                            if (currentContext != null) {
+                                try {
+                                    val cameraProviderFuture = ProcessCameraProvider.getInstance(currentContext)
+                                    cameraProviderFuture.addListener({
+                                        try {
+                                            val cameraProvider = cameraProviderFuture.get()
+                                            cameraProvider.unbindAll()
+                                        } catch (e: Exception) {}
+                                    }, ContextCompat.getMainExecutor(currentContext))
+                                } catch (e: Exception) {}
+                            }
+                        } else {
+                            startCamera()
+                        }
                     }
                 }
             }
@@ -897,27 +1037,6 @@ class ScannerFragment : Fragment() {
             }
         }
 
-        // Restart camera on mood / currentMode change to negotiate hardware aspect ratio and constraints on the fly
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.currentMode.collect {
-                    if (currentViewMode == FragmentViewMode.SCANNER && !viewModel.isDocumentOpenedFromLibrary) {
-                        startCamera()
-                    }
-                }
-            }
-        }
-
-        // Restart camera on hdMode (Quality) change to negotiate hardware resolution and latency/quality constraints on the fly
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.hdMode.collect {
-                    if (currentViewMode == FragmentViewMode.SCANNER && !viewModel.isDocumentOpenedFromLibrary) {
-                        startCamera()
-                    }
-                }
-            }
-        }
     }
 
     override fun onDestroyView() {
@@ -930,9 +1049,5 @@ class ScannerFragment : Fragment() {
         _binding = null
         shutterSound?.release()
         shutterSound = null
-        imageCapture = null
-        cameraControl = null
-        cameraInfo = null
-        cameraExecutor.shutdown()
     }
 }

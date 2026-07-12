@@ -62,7 +62,24 @@ class LocalMLEngine(private val context: Context) {
         }
     }
 
-    fun detectCorners(bitmap: Bitmap): Quadrilateral? {
+    private var lastStableCorners: List<Point>? = null
+    private var stableFrameCount = 0
+    private val STABLE_THRESHOLD = 3
+    private val TOLERANCE = 20.0
+
+    private fun isSimilar(current: List<Point>, previous: List<Point>): Boolean {
+        if (current.size != previous.size) return false
+        for (i in current.indices) {
+            val p1 = current[i]
+            val p2 = previous[i]
+            val dist = Math.sqrt(Math.pow(p1.x - p2.x, 2.0) + Math.pow(p1.y - p2.y, 2.0))
+            if (dist > TOLERANCE) return false
+        }
+        return true
+    }
+
+    @Synchronized
+    fun detectCorners(bitmap: Bitmap, isLive: Boolean = false): Quadrilateral? {
         val tflite = interpreter ?: return null
         if (bitmap.isRecycled) return null
         
@@ -103,6 +120,19 @@ class LocalMLEngine(private val context: Context) {
             val maskData = FloatArray(inputSize * inputSize)
             outputBuffer.asFloatBuffer().get(maskData)
             maskMat.put(0, 0, maskData)
+            
+            // 1. Confidence Check
+            var maxConfidence = 0.0f
+            for (v in maskData) {
+                if (v > maxConfidence) {
+                    maxConfidence = v
+                }
+            }
+            if (maxConfidence < 0.75f) {
+                lastStableCorners = null
+                stableFrameCount = 0
+                return null
+            }
             
             // Threshold to binary map (0 or 255)
             binaryMask = Mat()
@@ -166,8 +196,32 @@ class LocalMLEngine(private val context: Context) {
             
             val result = bestQuadPoints?.let { pts ->
                 val ordered = orderPoints(pts)
-                Quadrilateral(ordered[0], ordered[1], ordered[2], ordered[3])
+                
+                if (isLive) {
+                    if (lastStableCorners != null && isSimilar(ordered, lastStableCorners!!)) {
+                        stableFrameCount++
+                    } else {
+                        lastStableCorners = ordered
+                        stableFrameCount = 1
+                    }
+                    
+                    if (stableFrameCount >= STABLE_THRESHOLD) {
+                        Quadrilateral(ordered[0], ordered[1], ordered[2], ordered[3])
+                    } else {
+                        null
+                    }
+                } else {
+                    Quadrilateral(ordered[0], ordered[1], ordered[2], ordered[3])
+                }
             }
+            
+            if (result == null && isLive) {
+                if (bestQuadPoints == null) {
+                    lastStableCorners = null
+                    stableFrameCount = 0
+                }
+            }
+            
             return result
         } catch (e: Throwable) {
             Log.e("LocalMLEngine", "Error running inference", e)

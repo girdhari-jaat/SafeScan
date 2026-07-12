@@ -16,8 +16,8 @@ class DocumentScanner(
     private val localMLEngine: LocalMLEngine,
     private val context: Context
 ) {
-    fun detectDocument(bitmap: Bitmap): Quadrilateral? {
-        return localMLEngine.detectCorners(bitmap)
+    fun detectDocument(bitmap: Bitmap, isLive: Boolean = false): Quadrilateral? {
+        return localMLEngine.detectCorners(bitmap, isLive)
     }
 
     fun cropAndTransform(bitmap: Bitmap, quad: Quadrilateral, mode: String = "DOCUMENT"): Bitmap {

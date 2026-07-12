@@ -46,6 +46,8 @@ fun LibraryScreen(
     var savedFiles by remember { mutableStateOf(emptyList<File>()) }
     var fileToDelete by remember { mutableStateOf<File?>(null) }
     var docToDelete by remember { mutableStateOf<DocumentMetadata?>(null) }
+    var docToRename by remember { mutableStateOf<DocumentMetadata?>(null) }
+    var newTitleText by remember { mutableStateOf("") }
     var selectedTab by remember { mutableStateOf(0) } // 0: Original Docs, 1: Exported PDFs
 
     val savedDocs by viewModel.savedDocuments.collectAsState()
@@ -257,6 +259,10 @@ fun LibraryScreen(
                                 OriginalDocumentCard(
                                     doc = doc,
                                     onClick = { onOpenDocument(doc) },
+                                    onRename = {
+                                        docToRename = doc
+                                        newTitleText = doc.title
+                                    },
                                     onDelete = { docToDelete = doc }
                                 )
                             }
@@ -387,6 +393,45 @@ fun LibraryScreen(
                 }
             )
         }
+
+        // Original Document Rename Dialog
+        docToRename?.let { doc ->
+            AlertDialog(
+                onDismissRequest = { docToRename = null },
+                title = { Text(text = "Rename Document") },
+                text = {
+                    Column {
+                        OutlinedTextField(
+                            value = newTitleText,
+                            onValueChange = { newTitleText = it },
+                            label = { Text("Document Title") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            if (newTitleText.isNotBlank()) {
+                                viewModel.renameDocument(doc.id, newTitleText.trim())
+                                Toast.makeText(context, "Document renamed successfully", Toast.LENGTH_SHORT).show()
+                                docToRename = null
+                            } else {
+                                Toast.makeText(context, "Title cannot be empty", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    ) {
+                        Text(text = "Rename", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { docToRename = null }) {
+                        Text(text = "Cancel")
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -439,6 +484,7 @@ fun EmptyStateView(
 fun OriginalDocumentCard(
     doc: DocumentMetadata,
     onClick: () -> Unit,
+    onRename: () -> Unit,
     onDelete: () -> Unit
 ) {
     val formattedDate = remember(doc) {
@@ -512,9 +558,9 @@ fun OriginalDocumentCard(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Open/Edit button
-            IconButton(onClick = onClick) {
-                Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(20.dp))
+            // Rename button (Pen/Edit icon)
+            IconButton(onClick = onRename) {
+                Icon(Icons.Default.Edit, contentDescription = "Rename", modifier = Modifier.size(20.dp))
             }
 
             // Delete button

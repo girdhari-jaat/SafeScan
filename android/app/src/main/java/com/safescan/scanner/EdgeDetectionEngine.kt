@@ -11,10 +11,12 @@ import org.opencv.imgproc.Imgproc
 
 class EdgeDetectionEngine {
 
+    @Synchronized
     fun detectEdgesSafe(bitmap: Bitmap): List<Point> {
         return detectEdges(bitmap) ?: getFallbackQuad(bitmap.width.toDouble(), bitmap.height.toDouble())
     }
 
+    @Synchronized
     fun detectEdges(bitmap: Bitmap): List<Point>? {
         if (bitmap.isRecycled) return null
         val src = Mat()
