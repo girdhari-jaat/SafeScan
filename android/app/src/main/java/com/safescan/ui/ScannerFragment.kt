@@ -613,11 +613,6 @@ class ScannerFragment : Fragment() {
                 val hdModeStr = viewModel.hdMode.value
                 val currentRatio = com.safescan.scanner.CameraHardwareConfig.getTargetRatio(currentContext, mode)
                 binding.overlayView.setAspectRatio(currentRatio)
-                
-                val constraintSet = androidx.constraintlayout.widget.ConstraintSet()
-                constraintSet.clone(binding.root)
-                constraintSet.setDimensionRatio(binding.cameraContainer.id, "W,$currentRatio:1")
-                constraintSet.applyTo(binding.root)
 
                 // 1. Dynamic Hardware Negotiation & Mood Alignment (configured in CameraHardwareConfig)
                 val captureSettings = com.safescan.scanner.CameraHardwareConfig.getCaptureSettings(currentContext, mode, hdModeStr)
