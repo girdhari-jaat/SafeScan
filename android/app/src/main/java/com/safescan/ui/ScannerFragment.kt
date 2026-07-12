@@ -587,7 +587,7 @@ class ScannerFragment : Fragment() {
     }
 
     private fun getOverlayHoleRect(pw: Float, ph: Float): android.graphics.RectF {
-        val mode = viewModel.scannerMode.value
+        val mode = viewModel.currentMode.value
         val baseRatio = com.safescan.scanner.CameraHardwareConfig.getTargetRatio(requireContext(), mode)
         val finalRatio = if (mode == com.safescan.data.ScannerMode.GRID && baseRatio > 1.0f) {
             baseRatio 

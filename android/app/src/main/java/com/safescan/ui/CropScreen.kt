@@ -344,6 +344,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
 
                         // Corner Handles
                         CornerHandle(
+                            key = bmp,
                             offset = tl, 
                             onDragStart = { draggingHandle = "tl" },
                             onDragEnd = { draggingHandle = null },
@@ -353,6 +354,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
                             }
                         )
                         CornerHandle(
+                            key = bmp,
                             offset = tr, 
                             onDragStart = { draggingHandle = "tr" },
                             onDragEnd = { draggingHandle = null },
@@ -362,6 +364,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
                             }
                         )
                         CornerHandle(
+                            key = bmp,
                             offset = br, 
                             onDragStart = { draggingHandle = "br" },
                             onDragEnd = { draggingHandle = null },
@@ -371,6 +374,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
                             }
                         )
                         CornerHandle(
+                            key = bmp,
                             offset = bl, 
                             onDragStart = { draggingHandle = "bl" },
                             onDragEnd = { draggingHandle = null },
@@ -382,6 +386,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
 
                         // Side Handles
                         CornerHandle(
+                            key = bmp,
                             offset = midTop,
                             size = 40.dp,
                             onDragStart = { draggingHandle = "midTop" },
@@ -393,6 +398,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
                             }
                         )
                         CornerHandle(
+                            key = bmp,
                             offset = midRight,
                             size = 40.dp,
                             onDragStart = { draggingHandle = "midRight" },
@@ -404,6 +410,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
                             }
                         )
                         CornerHandle(
+                            key = bmp,
                             offset = midBottom,
                             size = 40.dp,
                             onDragStart = { draggingHandle = "midBottom" },
@@ -415,6 +422,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
                             }
                         )
                         CornerHandle(
+                            key = bmp,
                             offset = midLeft,
                             size = 40.dp,
                             onDragStart = { draggingHandle = "midLeft" },
@@ -480,6 +488,7 @@ private fun updateOffset(current: Offset, delta: Offset, bounds: IntSize): Offse
 
 @Composable
 fun CornerHandle(
+    key: Any? = null,
     offset: Offset, 
     size: androidx.compose.ui.unit.Dp = 48.dp,
     onDragStart: () -> Unit = {},
@@ -498,7 +507,7 @@ fun CornerHandle(
                 y = with(androidx.compose.ui.platform.LocalDensity.current) { offset.y.toDp() - size / 2 }
             )
             .size(size)
-            .pointerInput(Unit) {
+            .pointerInput(key ?: Unit) {
                 detectDragGestures(
                     onDragStart = { 
                         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
