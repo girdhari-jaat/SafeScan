@@ -653,41 +653,22 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean, modifier: Modifier =
             ScannerMode.CARD, ScannerMode.DOCUMENT -> {
                 // DOCUMENT and CARD: Try A4 ratio first, fallback to 4:3
                 val targetRatio = if (isA4) 1.4142f else 1.3333f
-                val preferredHeight = height * 0.65f
-                val preferredWidth = preferredHeight / targetRatio
-                if (preferredWidth > width * 0.85f) {
-                    rectWidth = width * 0.85f
-                    rectHeight = rectWidth * targetRatio
-                } else {
-                    rectWidth = preferredWidth
-                    rectHeight = preferredHeight
-                }
+                
+                // Use full width (100%) and calculate height dynamically based on ratio
+                rectWidth = width
+                rectHeight = rectWidth * targetRatio
             }
             ScannerMode.GRID -> {
                 // GRID: Try Pakistani CNIC / ID Card horizontal ratio first, fallback to 3:4 portrait
                 if (isCnic) {
                     val targetRatio = 1.5857f // landscape card ratio
-                    val preferredWidth = width * 0.85f
-                    val preferredHeight = preferredWidth / targetRatio
-                    if (preferredHeight > height * 0.6f) {
-                        rectHeight = height * 0.45f
-                        rectWidth = rectHeight * targetRatio
-                    } else {
-                        rectWidth = preferredWidth
-                        rectHeight = preferredHeight
-                    }
+                    rectWidth = width
+                    rectHeight = rectWidth / targetRatio
                 } else {
                     // Fallback to 3:4 portrait
-                    val targetRatio = 1.3333f // height / width = 4 / 3, so width / height = 0.75
-                    val preferredHeight = height * 0.65f
-                    val preferredWidth = preferredHeight * 0.75f
-                    if (preferredWidth > width * 0.85f) {
-                        rectWidth = width * 0.85f
-                        rectHeight = rectWidth / 0.75f
-                    } else {
-                        rectWidth = preferredWidth
-                        rectHeight = preferredHeight
-                    }
+                    val targetRatio = 1.3333f // 4/3 ratio
+                    rectWidth = width
+                    rectHeight = rectWidth * targetRatio
                 }
             }
         }

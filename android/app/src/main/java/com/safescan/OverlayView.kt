@@ -37,35 +37,8 @@ class OverlayView @JvmOverloads constructor(
     }
 
     override fun onDraw(canvas: Canvas) {
+        // Overlay visuals are now handled by ViewfinderOverlay in Compose
         super.onDraw(canvas)
-
-        val w = width.toFloat()
-        val h = height.toFloat()
-
-        if (w == 0f || h == 0f) return
-
-        val padding = w * 0.02f
-        val holeWidth = w - padding * 2
-        val holeHeight = holeWidth / targetRatio
-
-        val left = padding
-        val top = (h - holeHeight) / 2f
-        val right = w - padding
-        val bottom = top + holeHeight
-
-        holeRect.set(left, top, right, bottom)
-
-        val path = Path()
-        path.addRect(0f, 0f, w, h, Path.Direction.CW)
-        
-        val radius = 24f
-        val holePath = Path()
-        holePath.addRoundRect(holeRect, radius, radius, Path.Direction.CW)
-        
-        path.op(holePath, Path.Op.DIFFERENCE)
-        
-        canvas.drawPath(path, backgroundPaint)
-        canvas.drawRoundRect(holeRect, radius, radius, strokePaint)
     }
 
     // Keep these to prevent compilation errors if called from Fragment
