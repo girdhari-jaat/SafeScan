@@ -611,7 +611,7 @@ class ScannerFragment : Fragment() {
 
                 val mode = viewModel.currentMode.value
                 val hdModeStr = viewModel.hdMode.value
-                val currentRatio = getTargetRatio(currentContext, mode)
+                val currentRatio = com.safescan.scanner.CameraHardwareConfig.getTargetRatio(currentContext, mode)
                 binding.overlayView.setAspectRatio(currentRatio)
 
                 // 1. Dynamic Hardware Negotiation & Mood Alignment (configured in CameraHardwareConfig)
