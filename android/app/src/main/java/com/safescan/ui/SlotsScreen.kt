@@ -654,7 +654,7 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean, modifier: Modifier =
                 // DOCUMENT and CARD: Try A4 ratio first, fallback to 4:3
                 val targetRatio = if (isA4) 1.4142f else 1.3333f
                 
-                // Use full width (100%) and calculate height dynamically based on ratio
+                // Use maximum width (100%) and calculate height dynamically
                 rectWidth = width
                 rectHeight = rectWidth * targetRatio
             }
@@ -662,11 +662,15 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean, modifier: Modifier =
                 // GRID: Try Pakistani CNIC / ID Card horizontal ratio first, fallback to 3:4 portrait
                 if (isCnic) {
                     val targetRatio = 1.5857f // landscape card ratio
+                    
+                    // Use maximum width (100%) and calculate height dynamically
                     rectWidth = width
                     rectHeight = rectWidth / targetRatio
                 } else {
                     // Fallback to 3:4 portrait
                     val targetRatio = 1.3333f // 4/3 ratio
+                    
+                    // Use maximum width (100%) and calculate height dynamically
                     rectWidth = width
                     rectHeight = rectWidth * targetRatio
                 }
