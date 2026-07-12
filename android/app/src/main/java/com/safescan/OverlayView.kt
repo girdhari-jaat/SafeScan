@@ -44,7 +44,7 @@ class OverlayView @JvmOverloads constructor(
 
         if (w == 0f || h == 0f) return
 
-        val padding = w * 0.03f
+        val padding = w * 0.02f
         val holeWidth = w - padding * 2
         val holeHeight = holeWidth / targetRatio
 
@@ -64,7 +64,7 @@ class OverlayView @JvmOverloads constructor(
         
         path.op(holePath, Path.Op.DIFFERENCE)
         
-        // canvas.drawPath(path, backgroundPaint)
+        canvas.drawPath(path, backgroundPaint)
         canvas.drawRoundRect(holeRect, radius, radius, strokePaint)
     }
 
