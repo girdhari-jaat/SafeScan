@@ -608,6 +608,70 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    fun saveImageToGallery(context: android.content.Context, bitmap: Bitmap) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val resolver = context.contentResolver
+            val contentValues = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "SafeScan_${System.currentTimeMillis()}.jpg")
+                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DCIM + "/SafeScan")
+            }
+            val uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+            if (uri != null) {
+                try {
+                    resolver.openOutputStream(uri)?.use { out ->
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                    }
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Image saved to DCIM/SafeScan", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    Log.e("ScannerViewModel", "Failed to save image", e)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Failed to save image", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } else {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Failed to save image", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    fun savePdfToPublicDocuments(context: android.content.Context, sourceFile: java.io.File) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val resolver = context.contentResolver
+            val contentValues = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, sourceFile.name)
+                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOCUMENTS + "/SafeScan")
+            }
+            val uri = resolver.insert(android.provider.MediaStore.Files.getContentUri("external"), contentValues)
+            if (uri != null) {
+                try {
+                    resolver.openOutputStream(uri)?.use { out ->
+                        java.io.FileInputStream(sourceFile).use { input ->
+                            input.copyTo(out)
+                        }
+                    }
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "PDF saved to Documents/SafeScan", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    Log.e("ScannerViewModel", "Failed to save PDF", e)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Failed to save PDF", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } else {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Failed to save PDF", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     fun onSlotClick(slotId: String) {
         selectedSlotId.value = slotId
     }

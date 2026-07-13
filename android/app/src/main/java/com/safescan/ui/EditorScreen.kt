@@ -58,12 +58,18 @@ fun EditorScreen(viewModel: ScannerViewModel) {
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Text(
-                        text = "Edit Document",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    TextButton(onClick = {
+                        editingBitmap?.let { viewModel.saveImageToGallery(context, it) }
+                    }) {
+                        Icon(Icons.Default.Save, contentDescription = "Save Image", tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Save Image",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.closeEditor(save = false) }) {
@@ -443,7 +449,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                                 showExportPopover = false
                                 viewModel.exportPdf(context) { file ->
                                     if (file != null) {
-                                        Toast.makeText(context, "PDF Exported successfully to Documents!", Toast.LENGTH_LONG).show()
+                                        viewModel.savePdfToPublicDocuments(context, file)
                                     } else {
                                         Toast.makeText(context, "Export Failed", Toast.LENGTH_SHORT).show()
                                     }
