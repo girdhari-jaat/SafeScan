@@ -72,11 +72,11 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
 
     val scannerModeFlow: Flow<ScannerMode> = safeData
         .map { preferences ->
-            val modeName = preferences[PreferencesKeys.SCANNER_MODE] ?: ScannerMode.CARD.name
+            val modeName = preferences[PreferencesKeys.SCANNER_MODE] ?: ScannerMode.DOCUMENT.name
             try {
                 ScannerMode.valueOf(modeName)
             } catch (e: IllegalArgumentException) {
-                ScannerMode.CARD
+                ScannerMode.DOCUMENT
             }
         }
 
@@ -103,7 +103,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         .map { preferences -> preferences[PreferencesKeys.JPEG_QUALITY] ?: 80f }
 
     val pdfFilenameFlow: Flow<String> = safeData
-        .map { preferences -> preferences[PreferencesKeys.PDF_FILENAME] ?: "Scan_Document" }
+        .map { preferences -> preferences[PreferencesKeys.PDF_FILENAME] ?: "Doc+Date+Time" }
 
     val pageSizeFlow: Flow<String> = safeData
         .map { preferences -> preferences[PreferencesKeys.PAGE_SIZE] ?: "A4" }
@@ -112,7 +112,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         .map { preferences -> preferences[PreferencesKeys.DOUBLE_FOCUS] ?: false }
 
     val saveJpgFlow: Flow<Boolean> = safeData
-        .map { preferences -> preferences[PreferencesKeys.SAVE_JPG] ?: true }
+        .map { preferences -> preferences[PreferencesKeys.SAVE_JPG] ?: false }
 
     val autoPdfFlow: Flow<Boolean> = safeData
         .map { preferences -> preferences[PreferencesKeys.AUTO_PDF] ?: true }
@@ -136,7 +136,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         .map { preferences -> preferences[PreferencesKeys.AUTO_ROTATION] ?: false }
 
     val defaultFilterFlow: Flow<String> = safeData
-        .map { preferences -> preferences[PreferencesKeys.DEFAULT_FILTER] ?: "paper" }
+        .map { preferences -> preferences[PreferencesKeys.DEFAULT_FILTER] ?: "original" }
 
     val uiLanguageFlow: Flow<String> = safeData
         .map { preferences -> preferences[PreferencesKeys.UI_LANGUAGE] ?: "en" }
@@ -160,7 +160,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         .map { preferences -> preferences[PreferencesKeys.USE_NATIVE_SCANNER] ?: false }
 
     val hdModeFlow: Flow<String> = safeData
-        .map { preferences -> preferences[PreferencesKeys.HD_MODE] ?: "Standard" }
+        .map { preferences -> preferences[PreferencesKeys.HD_MODE] ?: "Fast" }
 
     suspend fun setScannerMode(mode: ScannerMode) {
         context.dataStore.edit { preferences ->

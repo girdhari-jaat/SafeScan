@@ -21,7 +21,7 @@ class WizardPrefs(context: Context) {
         const val KEY_AUTO_SHADOW = "auto_shadow"
         const val KEY_MANUAL_CROP = "manual_crop"
         const val KEY_BATCH_MODE = "batch_mode"
-        const val KEY_SAVE_AS = "save_as"
+        const val KEY_DONT_SHOW_AGAIN = "dont_show_again"
     }
 
     var scanType: String
@@ -33,7 +33,7 @@ class WizardPrefs(context: Context) {
         set(value) = prefs.edit().putString(KEY_PAGE_SIZE, value).apply()
 
     var imageQuality: String
-        get() = prefs.getString(KEY_IMAGE_QUALITY, "Standard") ?: "Standard"
+        get() = prefs.getString(KEY_IMAGE_QUALITY, "Fast") ?: "Fast"
         set(value) = prefs.edit().putString(KEY_IMAGE_QUALITY, value).apply()
 
     var warp: String
@@ -45,11 +45,11 @@ class WizardPrefs(context: Context) {
         set(value) = prefs.edit().putString(KEY_ROTATION, value).apply()
 
     var filter: String
-        get() = prefs.getString(KEY_FILTER, "Paper") ?: "Paper"
+        get() = prefs.getString(KEY_FILTER, "Original") ?: "Original"
         set(value) = prefs.edit().putString(KEY_FILTER, value).apply()
 
     var flash: String
-        get() = prefs.getString(KEY_FLASH, "Off") ?: "Off"
+        get() = prefs.getString(KEY_FLASH, "Auto") ?: "Auto"
         set(value) = prefs.edit().putString(KEY_FLASH, value).apply()
 
     var focusMode: String
@@ -57,11 +57,11 @@ class WizardPrefs(context: Context) {
         set(value) = prefs.edit().putString(KEY_FOCUS_MODE, value).apply()
 
     var liveEdge: Boolean
-        get() = prefs.getBoolean(KEY_LIVE_EDGE, true)
+        get() = prefs.getBoolean(KEY_LIVE_EDGE, false)
         set(value) = prefs.edit().putBoolean(KEY_LIVE_EDGE, value).apply()
 
     var autoCapture: Boolean
-        get() = prefs.getBoolean(KEY_AUTO_CAPTURE, true)
+        get() = prefs.getBoolean(KEY_AUTO_CAPTURE, false)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_CAPTURE, value).apply()
 
     var autoCrop: Boolean
@@ -69,7 +69,7 @@ class WizardPrefs(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_AUTO_CROP, value).apply()
 
     var autoShadow: Boolean
-        get() = prefs.getBoolean(KEY_AUTO_SHADOW, true)
+        get() = prefs.getBoolean(KEY_AUTO_SHADOW, false)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_SHADOW, value).apply()
 
     var manualCrop: Boolean
@@ -80,7 +80,7 @@ class WizardPrefs(context: Context) {
         get() = prefs.getBoolean(KEY_BATCH_MODE, true)
         set(value) = prefs.edit().putBoolean(KEY_BATCH_MODE, value).apply()
 
-    var saveAs: String
-        get() = prefs.getString(KEY_SAVE_AS, "PDF") ?: "PDF"
-        set(value) = prefs.edit().putString(KEY_SAVE_AS, value).apply()
+    var dontShowAgain: Boolean
+        get() = prefs.getBoolean(KEY_DONT_SHOW_AGAIN, false)
+        set(value) = prefs.edit().putBoolean(KEY_DONT_SHOW_AGAIN, value).apply()
 }

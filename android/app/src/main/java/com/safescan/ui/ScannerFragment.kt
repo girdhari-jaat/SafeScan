@@ -317,13 +317,6 @@ class ScannerFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(binding.composeView) { v, insets ->
-            val statusBars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.statusBars())
-            val navigationBars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
-            v.setPadding(0, statusBars.top, 0, navigationBars.bottom)
-            insets
-        }
-
         cameraExecutor = Executors.newSingleThreadExecutor()
 
         setupObservers()
@@ -388,7 +381,46 @@ class ScannerFragment : Fragment() {
                             onStartScan = {
                                 viewModel.isDocumentOpenedFromLibrary.value = false
                                 viewModel.openedDocumentId = null
-                                updateViewMode(FragmentViewMode.WIZARD)
+                                val wizardPrefs = com.safescan.utils.WizardPrefs(requireContext())
+                                if (wizardPrefs.dontShowAgain) {
+                                    // Sync wizard preferences directly to settingsRepository and run scanner
+                                    viewLifecycleOwner.lifecycleScope.launch {
+                                        val repo = viewModel.settingsRepository
+                                        
+                                        val modeObj = when (wizardPrefs.scanType) {
+                                            "Card" -> com.safescan.data.ScannerMode.CARD
+                                            "Grid" -> com.safescan.data.ScannerMode.GRID
+                                            else -> com.safescan.data.ScannerMode.DOCUMENT
+                                        }
+                                        repo.setScannerMode(modeObj)
+                                        repo.setPageSize(wizardPrefs.pageSize)
+                                        repo.setHdMode(wizardPrefs.imageQuality)
+                                        repo.setDefaultFilter(wizardPrefs.filter.lowercase())
+                                        repo.setShadowRemove(wizardPrefs.autoShadow)
+                                        
+                                        val flashObj = when (wizardPrefs.flash) {
+                                            "Auto" -> com.safescan.data.FlashMode.AUTO
+                                            "On" -> com.safescan.data.FlashMode.TORCH
+                                            "Torch" -> com.safescan.data.FlashMode.TORCH
+                                            else -> com.safescan.data.FlashMode.OFF
+                                        }
+                                        repo.setFlashMode(flashObj)
+                                        repo.setFlashOn(wizardPrefs.flash == "On" || wizardPrefs.flash == "Torch")
+                                        
+                                        repo.setDoubleFocus(wizardPrefs.focusMode == "Double Tap")
+                                        repo.setLiveDetect(wizardPrefs.liveEdge)
+                                        if (wizardPrefs.autoCapture != viewModel.autoCapture.value) {
+                                            repo.toggleAutoCapture()
+                                        }
+                                        repo.setAutoCrop(wizardPrefs.autoCrop)
+                                        repo.setBatchScan(wizardPrefs.batchMode)
+
+                                        
+                                        checkPermissionAndStartScanner()
+                                    }
+                                } else {
+                                    updateViewMode(FragmentViewMode.WIZARD)
+                                }
                             },
                             onOpenDocument = { doc ->
                                 viewModel.loadDocumentIntoSlots(doc)

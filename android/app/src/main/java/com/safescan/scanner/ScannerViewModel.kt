@@ -226,6 +226,36 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    private fun resolveDynamicFilename(pattern: String, mode: ScannerMode): String {
+        val sdf = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault())
+        val timestamp = sdf.format(java.util.Date())
+        
+        val trimmed = pattern.trim()
+        if (trimmed.isEmpty() || 
+            trimmed.equals("Doc+Date+Time", ignoreCase = true) || 
+            trimmed.equals("Card+Date+Time", ignoreCase = true) || 
+            trimmed.equals("Doc_yyyyMMdd_HHmm", ignoreCase = true) || 
+            trimmed.equals("Card_yyyyMMdd_HHmm", ignoreCase = true) || 
+            trimmed.equals("Scan_Document", ignoreCase = true)) {
+            return when (mode) {
+                ScannerMode.DOCUMENT -> "Doc_$timestamp"
+                ScannerMode.CARD, ScannerMode.GRID -> "Card_$timestamp"
+            }
+        }
+        
+        var resolved = pattern
+        if (resolved.contains("Doc+Date+Time", ignoreCase = true)) {
+            resolved = resolved.replace("Doc+Date+Time", "Doc_$timestamp", ignoreCase = true)
+        }
+        if (resolved.contains("Card+Date+Time", ignoreCase = true)) {
+            resolved = resolved.replace("Card+Date+Time", "Card_$timestamp", ignoreCase = true)
+        }
+        if (resolved.contains("Date+Time", ignoreCase = true)) {
+            resolved = resolved.replace("Date+Time", timestamp, ignoreCase = true)
+        }
+        return resolved
+    }
+
     val slots: MutableStateFlow<List<Slot>> = MutableStateFlow(emptyList())
     val selectedSlotId: MutableStateFlow<String?> = MutableStateFlow(null)
 
@@ -269,12 +299,6 @@ class ScannerViewModel @Inject constructor(
                 }
                 selectedSlotId.value = null
                 capturedJpgFiles.clear()
-                
-                // Auto naming logic: set title based on mode for new documents
-                if (openedDocumentId == null) {
-                    val autoName = generateDefaultTitle(mode)
-                    settingsRepository.setPdfFilename(autoName)
-                }
             }
         }
     }
@@ -1149,7 +1173,11 @@ class ScannerViewModel @Inject constructor(
             try {
                 // Also save the captured pages and metadata persistently as a document
                 val docId = openedDocumentId ?: ("doc_" + System.currentTimeMillis())
-                val title = pdfFilename.value
+                val title = if (openedDocumentId != null) {
+                    savedDocuments.value.find { it.id == docId }?.title ?: resolveDynamicFilename(pdfFilename.value, currentMode.value)
+                } else {
+                    resolveDynamicFilename(pdfFilename.value, currentMode.value)
+                }
                 val pagesData = if (capturedJpgFiles.isNotEmpty()) {
                     capturedJpgFiles.mapIndexed { idx, file ->
                         val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
@@ -1196,7 +1224,7 @@ class ScannerViewModel @Inject constructor(
                         }
                     }
                     DiagnosticsLogger.info("Exporting document to PDF at ${pageSize.value} layout off-thread...")
-                    val result = pdfExporter.exportCardsToPdf(slotsToExport, pdfFilename.value, currentMode.value, pageSize.value)
+                    val result = pdfExporter.exportCardsToPdf(slotsToExport, title, currentMode.value, pageSize.value)
                     withContext(Dispatchers.Main) {
                         capturedJpgFiles.clear()
                         originalJpgBitmaps.clear()

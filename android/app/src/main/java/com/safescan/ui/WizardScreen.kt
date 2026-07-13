@@ -53,36 +53,11 @@ fun WizardScreen(
     var autoShadow by remember { mutableStateOf(wizardPrefs.autoShadow) }
     var manualCrop by remember { mutableStateOf(wizardPrefs.manualCrop) }
     var batchMode by remember { mutableStateOf(wizardPrefs.batchMode) }
-    var saveAs by remember { mutableStateOf(wizardPrefs.saveAs) }
+    var dontShowAgain by remember { mutableStateOf(wizardPrefs.dontShowAgain) }
 
     val scrollState = rememberScrollState()
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "New Scan Setup",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onClose) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = Color.White
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF1E1E1E)
-                )
-            )
-        },
         containerColor = Color(0xFF121212)
     ) { paddingValues ->
         Column(
@@ -90,15 +65,34 @@ fun WizardScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .verticalScroll(scrollState)
-                .padding(16.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
-            // --- Scan Type Section ---
-            WizardSectionHeader(title = "Scan Type")
+            // Compact close button at the top-right
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 val types = listOf("Document", "Card", "Grid")
                 types.forEach { type ->
@@ -115,23 +109,17 @@ fun WizardScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider(color = Color(0xFF2C2C2C), thickness = 1.dp)
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // --- Page & Quality Section ---
-            WizardSectionHeader(title = "Page & Quality")
-            
+            // --- Page Size ---
             Text(
                 text = "Page Size",
                 color = Color.Gray,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(vertical = 4.dp)
+                fontSize = 11.sp,
+                modifier = Modifier.padding(bottom = 2.dp)
             )
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 val pageSizes = com.safescan.utils.PageConfig.ALL_PAGE_SIZES
@@ -149,19 +137,18 @@ fun WizardScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
+            // --- Image Quality ---
             Text(
                 text = "Image Quality",
                 color = Color.Gray,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(vertical = 4.dp)
+                fontSize = 11.sp,
+                modifier = Modifier.padding(bottom = 2.dp)
             )
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 val qualities = listOf("Fast", "Standard", "High")
                 qualities.forEach { quality ->
@@ -178,53 +165,47 @@ fun WizardScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider(color = Color(0xFF2C2C2C), thickness = 1.dp)
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // --- Correction Section ---
-            WizardSectionHeader(title = "Correction")
-
+            // --- Warp Correction ---
             Text(
-                text = "Warp",
+                text = "Warp Correction",
                 color = Color.Gray,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(vertical = 4.dp)
+                fontSize = 11.sp,
+                modifier = Modifier.padding(bottom = 2.dp)
             )
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                val warps = listOf("Perspective", "Flat Crop Only", "None")
+                val warps = listOf("Perspective", "Flat", "None")
                 warps.forEach { warpItem ->
-                    val selected = warp == warpItem
+                    val selected = if (warpItem == "Flat") warp == "Flat Crop Only" else warp == warpItem
                     WizardSelectionButton(
                         text = warpItem,
                         selected = selected,
                         modifier = Modifier.weight(1f),
                         onClick = {
-                            warp = warpItem
-                            wizardPrefs.warp = warpItem
+                            val actualWarpValue = if (warpItem == "Flat") "Flat Crop Only" else warpItem
+                            warp = actualWarpValue
+                            wizardPrefs.warp = actualWarpValue
                         }
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
+            // --- Rotation ---
             Text(
                 text = "Rotation",
                 color = Color.Gray,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(vertical = 4.dp)
+                fontSize = 11.sp,
+                modifier = Modifier.padding(bottom = 2.dp)
             )
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 val rotations = listOf("Auto", "0°", "90°", "180°")
                 rotations.forEach { rot ->
@@ -241,19 +222,18 @@ fun WizardScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
+            // --- Filter Selector (Full Width but compact) ---
             Text(
-                text = "Filter",
+                text = "Processing Filter",
                 color = Color.Gray,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(vertical = 4.dp)
+                fontSize = 11.sp,
+                modifier = Modifier.padding(bottom = 2.dp)
             )
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 val filters = listOf("Original", "Magic", "Paper", "B&W", "Color", "Card")
                 filters.forEach { f ->
@@ -270,24 +250,18 @@ fun WizardScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider(color = Color(0xFF2C2C2C), thickness = 1.dp)
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
-            // --- Camera Section ---
-            WizardSectionHeader(title = "Camera")
-
+            // --- Flash Mode ---
             Text(
-                text = "Flash",
+                text = "Flash Mode",
                 color = Color.Gray,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(vertical = 4.dp)
+                fontSize = 11.sp,
+                modifier = Modifier.padding(bottom = 2.dp)
             )
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 val flashes = listOf("Off", "Auto", "On", "Torch")
                 flashes.forEach { fl ->
@@ -304,211 +278,233 @@ fun WizardScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
+            // --- Focus Mode ---
             Text(
                 text = "Focus Mode",
                 color = Color.Gray,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(vertical = 4.dp)
+                fontSize = 11.sp,
+                modifier = Modifier.padding(bottom = 2.dp)
             )
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                val focuses = listOf("Continuous", "Single", "Double Tap")
+                val focuses = listOf("Continuous", "Single", "Double")
                 focuses.forEach { foc ->
-                    val selected = focusMode == foc
+                    val selected = if (foc == "Double") focusMode == "Double Tap" else focusMode == foc
                     WizardSelectionButton(
                         text = foc,
                         selected = selected,
                         modifier = Modifier.weight(1f),
                         onClick = {
-                            focusMode = foc
-                            wizardPrefs.focusMode = foc
+                            val actualFocusValue = if (foc == "Double") "Double Tap" else foc
+                            focusMode = actualFocusValue
+                            wizardPrefs.focusMode = actualFocusValue
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // --- Advanced Preferences Checkboxes (2 Columns) ---
+            Text(
+                text = "Advanced Preferences",
+                color = Color.Gray,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(bottom = 2.dp)
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    WizardCheckboxItem(
+                        text = "Live Edge",
+                        checked = liveEdge,
+                        onCheckedChange = {
+                            liveEdge = it
+                            wizardPrefs.liveEdge = it
+                        }
+                    )
+                    WizardCheckboxItem(
+                        text = "Auto Crop",
+                        checked = autoCrop,
+                        onCheckedChange = {
+                            autoCrop = it
+                            wizardPrefs.autoCrop = it
+                        }
+                    )
+                    WizardCheckboxItem(
+                        text = "Manual Crop",
+                        checked = manualCrop,
+                        onCheckedChange = {
+                            manualCrop = it
+                            wizardPrefs.manualCrop = it
+                        }
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    WizardCheckboxItem(
+                        text = "Auto Capture",
+                        checked = autoCapture,
+                        onCheckedChange = {
+                            autoCapture = it
+                            wizardPrefs.autoCapture = it
+                        }
+                    )
+                    WizardCheckboxItem(
+                        text = "Shadow Remove",
+                        checked = autoShadow,
+                        onCheckedChange = {
+                            autoShadow = it
+                            wizardPrefs.autoShadow = it
+                        }
+                    )
+                    WizardCheckboxItem(
+                        text = "Batch Mode",
+                        checked = batchMode,
+                        onCheckedChange = {
+                            batchMode = it
+                            wizardPrefs.batchMode = it
                         }
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider(color = Color(0xFF2C2C2C), thickness = 1.dp)
-            Spacer(modifier = Modifier.height(16.dp))
 
-            // --- Advanced Section ---
-            WizardSectionHeader(title = "Advanced")
-
-            WizardCheckboxItem(
-                text = "Live Edge Detection",
-                checked = liveEdge,
-                onCheckedChange = {
-                    liveEdge = it
-                    wizardPrefs.liveEdge = it
-                }
-            )
-            WizardCheckboxItem(
-                text = "Auto Capture",
-                checked = autoCapture,
-                onCheckedChange = {
-                    autoCapture = it
-                    wizardPrefs.autoCapture = it
-                }
-            )
-            WizardCheckboxItem(
-                text = "Auto Crop",
-                checked = autoCrop,
-                onCheckedChange = {
-                    autoCrop = it
-                    wizardPrefs.autoCrop = it
-                }
-            )
-            WizardCheckboxItem(
-                text = "Auto Shadow Removal",
-                checked = autoShadow,
-                onCheckedChange = {
-                    autoShadow = it
-                    wizardPrefs.autoShadow = it
-                }
-            )
-            WizardCheckboxItem(
-                text = "Manual Crop",
-                checked = manualCrop,
-                onCheckedChange = {
-                    manualCrop = it
-                    wizardPrefs.manualCrop = it
-                }
-            )
-            WizardCheckboxItem(
-                text = "Batch Mode",
-                checked = batchMode,
-                onCheckedChange = {
-                    batchMode = it
-                    wizardPrefs.batchMode = it
-                }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Save As",
-                color = Color.Gray,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
+            // --- Bottom Row: [✓] Don't Show Again  [▶ Start Scan] ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                val saveFormats = listOf("PDF", "JPG")
-                saveFormats.forEach { fmt ->
-                    val selected = saveAs == fmt
-                    WizardSelectionButton(
-                        text = fmt,
-                        selected = selected,
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            saveAs = fmt
-                            wizardPrefs.saveAs = fmt
-                        }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // --- Start Scanning Button ---
-            Button(
-                onClick = {
-                    // Sync values to settingsRepository / ScannerViewModel before starting scan
-                    scope.launch {
-                        val repo = viewModel.settingsRepository
-
-                        // 1. Scan Type (ScannerMode)
-                        val modeObj = when (scanType) {
-                            "Card" -> ScannerMode.CARD
-                            "Grid" -> ScannerMode.GRID
-                            else -> ScannerMode.DOCUMENT
-                        }
-                        repo.setScannerMode(modeObj)
-
-                        // 2. Page Size
-                        repo.setPageSize(pageSize)
-
-                        // 3. HD Quality/Quality Mode
-                        repo.setHdMode(imageQuality)
-
-                        // 4. Filters & Shadow Removal
-                        repo.setDefaultFilter(filter.lowercase())
-                        repo.setShadowRemove(autoShadow)
-
-                                                // 5. Camera & Flash
-                        val flashObj = when (flash) {
-                            "Auto" -> FlashMode.AUTO
-                            "On" -> FlashMode.TORCH
-                            "Torch" -> FlashMode.TORCH
-                            else -> FlashMode.OFF
-                        }
-                        repo.setFlashMode(flashObj)
-                        repo.setFlashOn(flash == "On" || flash == "Torch")
-
-                        // 6. Focus Mode
-                        repo.setDoubleFocus(focusMode == "Double Tap")
-
-                        // 7. Live Edge Detection & Auto Capture
-                        repo.setLiveDetect(liveEdge)
-                        
-                        // Auto-capture should only toggle settings toggle
-                        if (autoCapture != viewModel.autoCapture.value) {
-                            repo.toggleAutoCapture()
-                        }
-
-                        // 8. Auto Crop & Manual Crop
-                        repo.setAutoCrop(autoCrop)
-
-                        // 9. Batch Mode
-                        repo.setBatchScan(batchMode)
-
-                        // 10. Save formats
-                        repo.setSaveJpg(saveAs == "JPG" || saveAs == "PDF")
-
-                        // 11. Run scan
-                        onStartScan()
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(54.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White
-                ),
-                shape = RoundedCornerShape(8.dp)
-            ) {
+                // Don't Show Again Checkbox Row
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+                    modifier = Modifier
+                        .weight(1.1f)
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable {
+                            dontShowAgain = !dontShowAgain
+                            wizardPrefs.dontShowAgain = dontShowAgain
+                        }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Start Scanning",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
+                    Checkbox(
+                        checked = dontShowAgain,
+                        onCheckedChange = {
+                            dontShowAgain = it
+                            wizardPrefs.dontShowAgain = it
+                        },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = MaterialTheme.colorScheme.primary,
+                            uncheckedColor = Color.Gray,
+                            checkmarkColor = Color.White
                         )
                     )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Don't Show Again",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
-            }
 
-            Spacer(modifier = Modifier.height(24.dp))
+                // Start Scanning Button
+                Button(
+                    onClick = {
+                        // Sync values to settingsRepository / ScannerViewModel before starting scan
+                        scope.launch {
+                            val repo = viewModel.settingsRepository
+
+                            // 1. Scan Type (ScannerMode)
+                            val modeObj = when (scanType) {
+                                "Card" -> ScannerMode.CARD
+                                "Grid" -> ScannerMode.GRID
+                                else -> ScannerMode.DOCUMENT
+                            }
+                            repo.setScannerMode(modeObj)
+
+                            // 2. Page Size
+                            repo.setPageSize(pageSize)
+
+                            // 3. HD Quality/Quality Mode
+                            repo.setHdMode(imageQuality)
+
+                            // 4. Filters & Shadow Removal
+                            repo.setDefaultFilter(filter.lowercase())
+                            repo.setShadowRemove(autoShadow)
+
+                            // 5. Camera & Flash
+                            val flashObj = when (flash) {
+                                "Auto" -> FlashMode.AUTO
+                                "On" -> FlashMode.TORCH
+                                "Torch" -> FlashMode.TORCH
+                                else -> FlashMode.OFF
+                            }
+                            repo.setFlashMode(flashObj)
+                            repo.setFlashOn(flash == "On" || flash == "Torch")
+
+                            // 6. Focus Mode
+                            repo.setDoubleFocus(focusMode == "Double Tap")
+
+                            // 7. Live Edge Detection & Auto Capture
+                            repo.setLiveDetect(liveEdge)
+                            
+                            // Auto-capture should only toggle settings toggle
+                            if (autoCapture != viewModel.autoCapture.value) {
+                                repo.toggleAutoCapture()
+                            }
+
+                            // 8. Auto Crop & Manual Crop
+                            repo.setAutoCrop(autoCrop)
+
+                            // 9. Batch Mode
+                            repo.setBatchScan(batchMode)
+
+                            // 10. Run scan
+                            onStartScan()
+                        }
+                    },
+                    modifier = Modifier
+                        .weight(0.9f)
+                        .height(44.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Start Scan",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        )
+                    }
+                }
+            }  }
+
+            Spacer(modifier = Modifier.height(12.dp))
         }
     }
 }
