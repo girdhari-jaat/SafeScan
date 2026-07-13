@@ -45,7 +45,7 @@ class WizardPrefs(context: Context) {
         set(value) = prefs.edit().putString(KEY_ROTATION, value).apply()
 
     var filter: String
-        get() = prefs.getString(KEY_FILTER, "Original") ?: "Original"
+        get() = prefs.getString(KEY_FILTER, "Paper") ?: "Paper"
         set(value) = prefs.edit().putString(KEY_FILTER, value).apply()
 
     var flash: String

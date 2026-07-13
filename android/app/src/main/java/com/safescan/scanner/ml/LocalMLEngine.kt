@@ -64,7 +64,7 @@ class LocalMLEngine(private val context: Context) {
 
     private var lastStableCorners: List<Point>? = null
     private var stableFrameCount = 0
-    private val STABLE_THRESHOLD = 3
+    private val STABLE_THRESHOLD = 2
     private val TOLERANCE = 20.0
     private var lastBitmapWidth = 0
     private var lastBitmapHeight = 0

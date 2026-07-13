@@ -66,7 +66,7 @@ object ScannerDebugLogger {
     }
 
     fun logStability(stableCount: Int) {
-        val msg = "[Stability] Stable frame count: $stableCount/5"
+        val msg = "[Stability] Stable frame count: $stableCount/3"
         Log.i(TAG, msg)
         DiagnosticsLogger.log("ℹ️ $msg")
     }

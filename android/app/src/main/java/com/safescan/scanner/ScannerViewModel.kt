@@ -291,7 +291,7 @@ class ScannerViewModel @Inject constructor(
     // IMPROVEMENT: Added async detectEdges runner updating isAutoRunning state Flow
     private var stableFrameCount = 0
     private var lastQuadPoints: List<com.safescan.domain.model.Point>? = null
-    private val STABLE_FRAME_THRESHOLD = 5
+    private val STABLE_FRAME_THRESHOLD = 3
     private val STABILITY_TOLERANCE = 30.0
     var isFocusing = false
 
