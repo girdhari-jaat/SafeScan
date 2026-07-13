@@ -56,55 +56,96 @@ fun EditorScreen(viewModel: ScannerViewModel) {
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    TextButton(onClick = {
-                        editingBitmap?.let { viewModel.saveImageToGallery(context, it) }
-                    }) {
-                        Icon(Icons.Default.Save, contentDescription = "Save Image", tint = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Save Image",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 3.dp,
+                shadowElevation = 4.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .height(56.dp)
+                        .padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 1. Back/Cancel Button
+                    IconButton(
+                        onClick = { viewModel.closeEditor(save = false) },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = stringResource(id = R.string.cancel),
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
-                },
-                navigationIcon = {
-                    IconButton(onClick = { viewModel.closeEditor(save = false) }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(id = R.string.cancel))
+
+                    // 2. Save Image (to gallery) Button
+                    IconButton(
+                        onClick = { editingBitmap?.let { viewModel.saveImageToGallery(context, it) } },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Save,
+                            contentDescription = "Save Image",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
-                },
-                actions = {
-                    // PDF Icon to trigger Popover
-                    IconButton(onClick = { showExportPopover = !showExportPopover }) {
+
+                    // 3. PDF Export Options Button
+                    IconButton(
+                        onClick = { showExportPopover = !showExportPopover },
+                        modifier = Modifier.size(48.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.PictureAsPdf,
                             contentDescription = "PDF Export Options",
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
-                    // Delete Icon
-                    IconButton(onClick = {
-                        viewModel.closeEditor(save = false)
-                        Toast.makeText(context, "Page Deleted", Toast.LENGTH_SHORT).show()
-                    }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete Page")
+
+                    // 4. Delete Page Button
+                    IconButton(
+                        onClick = {
+                            viewModel.closeEditor(save = false)
+                            Toast.makeText(context, "Page Deleted", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete Page",
+                            tint = MaterialTheme.colorScheme.error
+                        )
                     }
-                    // Save Button
-                    IconButton(onClick = { viewModel.closeEditor(save = true) }) {
-                        Icon(Icons.Default.Check, contentDescription = stringResource(id = R.string.save), tint = MaterialTheme.colorScheme.primary)
+
+                    // 5. Done / Save to slot Button
+                    IconButton(
+                        onClick = { viewModel.closeEditor(save = true) },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = stringResource(id = R.string.save),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
-                    // Next Button
-                    TextButton(onClick = { viewModel.saveAndNext() }) {
-                        Text("Next", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+
+                    // 6. Next Button
+                    IconButton(
+                        onClick = { viewModel.saveAndNext() },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowForward,
+                            contentDescription = "Next",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
+                }
+            }
         }
     ) { padding ->
         Box(
