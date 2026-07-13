@@ -2,6 +2,7 @@ package com.safescan.scanner
 
 import android.graphics.Bitmap
 import android.util.Log
+import android.widget.Toast
 import java.text.SimpleDateFormat
 import java.util.Locale
 import androidx.lifecycle.ViewModel
