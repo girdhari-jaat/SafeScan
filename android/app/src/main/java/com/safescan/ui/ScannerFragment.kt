@@ -755,12 +755,14 @@ class ScannerFragment : Fragment() {
         val isCropping = viewModel.isCropping.value
         val isSettingsOpen = viewModel.isSettingsOpen.value
         val isDocOpenFromLib = viewModel.isDocumentOpenedFromLibrary.value
+        val isGridViewVisible = viewModel.isGridViewVisible.value
         val isScannerMode = currentViewMode == FragmentViewMode.SCANNER
         val usePhoneCam = viewModel.usePhoneCamera.value
         val useNativeScan = viewModel.useNativeScanner.value
         
         val shouldCameraBeOn = isScannerMode && 
-                               !isDocOpenFromLib && 
+                               !isDocOpenFromLib &&
+                               !isGridViewVisible && 
                                !isEditing && 
                                !isCropping && 
                                !isSettingsOpen && 
@@ -778,6 +780,7 @@ class ScannerFragment : Fragment() {
                     try {
                         val cameraProvider = cameraProviderFuture.get()
                         cameraProvider.unbindAll()
+                        liveEdgeDetectionEngine.release()
                     } catch (e: Exception) {
                         Log.e("ScannerFragment", "Failed to unbind camera in updateCameraState", e)
                     }
@@ -805,6 +808,7 @@ class ScannerFragment : Fragment() {
 
                 if (viewModel.useNativeScanner.value || viewModel.usePhoneCamera.value) {
                     cameraProvider.unbindAll()
+                        liveEdgeDetectionEngine.release()
                     binding.previewView.visibility = View.INVISIBLE
                     return@addListener
                 } else {
@@ -843,7 +847,7 @@ class ScannerFragment : Fragment() {
                 imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
                     val isLiveDetectOn = viewModel.liveDetect.value
                     val isBatterySaverOn = viewModel.batterySaver.value
-                    val isOverlayActive = !viewModel.isEditing.value && !viewModel.isCropping.value && !viewModel.isSettingsOpen.value && !viewModel.isDocumentOpenedFromLibrary.value
+                    val isOverlayActive = !viewModel.isEditing.value && !viewModel.isCropping.value && !viewModel.isSettingsOpen.value && !viewModel.isDocumentOpenedFromLibrary.value && !viewModel.isGridViewVisible.value
                     if (isLiveDetectOn && !isBatterySaverOn && isOverlayActive) {
                         try {
                             val rotationDegrees = imageProxy.imageInfo.rotationDegrees
@@ -923,6 +927,7 @@ class ScannerFragment : Fragment() {
                 val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
                 cameraProvider.unbindAll()
+                        liveEdgeDetectionEngine.release()
 
                 val camera = cameraProvider.bindToLifecycle(
                     viewLifecycleOwner, cameraSelector, preview, imageCapture, imageAnalysis
@@ -1254,6 +1259,7 @@ class ScannerFragment : Fragment() {
                     viewModel.isCropping,
                     viewModel.isSettingsOpen,
                     viewModel.isDocumentOpenedFromLibrary,
+                    viewModel.isGridViewVisible,
                     viewModel.usePhoneCamera,
                     viewModel.useNativeScanner
                 ) { _ ->
