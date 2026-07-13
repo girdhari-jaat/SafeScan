@@ -34,8 +34,8 @@ class EdgeDetectionEngine {
         val gray = Mat()
         Imgproc.cvtColor(resized, gray, Imgproc.COLOR_RGBA2GRAY)
         
-        // Bilateral filter or Gaussian blur to remove textures/noise while keeping sharp borders
-        Imgproc.GaussianBlur(gray, gray, Size(5.0, 5.0), 0.0)
+        // Median blur is generally better than Gaussian blur for removing noise while keeping document edges sharp
+        Imgproc.medianBlur(gray, gray, 5)
         
         val maxArea = resized.width() * resized.height()
         val minArea = maxArea * 0.12 // Document must occupy at least 12% of the screen

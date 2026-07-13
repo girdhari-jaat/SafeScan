@@ -1,4 +1,4 @@
-package com.safescan.scanner.ml
+package com.safescan.scanner
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -19,7 +19,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.FileChannel
 
-class LocalMLEngine(private val context: Context) {
+class TFLiteEngine(private val context: Context) {
 
     private var interpreter: Interpreter? = null
     private var gpuDelegate: GpuDelegate? = null
@@ -40,14 +40,14 @@ class LocalMLEngine(private val context: Context) {
                 gpuDelegate = GpuDelegate()
                 options.addDelegate(gpuDelegate)
                 interpreter = Interpreter(tfliteModel, options)
-                Log.d("LocalMLEngine", "Native TFLite model loaded successfully with GPU acceleration")
+                Log.d("TFLiteEngine", "Native TFLite model loaded successfully with GPU acceleration")
             } catch (gpuEx: Throwable) {
-                Log.w("LocalMLEngine", "GPU acceleration not supported or failed to initialize. Falling back to CPU safely.", gpuEx)
+                Log.w("TFLiteEngine", "GPU acceleration not supported or failed to initialize. Falling back to CPU safely.", gpuEx)
                 // Clean up GPU delegate if it was created
                 try {
                     gpuDelegate?.close()
                 } catch (closeEx: Throwable) {
-                    Log.e("LocalMLEngine", "Failed to close gpuDelegate", closeEx)
+                    Log.e("TFLiteEngine", "Failed to close gpuDelegate", closeEx)
                 }
                 gpuDelegate = null
                 
@@ -55,10 +55,10 @@ class LocalMLEngine(private val context: Context) {
                 val options = Interpreter.Options()
                 options.setNumThreads(4) // Use 4 CPU threads for high performance
                 interpreter = Interpreter(tfliteModel, options)
-                Log.d("LocalMLEngine", "Native TFLite model loaded successfully with CPU (4 threads)")
+                Log.d("TFLiteEngine", "Native TFLite model loaded successfully with CPU (4 threads)")
             }
         } catch (e: Throwable) {
-            Log.e("LocalMLEngine", "Fatal error loading Native TFLite model", e)
+            Log.e("TFLiteEngine", "Fatal error loading Native TFLite model", e)
         }
     }
 
@@ -233,7 +233,7 @@ class LocalMLEngine(private val context: Context) {
             
             return result
         } catch (e: Throwable) {
-            Log.e("LocalMLEngine", "Error running inference", e)
+            Log.e("TFLiteEngine", "Error running inference", e)
         } finally {
             maskMat?.release()
             binaryMask?.release()

@@ -6,7 +6,7 @@ import com.safescan.scanner.DocumentScannerEngine
 import com.safescan.scanner.MLScannerEngine
 import com.safescan.domain.model.Point
 import com.safescan.scanner.DocumentScanner
-import com.safescan.scanner.ml.LocalMLEngine
+import com.safescan.scanner.TFLiteEngine
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -19,22 +19,22 @@ import javax.inject.Singleton
 object ScannerModule {
     @Provides
     @Singleton
-    fun provideLocalMLEngine(@ApplicationContext context: Context): LocalMLEngine {
-        return LocalMLEngine(context)
+    fun provideTFLiteEngine(@ApplicationContext context: Context): TFLiteEngine {
+        return TFLiteEngine(context)
     }
 
     @Provides
     @Singleton
-    fun provideDocumentScanner(localMLEngine: LocalMLEngine, @ApplicationContext context: Context): DocumentScanner {
-        return DocumentScanner(localMLEngine, context)
+    fun provideDocumentScanner(tfLiteEngine: TFLiteEngine, @ApplicationContext context: Context): DocumentScanner {
+        return DocumentScanner(tfLiteEngine, context)
     }
 
     @Provides
     @Singleton
-    fun provideMLScannerEngine(localMLEngine: LocalMLEngine): MLScannerEngine {
+    fun provideMLScannerEngine(tfLiteEngine: TFLiteEngine): MLScannerEngine {
         return object : MLScannerEngine {
             override suspend fun detectCorners(bitmap: Bitmap): List<Point>? {
-                val quad = localMLEngine.detectCorners(bitmap)
+                val quad = tfLiteEngine.detectCorners(bitmap)
                 return quad?.let { listOf(it.topLeft, it.topRight, it.bottomRight, it.bottomLeft) }
             }
         }

@@ -21,6 +21,9 @@ class LiveEdgeDetectionEngine {
     private var edges: Mat? = null
     private var hierarchy: Mat? = null
     private var kernel: Mat? = null
+    
+    private var previousCorners: List<Point>? = null
+    private var framesWithoutDetection = 0
 
     private fun initMatsIfNeeded() {
         if (src == null) {
@@ -103,8 +106,8 @@ class LiveEdgeDetectionEngine {
                 // Convert to grayscale
                 Imgproc.cvtColor(resized!!, gray!!, Imgproc.COLOR_RGBA2GRAY)
                 
-                // Median blur is better for removing salt-and-pepper noise while preserving edges
-                Imgproc.medianBlur(gray!!, blurred!!, 5)
+                // Gaussian blur is faster for live preview and provides good edge smoothing
+                Imgproc.GaussianBlur(gray!!, blurred!!, Size(5.0, 5.0), 0.0)
                 
                 // Enhance contrast slightly using equalization could be heavy, so we rely on adaptive threshold or Canny
                 Imgproc.Canny(blurred!!, edges!!, 40.0, 120.0) 
@@ -170,13 +173,45 @@ class LiveEdgeDetectionEngine {
             }
             
             if (foundCorners != null) {
+                framesWithoutDetection = 0
+                if (previousCorners != null) {
+                    val maxDistance = foundCorners!!.mapIndexed { index, p ->
+                        Math.hypot(p.x - previousCorners!![index].x, p.y - previousCorners!![index].y)
+                    }.maxOrNull() ?: 0.0
+                    
+                    if (maxDistance > 200) { 
+                        // Large jump, reset smoothing
+                        previousCorners = foundCorners
+                    } else {
+                        // Exponential Moving Average for stabilization
+                        foundCorners = foundCorners!!.mapIndexed { index, p ->
+                            Point(
+                                previousCorners!![index].x + 0.35 * (p.x - previousCorners!![index].x),
+                                previousCorners!![index].y + 0.35 * (p.y - previousCorners!![index].y)
+                            )
+                        }
+                        previousCorners = foundCorners
+                    }
+                } else {
+                    previousCorners = foundCorners
+                }
+                
                 ScannerDebugLogger.logLiveEdgePoints(
-                    foundCorners[0].toString(),
-                    foundCorners[1].toString(),
-                    foundCorners[2].toString(),
-                    foundCorners[3].toString()
+                    foundCorners!![0].toString(),
+                    foundCorners!![1].toString(),
+                    foundCorners!![2].toString(),
+                    foundCorners!![3].toString()
                 )
+            } else {
+                framesWithoutDetection++
+                if (framesWithoutDetection < 5 && previousCorners != null) {
+                    // Keep showing previous corners for a few frames to prevent flickering
+                    foundCorners = previousCorners
+                } else {
+                    previousCorners = null
+                }
             }
+            
             onResult(foundCorners)
         } catch (e: Throwable) {
             ScannerDebugLogger.logError("LiveEdge", "Live edge detection processing error", e)

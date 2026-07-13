@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import com.safescan.domain.model.Point
 import com.safescan.domain.model.Quadrilateral
-import com.safescan.scanner.ml.LocalMLEngine
 import org.opencv.android.Utils
 import org.opencv.core.Mat
 import org.opencv.core.MatOfPoint2f
@@ -15,11 +14,11 @@ import kotlin.math.pow
 import kotlin.math.sqrt
 
 class DocumentScanner(
-    private val localMLEngine: LocalMLEngine,
+    private val tfLiteEngine: TFLiteEngine,
     private val context: Context
 ) {
     fun detectDocument(bitmap: Bitmap, isLive: Boolean = false): Quadrilateral? {
-        return localMLEngine.detectCorners(bitmap, isLive)
+        return tfLiteEngine.detectCorners(bitmap, isLive)
     }
 
     fun cropAndTransform(bitmap: Bitmap, quad: Quadrilateral, mode: String = "DOCUMENT"): Bitmap {

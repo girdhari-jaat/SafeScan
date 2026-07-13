@@ -408,35 +408,21 @@ class ScannerViewModel @Inject constructor(
             onResult(null)
             return
         }
+
         _uiState.update { it.copy(isAutoRunning = true) }
         viewModelScope.launch(Dispatchers.IO) {
             var points: List<Point>? = null
-            // Try TFLite Local ML first
             try {
                 if (!bitmap.isRecycled) {
-                    val quad = documentScanner.detectDocument(bitmap)
-                    if (quad != null) {
-                        points = listOf(quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft)
-                        Log.d("ScannerViewModel", "detectEdges: Successfully detected corners using TFLite")
-                    }
+                    points = edgeDetectionEngine.detectEdges(bitmap)
+                    Log.d("ScannerViewModel", "detectEdges: Successfully detected corners using OpenCV")
                 }
             } catch (e: Throwable) {
-                Log.e("ScannerViewModel", "detectEdges: TFLite ML detection failed, falling back to OpenCV", e)
-            }
-
-            // Fallback to OpenCV
-            if (points == null || points.size != 4) {
-                try {
-                    if (!bitmap.isRecycled) {
-                        points = edgeDetectionEngine.detectEdges(bitmap)
-                        Log.d("ScannerViewModel", "detectEdges: Successfully detected corners using OpenCV fallback")
-                    }
-                } catch (e: Throwable) {
-                    Log.e("ScannerViewModel", "detectEdges: OpenCV detection fallback failed", e)
-                }
+                Log.e("ScannerViewModel", "detectEdges: OpenCV detection failed", e)
             }
 
             _uiState.update { it.copy(isAutoRunning = false) }
+
             withContext(Dispatchers.Main) {
                 try {
                     onResult(points)
