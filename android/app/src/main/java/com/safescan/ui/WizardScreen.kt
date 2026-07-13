@@ -445,10 +445,10 @@ fun WizardScreen(
                         repo.setDefaultFilter(filter.lowercase())
                         repo.setShadowRemove(autoShadow)
 
-                        // 5. Camera & Flash
+                                                // 5. Camera & Flash
                         val flashObj = when (flash) {
                             "Auto" -> FlashMode.AUTO
-                            "On" -> FlashMode.ON
+                            "On" -> FlashMode.TORCH
                             "Torch" -> FlashMode.TORCH
                             else -> FlashMode.OFF
                         }
@@ -462,7 +462,7 @@ fun WizardScreen(
                         repo.setLiveDetect(liveEdge)
                         
                         // Auto-capture should only toggle settings toggle
-                        if (autoCapture != repo.autoCaptureFlow.value) {
+                        if (autoCapture != viewModel.autoCapture.value) {
                             repo.toggleAutoCapture()
                         }
 

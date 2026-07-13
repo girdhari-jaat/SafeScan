@@ -34,7 +34,7 @@ import javax.inject.Inject
 class ScannerViewModel @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val scannerEngine: DocumentScannerEngine,
-    private val settingsRepository: SettingsRepository,
+    val settingsRepository: SettingsRepository,
     private val edgeDetectionEngine: com.safescan.scanner.EdgeDetectionEngine,
     private val pdfExporter: com.safescan.domain.PdfExporter,
     private val documentRepository: com.safescan.data.DocumentRepository,
