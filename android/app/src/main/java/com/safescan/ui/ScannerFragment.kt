@@ -675,11 +675,13 @@ class ScannerFragment : Fragment() {
             com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> !isLandscape // CARD/GRID should be landscape
         }
         return if (needsRotation) {
+            com.safescan.core.ScannerDebugLogger.logAutoRotation(90f)
             val matrix = android.graphics.Matrix().apply { postRotate(90f) }
             val rotated = android.graphics.Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
             bitmap.recycle()
             rotated
         } else {
+            com.safescan.core.ScannerDebugLogger.logAutoRotation(0f)
             bitmap
         }
     }
@@ -756,6 +758,7 @@ class ScannerFragment : Fragment() {
 
                 // 1. Dynamic Hardware Negotiation & Mood Alignment (configured in CameraHardwareConfig)
                 val captureSettings = com.safescan.scanner.CameraHardwareConfig.getCaptureSettings(currentContext, mode, hdModeStr)
+                com.safescan.core.ScannerDebugLogger.logCameraX("${captureSettings.targetSize.width}x${captureSettings.targetSize.height} (${captureSettings.megapixelsLabel})", mode.name)
                 val previewSelector = com.safescan.scanner.CameraHardwareConfig.getPreviewResolutionSelector(currentContext, mode)
                 val analysisSelector = com.safescan.scanner.CameraHardwareConfig.getImageAnalysisResolutionSelector(currentContext, mode)
 
@@ -1038,6 +1041,7 @@ class ScannerFragment : Fragment() {
                     // ALWAYS rotate the raw camera sensor bitmap by imageProxy.imageInfo.rotationDegrees
                     // so it displays in standard upright portrait/landscape orientation matching the screen preview.
                     val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+                    com.safescan.core.ScannerDebugLogger.logCameraRotation(rotationDegrees)
                     val bitmap = if (rotationDegrees != 0) {
                         val matrix = android.graphics.Matrix().apply { postRotate(rotationDegrees.toFloat()) }
                         val rotated = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
@@ -1054,6 +1058,7 @@ class ScannerFragment : Fragment() {
                         val ph = binding.previewView.height.toFloat()
                         val holeRect = getOverlayHoleRect(pw, ph)
                         if (pw > 0f && ph > 0f && !holeRect.isEmpty) {
+                            com.safescan.core.ScannerDebugLogger.logCrop(holeRect.left, holeRect.top, holeRect.width(), holeRect.height())
                             val bw = bitmap.width.toFloat()
                             val bh = bitmap.height.toFloat()
                             
@@ -1076,6 +1081,7 @@ class ScannerFragment : Fragment() {
                             val safeHeight = cropHeight.coerceAtMost(bitmap.height - cropTop)
                             
                             val cropped = Bitmap.createBitmap(bitmap, cropLeft, cropTop, safeWidth, safeHeight)
+                            com.safescan.core.ScannerDebugLogger.logCropRoiSize(cropped.width, cropped.height)
                             bitmap.recycle()
                             cropped
                         } else {

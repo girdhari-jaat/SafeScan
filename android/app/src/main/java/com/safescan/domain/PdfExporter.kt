@@ -12,13 +12,19 @@ import java.io.File
 import java.io.FileOutputStream
 import com.safescan.data.ScannerMode
 import com.safescan.data.Slot
+import com.safescan.core.ScannerDebugLogger
 
 class PdfExporter(private val context: Context) {
 
     // IMPROVEMENT: Changed return type to Result<File> instead of throwing or returning nullable File to avoid crashes and support multi-page dynamic size PDF documents
     suspend fun exportCardsToPdf(slots: List<Slot>, filename: String, mode: ScannerMode, pageSizeStr: String = "A4"): Result<File> = withContext(Dispatchers.IO) {
+        ScannerDebugLogger.logEnter("PdfExporter.exportCardsToPdf")
         val documentDir = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
-            ?: return@withContext Result.failure(IllegalStateException("Cannot access external files directory"))
+            ?: run {
+                ScannerDebugLogger.logError("PDF", "Cannot access external files directory")
+                ScannerDebugLogger.logExit("PdfExporter.exportCardsToPdf")
+                return@withContext Result.failure(IllegalStateException("Cannot access external files directory"))
+            }
 
         if (!documentDir.exists()) {
             documentDir.mkdirs()
@@ -30,6 +36,7 @@ class PdfExporter(private val context: Context) {
         val pdfDocument = PdfDocument()
 
         try {
+            ScannerDebugLogger.logPdfAssemble(slots.size, pageSizeStr)
             // Check selected page size
             val isA4 = pageSizeStr.equals("A4", ignoreCase = true)
             val pageWidth = if (isA4) 595 else 612 // Letter: 612, A4: 595
@@ -143,11 +150,16 @@ class PdfExporter(private val context: Context) {
                 pdfDocument.writeTo(outStream)
             }
 
+            val sizeMb = file.length().toDouble() / (1024.0 * 1024.0)
+            ScannerDebugLogger.logPdfSuccess(file.absolutePath, sizeMb)
+            ScannerDebugLogger.logExit("PdfExporter.exportCardsToPdf")
             Result.success(file)
         } catch (e: Exception) {
+            ScannerDebugLogger.logError("PDF", "Failed to export PDF", e)
             if (file.exists()) {
                 file.delete()
             }
+            ScannerDebugLogger.logExit("PdfExporter.exportCardsToPdf")
             Result.failure(e)
         } finally {
             pdfDocument.close()

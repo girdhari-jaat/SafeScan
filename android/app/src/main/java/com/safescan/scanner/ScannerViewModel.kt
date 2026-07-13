@@ -14,6 +14,7 @@ import com.safescan.data.SettingsRepository
 import com.safescan.data.ScannerUiState
 import com.safescan.core.DiagnosticsLogger
 import com.safescan.domain.model.Point
+import com.safescan.core.ScannerDebugLogger
 import com.safescan.domain.model.Quadrilateral
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -190,6 +191,8 @@ class ScannerViewModel @Inject constructor(
             java.io.FileOutputStream(file).use { out ->
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
             }
+            val sizeKb = file.length() / 1024
+            ScannerDebugLogger.logSaveFullImage(sizeKb)
             file.absolutePath
         } catch (e: Exception) {
             Log.e("ScannerViewModel", "Failed to save high-res bitmap to disk", e)
@@ -292,33 +295,67 @@ class ScannerViewModel @Inject constructor(
     var isFocusing = false
 
     fun onDocumentDetected(points: List<com.safescan.domain.model.Point>?) {
-        if (isFocusing) return
-        isDocumentDetected.value = (points != null && points.size == 4)
-        if (!autoCapture.value || points == null || points.size != 4) {
+        ScannerDebugLogger.logEnter("ScannerViewModel.onDocumentDetected")
+        if (isFocusing) {
+            ScannerDebugLogger.logExit("ScannerViewModel.onDocumentDetected")
+            return
+        }
+        
+        // Use mutable points variable for smoothing
+        var processedPoints = points
+
+        isDocumentDetected.value = (processedPoints != null && processedPoints.size == 4)
+        if (!autoCapture.value || processedPoints == null || processedPoints.size != 4) {
             stableFrameCount = 0
             lastQuadPoints = null
+            ScannerDebugLogger.logExit("ScannerViewModel.onDocumentDetected")
             return
         }
 
-        if (lastQuadPoints == null) {
-            lastQuadPoints = points
-            stableFrameCount = 1
-            return
+        // Smoothing: Average with last frame
+        if (lastQuadPoints != null) {
+            processedPoints = averageCorners(lastQuadPoints!!, processedPoints!!)
         }
 
-        if (isStable(lastQuadPoints!!, points)) {
+        if (processedPoints.size == 4) {
+            ScannerDebugLogger.logLiveEdgePoints(
+                processedPoints[0].toString(),
+                processedPoints[1].toString(),
+                processedPoints[2].toString(),
+                processedPoints[3].toString()
+            )
+        }
+
+        // Stability Check
+        if (lastQuadPoints != null && isStable(lastQuadPoints!!, processedPoints)) {
             stableFrameCount++
         } else {
             stableFrameCount = 1
         }
+        lastQuadPoints = processedPoints
 
-        lastQuadPoints = points
+        ScannerDebugLogger.logStability(stableFrameCount)
 
-        if (stableFrameCount >= STABLE_FRAME_THRESHOLD) {
+        val trigger = stableFrameCount >= STABLE_FRAME_THRESHOLD
+        ScannerDebugLogger.logAutoCap(inBox = true, sharpness = 0.0, stable = stableFrameCount, trigger = trigger)
+
+        if (trigger) {
             stableFrameCount = 0
             lastQuadPoints = null
             triggerAutoCapture()
         }
+        ScannerDebugLogger.logExit("ScannerViewModel.onDocumentDetected")
+    }
+
+    private fun averageCorners(p1: List<com.safescan.domain.model.Point>, p2: List<com.safescan.domain.model.Point>): List<com.safescan.domain.model.Point> {
+        val result = mutableListOf<com.safescan.domain.model.Point>()
+        for (i in 0..3) {
+            result.add(com.safescan.domain.model.Point(
+                (p1[i].x + p2[i].x) / 2f,
+                (p1[i].y + p2[i].y) / 2f
+            ))
+        }
+        return result
     }
 
     private fun isStable(p1: List<com.safescan.domain.model.Point>, p2: List<com.safescan.domain.model.Point>): Boolean {
@@ -585,6 +622,9 @@ class ScannerViewModel @Inject constructor(
             // Save high-res processed bitmap to disk
             val processedPath = saveHighResToDisk(bitmap, slotId, "processed")
             highResCache.put("${slotId}_processed", bitmap)
+            if (processedPath != null) {
+                ScannerDebugLogger.logSaveThumbnail(processedPath)
+            }
 
             // Save high-res original bitmap to disk if it is a new capture, or reuse existing
             var origPath = existing.originalBitmapPath
@@ -1200,6 +1240,7 @@ class ScannerViewModel @Inject constructor(
         }
         
         viewModelScope.launch(Dispatchers.IO) {
+            ScannerDebugLogger.logEnter("ScannerViewModel.onCapture")
             // Dynamically scale the image based on our negotiated CameraHardwareConfig constraints (supporting Fast, Standard, High, and high-megapixel modes)
             val currentModeVal = currentMode.value
             val hdModeStr = hdMode.value
@@ -1234,6 +1275,10 @@ class ScannerViewModel @Inject constructor(
                     slots.value = slots.value + Slot(newId, "Page ${slots.value.size + 1}")
                     slotId = newId
                 }
+
+                ScannerDebugLogger.logCapture(slotId ?: "unknown")
+                val ratioStr = "${processedBitmap.width}:${processedBitmap.height}"
+                ScannerDebugLogger.logOrientation(ratioStr, pageSize.value)
 
                 if (isNativeScanned || isAutoCropOff) {
                     if (slotId != null) {
@@ -1320,6 +1365,7 @@ class ScannerViewModel @Inject constructor(
                     }
                 }
             }
+            ScannerDebugLogger.logExit("ScannerViewModel.onCapture")
         }
     }
 

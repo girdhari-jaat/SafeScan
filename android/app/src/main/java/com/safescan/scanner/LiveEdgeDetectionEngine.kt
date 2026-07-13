@@ -9,6 +9,7 @@ import org.opencv.core.MatOfPoint
 import org.opencv.core.MatOfPoint2f
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
+import com.safescan.core.ScannerDebugLogger
 
 class LiveEdgeDetectionEngine {
     
@@ -61,12 +62,14 @@ class LiveEdgeDetectionEngine {
         engineType: ScannerEngineType, 
         onResult: (List<Point>?) -> Unit
     ) = synchronized(this) {
+        ScannerDebugLogger.logEnter("LiveEdgeDetectionEngine.process")
         initMatsIfNeeded()
         var bitmap: android.graphics.Bitmap? = null
         val contours = ArrayList<MatOfPoint>()
         try {
             bitmap = imageProxy.toBitmap()
             if (bitmap == null) {
+                ScannerDebugLogger.logExit("LiveEdgeDetectionEngine.process")
                 return@synchronized
             }
             
@@ -112,6 +115,7 @@ class LiveEdgeDetectionEngine {
                 // RETR_EXTERNAL is faster and we only care about the outermost document contour
                 Imgproc.findContours(edges!!, contours, hierarchy!!, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
                 
+                ScannerDebugLogger.logLiveEdge(contours.size)
                 contours.sortByDescending { Imgproc.contourArea(it) }
                 
                 val maxArea = resized!!.width() * resized!!.height()
@@ -159,14 +163,23 @@ class LiveEdgeDetectionEngine {
                     }
                     
                     if (foundCorners != null) {
+                        ScannerDebugLogger.logLiveEdgeArea(area, (area.toDouble() / maxArea.toDouble()) * 100.0)
                         break // Found our document
                     }
                 }
             }
             
+            if (foundCorners != null) {
+                ScannerDebugLogger.logLiveEdgePoints(
+                    foundCorners[0].toString(),
+                    foundCorners[1].toString(),
+                    foundCorners[2].toString(),
+                    foundCorners[3].toString()
+                )
+            }
             onResult(foundCorners)
         } catch (e: Throwable) {
-            Log.e("LiveEdgeDetectionEngine", "Live edge detection processing error", e)
+            ScannerDebugLogger.logError("LiveEdge", "Live edge detection processing error", e)
         } finally {
             bitmap?.recycle()
             for (contour in contours) {
@@ -181,6 +194,7 @@ class LiveEdgeDetectionEngine {
             } catch (ipe: Throwable) {
                 Log.e("LiveEdgeDetectionEngine", "Failed to close ImageProxy", ipe)
             }
+            ScannerDebugLogger.logExit("LiveEdgeDetectionEngine.process")
         }
     }
 

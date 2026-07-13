@@ -15,10 +15,12 @@ import org.opencv.imgproc.Imgproc
 import org.opencv.core.MatOfPoint2f
 import org.opencv.core.Point as CvPoint
 import com.safescan.domain.model.Quadrilateral
+import com.safescan.core.ScannerDebugLogger
 
 object ImageProcessor {
 
     suspend fun cropDocument(bitmap: Bitmap, quad: Quadrilateral): Bitmap = withContext(Dispatchers.Default) {
+        ScannerDebugLogger.logEnter("ImageProcessor.cropDocument")
         var src: Mat? = null
         var ptsSrc: MatOfPoint2f? = null
         var ptsDst: MatOfPoint2f? = null
@@ -32,6 +34,8 @@ object ImageProcessor {
             val tr = quad.topRight
             val br = quad.bottomRight
             val bl = quad.bottomLeft
+
+            ScannerDebugLogger.logWarp4Point(tl.toString(), tr.toString(), br.toString(), bl.toString())
 
             ptsSrc = MatOfPoint2f(
                 CvPoint(tl.x, tl.y),
@@ -60,11 +64,15 @@ object ImageProcessor {
             outMat = Mat()
             Imgproc.warpPerspective(src, outMat, perspectiveTransform, Size(maxWidth.toDouble(), maxHeight.toDouble()))
 
+            ScannerDebugLogger.logWarpMatrix(maxWidth, maxHeight)
+
             val resultBitmap = Bitmap.createBitmap(maxWidth, maxHeight, Bitmap.Config.ARGB_8888)
             Utils.matToBitmap(outMat, resultBitmap)
+            ScannerDebugLogger.logExit("ImageProcessor.cropDocument")
             resultBitmap
         } catch (e: Exception) {
-            e.printStackTrace()
+            ScannerDebugLogger.logError("Crop", "Failed to crop document in ImageProcessor", e)
+            ScannerDebugLogger.logExit("ImageProcessor.cropDocument")
             bitmap
         } finally {
             src?.release()
@@ -76,6 +84,8 @@ object ImageProcessor {
     }
 
     suspend fun apply(bitmap: Bitmap, state: EditorState): Bitmap = withContext(Dispatchers.Default) {
+        ScannerDebugLogger.logEnter("ImageProcessor.apply")
+        val startTime = System.currentTimeMillis()
         var src: Mat? = null
         var outMat: Mat? = null
         var blurred: Mat? = null
@@ -248,9 +258,14 @@ object ImageProcessor {
 
             val resultBitmap = Bitmap.createBitmap(outMat.cols(), outMat.rows(), Bitmap.Config.ARGB_8888)
             Utils.matToBitmap(outMat, resultBitmap)
+            
+            val duration = System.currentTimeMillis() - startTime
+            ScannerDebugLogger.logFilter(state.filter.name, duration)
+            ScannerDebugLogger.logExit("ImageProcessor.apply")
             resultBitmap
         } catch (e: Exception) {
-            e.printStackTrace()
+            ScannerDebugLogger.logError("Filter", "Failed to apply filters in ImageProcessor", e)
+            ScannerDebugLogger.logExit("ImageProcessor.apply")
             bitmap
         } finally {
             src?.release()
