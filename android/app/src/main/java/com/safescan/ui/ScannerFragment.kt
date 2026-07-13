@@ -73,6 +73,7 @@ class ScannerFragment : Fragment() {
 
     private enum class FragmentViewMode {
         LIBRARY,
+        WIZARD,
         SCANNER
     }
     private var currentViewMode = FragmentViewMode.LIBRARY
@@ -316,6 +317,13 @@ class ScannerFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(binding.composeView) { v, insets ->
+            val statusBars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+            val navigationBars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+            v.setPadding(0, statusBars.top, 0, navigationBars.bottom)
+            insets
+        }
+
         cameraExecutor = Executors.newSingleThreadExecutor()
 
         setupObservers()
@@ -336,6 +344,8 @@ class ScannerFragment : Fragment() {
                     viewModel.isCropping.value = false
                 } else if (isEditing) {
                     viewModel.isEditing.value = false
+                } else if (currentViewMode == FragmentViewMode.WIZARD) {
+                    updateViewMode(FragmentViewMode.LIBRARY)
                 } else if (currentViewMode == FragmentViewMode.SCANNER) {
                     updateViewMode(FragmentViewMode.LIBRARY)
                 } else if (currentViewMode == FragmentViewMode.LIBRARY) {
@@ -378,11 +388,37 @@ class ScannerFragment : Fragment() {
                             onStartScan = {
                                 viewModel.isDocumentOpenedFromLibrary.value = false
                                 viewModel.openedDocumentId = null
-                                checkPermissionAndStartScanner()
+                                updateViewMode(FragmentViewMode.WIZARD)
                             },
                             onOpenDocument = { doc ->
                                 viewModel.loadDocumentIntoSlots(doc)
                                 checkPermissionAndStartScanner()
+                            }
+                        )
+                    }
+                }
+            }
+        } else if (mode == FragmentViewMode.WIZARD) {
+            // Hide camera-related XML views entirely
+            binding.btnCapture.visibility = View.GONE
+            binding.btnFlash.visibility = View.GONE
+            binding.btnSwitchEngine.visibility = View.GONE
+            binding.resultImageView.visibility = View.GONE
+            binding.overlayView.visibility = View.GONE
+            binding.overlayView.updateCorners(null)
+
+            // Bind Compose View to WizardScreen
+            binding.composeView.apply {
+                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+                setContent {
+                    SafeScanTheme {
+                        com.safescan.ui.WizardScreen(
+                            viewModel = viewModel,
+                            onStartScan = {
+                                checkPermissionAndStartScanner()
+                            },
+                            onClose = {
+                                updateViewMode(FragmentViewMode.LIBRARY)
                             }
                         )
                     }
@@ -623,7 +659,7 @@ class ScannerFragment : Fragment() {
         val baseRatio = com.safescan.scanner.CameraHardwareConfig.getTargetRatio(requireContext(), mode)
         val finalRatio = when (mode) {
             com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> {
-                1.586f
+                1f / 1.586f
             }
             com.safescan.data.ScannerMode.DOCUMENT -> {
                 if (baseRatio > 1.0f) 1f / baseRatio else baseRatio
@@ -1092,7 +1128,8 @@ class ScannerFragment : Fragment() {
                     }
 
                     // If Auto-Rotation is enabled, apply intelligent mode-based aspect ratio/layout correction
-                    if (viewModel.autoRotation.value) {
+                    // (We always auto-rotate CARD and GRID captures so portrait overlays are transformed to landscape instantly)
+                    if (viewModel.autoRotation.value || viewModel.currentMode.value == com.safescan.data.ScannerMode.CARD || viewModel.currentMode.value == com.safescan.data.ScannerMode.GRID) {
                         finalBitmap = autoRotateForMode(finalBitmap, viewModel.currentMode.value)
                     }
 

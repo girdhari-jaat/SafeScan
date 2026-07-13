@@ -37,10 +37,8 @@ class PdfExporter(private val context: Context) {
 
         try {
             ScannerDebugLogger.logPdfAssemble(slots.size, pageSizeStr)
-            // Check selected page size
-            val isA4 = pageSizeStr.equals("A4", ignoreCase = true)
-            val pageWidth = if (isA4) 595 else 612 // Letter: 612, A4: 595
-            val pageHeight = if (isA4) 842 else 792 // Letter: 792, A4: 842
+            // Use ExportHelper for page size dimensions
+            val (pageWidth, pageHeight) = ExportHelper.getPageDimensions(pageSizeStr)
 
             val paint = Paint().apply {
                 isFilterBitmap = true
@@ -60,34 +58,27 @@ class PdfExporter(private val context: Context) {
                         currentWidth = bmp.width
                         currentHeight = bmp.height
                     } else {
-                        currentWidth = if (isA4) 595 else 612
-                        currentHeight = if (isA4) 842 else 792
+                        currentWidth = pageWidth
+                        currentHeight = pageHeight
                     }
 
                     val pageInfo = PdfDocument.PageInfo.Builder(currentWidth, currentHeight, pageNum++).create()
                     val page = pdfDocument.startPage(pageInfo)
                     val canvas = page.canvas
 
-                    val margin = if (pageSizeStr.equals("Original", ignoreCase = true)) 0f else 36f // No margin for original size
-                    val printableWidth = currentWidth - 2 * margin
-                    val printableHeight = currentHeight - 2 * margin
-
-                    val scaleX = printableWidth / bmp.width
-                    val scaleY = printableHeight / bmp.height
-                    val scale = minOf(scaleX, scaleY)
-
-                    val drawnWidth = bmp.width * scale
-                    val drawnHeight = bmp.height * scale
-
-                    val left = margin + (printableWidth - drawnWidth) / 2f
-                    val top = margin + (printableHeight - drawnHeight) / 2f
-
                     val srcRect = Rect(0, 0, bmp.width, bmp.height)
-                    val dstRect = android.graphics.RectF(left, top, left + drawnWidth, top + drawnHeight)
+                    val dstRect = ExportHelper.calculateBitmapDrawingRects(
+                        bmp.width,
+                        bmp.height,
+                        currentWidth,
+                        currentHeight,
+                        pageSizeStr
+                    )
                     canvas.drawBitmap(bmp, srcRect, dstRect, paint)
 
                     pdfDocument.finishPage(page)
                 }
+
                 
                 // If no scanned pages, generate a blank placeholder page to avoid empty PDF error
                 if (pageNum == 1) {
