@@ -37,8 +37,9 @@ class PdfExporter(private val context: Context) {
 
         try {
             ScannerDebugLogger.logPdfAssemble(slots.size, pageSizeStr)
+            val referenceBitmap = slots.firstOrNull { it.bitmap != null }?.bitmap
             // Use ExportHelper for page size dimensions
-            val (pageWidth, pageHeight) = ExportHelper.getPageDimensions(pageSizeStr)
+            val (pageWidth, pageHeight) = ExportHelper.getPageDimensions(pageSizeStr, referenceBitmap)
 
             val paint = Paint().apply {
                 isFilterBitmap = true
@@ -51,16 +52,7 @@ class PdfExporter(private val context: Context) {
                 for (slot in slots) {
                     val bmp = slot.bitmap ?: continue
                     
-                    val currentWidth: Int
-                    val currentHeight: Int
-                    
-                    if (pageSizeStr.equals("Original", ignoreCase = true)) {
-                        currentWidth = bmp.width
-                        currentHeight = bmp.height
-                    } else {
-                        currentWidth = pageWidth
-                        currentHeight = pageHeight
-                    }
+                    val (currentWidth, currentHeight) = ExportHelper.getPageDimensions(pageSizeStr, bmp)
 
                     val pageInfo = PdfDocument.PageInfo.Builder(currentWidth, currentHeight, pageNum++).create()
                     val page = pdfDocument.startPage(pageInfo)

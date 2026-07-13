@@ -1,0 +1,114 @@
+android/
+├── RELEASE_CHECKLIST.md
+├── GEMINI.md
+├── README_TEST.md
+├── build.gradle.kts
+├── settings.gradle.kts
+├── gradlew
+├── gradlew.bat
+├── gradle.properties
+├── signing.properties.template
+├── gradle/
+│   └── wrapper/
+│       ├── gradle-wrapper.jar
+│       └── gradle-wrapper.properties
+└── app/
+    ├── proguard-rules.pro
+    ├── build.gradle.kts
+    ├── download-tflite.gradle.kts
+    └── src/
+        ├── androidTest/
+        │   ├── assets/
+        │   │   ├── sample_a4.jpg
+        │   │   ├── sample_cnic_1.jpg
+        │   │   └── sample_cnic_2.jpg
+        │   └── java/
+        │       └── com/
+        │           └── safescan/
+        │               ├── DocumentScannerEngineTest.kt
+        │               ├── MainActivityLaunchTest.kt
+        │               ├── OcrEngineTest.kt
+        │               ├── PdfExporterTest.kt
+        │               └── SampleImageProvider.kt
+        └── main/
+            ├── AndroidManifest.xml
+            ├── java/
+            │   └── com/
+            │       └── safescan/
+            │           ├── MainActivity.kt
+            │           ├── OverlayView.kt
+            │           ├── SafeScanApplication.kt
+            │           ├── ScannerForegroundService.kt
+            │           ├── core/
+            │           │   ├── DiagnosticsLogger.kt
+            │           │   ├── GlobalExceptionHandler.kt
+            │           │   ├── ScannerDebugLogger.kt
+            │           │   └── AppResult.kt
+            │           ├── data/
+            │           │   ├── DocumentModels.kt
+            │           │   ├── DocumentRepository.kt
+            │           │   ├── EditorState.kt
+            │           │   ├── FlashMode.kt
+            │           │   ├── ScannerMode.kt
+            │           │   ├── SettingsRepository.kt
+            │           │   ├── Slot.kt
+            │           │   └── UiState.kt
+            │           ├── di/
+            │           │   ├── AppModule.kt
+            │           │   └── ScannerModule.kt
+            │           ├── domain/
+            │           │   ├── model/
+            │           │   │   └── Quadrilateral.kt
+            │           │   ├── ExportHelper.kt
+            │           │   ├── ImageProcessor.kt
+            │           │   ├── PdfExporter.kt
+            │           │   └── PdfUtils.kt
+            │           ├── scanner/
+            │           │   ├── ml/
+            │           │   │   └── LocalMLEngine.kt
+            │           │   ├── CameraHardwareConfig.kt
+            │           │   ├── DocumentScanner.kt
+            │           │   ├── DocumentScannerEngine.kt
+            │           │   ├── EdgeDetectionEngine.kt
+            │           │   ├── LiveEdgeDetectionEngine.kt
+            │           │   ├── OcrEngine.kt
+            │           │   └── ScannerViewModel.kt
+            │           ├── ui/
+            │           │   ├── theme/
+            │           │   │   ├── Font.kt
+            │           │   │   └── Theme.kt
+            │           │   ├── CardScanScreen.kt
+            │           │   ├── CropScreen.kt
+            │           │   ├── DeveloperStatsView.kt
+            │           │   ├── EditorScreen.kt
+            │           │   ├── LibraryScreen.kt
+            │           │   ├── ScannerFragment.kt
+            │           │   ├── SettingsScreen.kt
+            │           │   ├── SlotsScreen.kt
+            │           │   ├── TopBar.kt
+            │           │   ├── WizardScreen.kt
+            │           │   └── ZoomableImage.kt
+            │           └── utils/
+            │               ├── PageConfig.kt
+            │               └── WizardPrefs.kt
+            └── res/
+                ├── drawable/
+                │   ├── ic_launcher_background.xml
+                │   └── ic_launcher_foreground.xml
+                ├── layout/
+                │   ├── activity_main.xml
+                │   ├── fragment_scanner.xml
+                │   └── wizard_activity.xml
+                ├── mipmap/
+                │   └── ic_launcher.xml
+                ├── mipmap-anydpi-v26/
+                │   ├── ic_launcher.xml
+                │   └── ic_launcher_round.xml
+                ├── navigation/
+                │   └── nav_graph.xml
+                ├── values/
+                │   └── strings.xml
+                ├── values-hi/
+                │   └── strings.xml
+                └── values-ur/
+                    └── strings.xml

@@ -132,9 +132,9 @@ fun WizardScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                val pageSizes = listOf("A4", "Letter", "Legal", "Auto")
+                val pageSizes = com.safescan.utils.PageConfig.ALL_PAGE_SIZES
                 pageSizes.forEach { size ->
                     val selected = pageSize == size
                     WizardSelectionButton(

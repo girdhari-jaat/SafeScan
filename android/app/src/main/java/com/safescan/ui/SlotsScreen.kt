@@ -638,19 +638,7 @@ fun ViewfinderOverlay(mode: ScannerMode, showGrid: Boolean, modifier: Modifier =
         val width = size.width
         val height = size.height
 
-        val baseRatio = com.safescan.scanner.CameraHardwareConfig.getTargetRatio(context, mode)
-        
-        // Safely determine target aspect ratio (width / height) based on actual document mode
-        val finalRatio = when (mode) {
-            ScannerMode.CARD, ScannerMode.GRID -> {
-                // ID Card / CNIC is standard portrait for onscreen layout (ID-1 ratio inverted: 1f / 1.586f)
-                1f / 1.586f
-            }
-            ScannerMode.DOCUMENT -> {
-                // A4 Paper is portrait (baseRatio is usually landscape, e.g. 1.4142f, so we invert)
-                if (baseRatio > 1.0f) 1f / baseRatio else baseRatio
-            }
-        }
+        val finalRatio = com.safescan.utils.PageConfig.getOnscreenLayoutRatio(context, mode)
 
         // Limit the cutout bounds to prevent overflowing the preview viewport
         val maxWidth = width * 0.90f

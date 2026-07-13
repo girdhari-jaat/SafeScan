@@ -253,7 +253,7 @@ fun SettingsScreen(
                                     expanded = sizeExpanded,
                                     onDismissRequest = { sizeExpanded = false }
                                 ) {
-                                    listOf("A4", "Letter", "Original").forEach { size ->
+                                    com.safescan.utils.PageConfig.ALL_PAGE_SIZES.forEach { size ->
                                         DropdownMenuItem(
                                             text = { Text(size) },
                                             onClick = {

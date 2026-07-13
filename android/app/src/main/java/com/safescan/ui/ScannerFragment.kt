@@ -656,15 +656,7 @@ class ScannerFragment : Fragment() {
 
     private fun getOverlayHoleRect(pw: Float, ph: Float): android.graphics.RectF {
         val mode = viewModel.currentMode.value
-        val baseRatio = com.safescan.scanner.CameraHardwareConfig.getTargetRatio(requireContext(), mode)
-        val finalRatio = when (mode) {
-            com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> {
-                1f / 1.586f
-            }
-            com.safescan.data.ScannerMode.DOCUMENT -> {
-                if (baseRatio > 1.0f) 1f / baseRatio else baseRatio
-            }
-        }
+        val finalRatio = com.safescan.utils.PageConfig.getOnscreenLayoutRatio(requireContext(), mode)
 
         val maxWidth = pw * 0.90f
         val maxHeight = ph * 0.85f

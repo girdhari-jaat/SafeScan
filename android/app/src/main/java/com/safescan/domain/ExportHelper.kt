@@ -27,11 +27,8 @@ object ExportHelper {
     /**
      * Helper to get page width and height dimensions based on selected size string.
      */
-    fun getPageDimensions(pageSizeStr: String): Pair<Int, Int> {
-        val isA4 = pageSizeStr.equals("A4", ignoreCase = true)
-        val pageWidth = if (isA4) 595 else 612 // Letter: 612, A4: 595
-        val pageHeight = if (isA4) 842 else 792 // Letter: 792, A4: 842
-        return Pair(pageWidth, pageHeight)
+    fun getPageDimensions(pageSizeStr: String, referenceBitmap: android.graphics.Bitmap? = null): Pair<Int, Int> {
+        return com.safescan.utils.PageConfig.getPageDimensions(pageSizeStr, referenceBitmap)
     }
 
     /**
@@ -44,21 +41,7 @@ object ExportHelper {
         pageHeight: Int,
         pageSizeStr: String
     ): RectF {
-        val margin = if (pageSizeStr.equals("Original", ignoreCase = true)) 0f else 36f
-        val printableWidth = pageWidth - 2 * margin
-        val printableHeight = pageHeight - 2 * margin
-
-        val scaleX = printableWidth / bmpWidth
-        val scaleY = printableHeight / bmpHeight
-        val scale = minOf(scaleX, scaleY)
-
-        val drawnWidth = bmpWidth * scale
-        val drawnHeight = bmpHeight * scale
-
-        val left = margin + (printableWidth - drawnWidth) / 2f
-        val top = margin + (printableHeight - drawnHeight) / 2f
-
-        return RectF(left, top, left + drawnWidth, top + drawnHeight)
+        return com.safescan.utils.PageConfig.calculateBitmapDrawingRects(bmpWidth, bmpHeight, pageWidth, pageHeight, pageSizeStr)
     }
 }
 
