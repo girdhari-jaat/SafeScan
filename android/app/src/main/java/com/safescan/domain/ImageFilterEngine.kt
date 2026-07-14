@@ -64,7 +64,6 @@ object ImageFilterEngine {
                     gray?.release()
                     claheMat?.release()
                     b?.release()
-                    clahe?.release()
                 }
             }
             FilterType.MAGIC_COLOR -> {

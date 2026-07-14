@@ -227,6 +227,7 @@ class LiveEdgeDetectionEngine {
                     Log.e("LiveEdgeDetectionEngine", "Failed to release individual contour", ce)
                 }
             }
+            // FIX: FINAL LEAK
             try {
                 imageProxy.close()
             } catch (ipe: Throwable) {
