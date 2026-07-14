@@ -26,6 +26,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         val JPEG_QUALITY = floatPreferencesKey("jpeg_quality")
         val PDF_FILENAME = stringPreferencesKey("pdf_filename")
         val PAGE_SIZE = stringPreferencesKey("page_size")
+        val PDF_ORIENTATION = stringPreferencesKey("pdf_orientation")
         val DOUBLE_FOCUS = booleanPreferencesKey("double_focus")
         val SAVE_JPG = booleanPreferencesKey("save_jpg")
         val AUTO_PDF = booleanPreferencesKey("auto_pdf")
@@ -107,6 +108,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
 
     val pageSizeFlow: Flow<String> = safeData
         .map { preferences -> preferences[PreferencesKeys.PAGE_SIZE] ?: "A4" }
+
+    val pdfOrientationFlow: Flow<String> = safeData
+        .map { preferences -> preferences[PreferencesKeys.PDF_ORIENTATION] ?: "Auto" }
 
     val doubleFocusFlow: Flow<Boolean> = safeData
         .map { preferences -> preferences[PreferencesKeys.DOUBLE_FOCUS] ?: false }
@@ -207,6 +211,12 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     suspend fun setPageSize(pageSize: String) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.PAGE_SIZE] = pageSize
+        }
+    }
+
+    suspend fun setPdfOrientation(orientation: String) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.PDF_ORIENTATION] = orientation
         }
     }
 

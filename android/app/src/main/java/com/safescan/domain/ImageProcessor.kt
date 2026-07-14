@@ -100,16 +100,11 @@ object ImageProcessor {
             Imgproc.cvtColor(src, src, Imgproc.COLOR_RGBA2BGR)
 
             // Apply Brightness & Contrast
-            var alpha = state.contrast.toDouble()
-            var beta = state.brightness.toDouble() * 255.0 / 100.0 // approximate translation
-            
-            beta = beta.coerceIn(-60.0, 60.0)
-            alpha = alpha.coerceIn(0.5, 3.0)
+            val alpha = state.contrast.toDouble().coerceIn(0.5, 3.0)
+            val beta = (state.brightness.toDouble() * 255.0 / 100.0).coerceIn(-60.0, 60.0)
 
             dst = Mat()
-            src.convertTo(dst, -1, alpha, 0.0)
-            Core.add(dst, org.opencv.core.Scalar(beta, beta, beta, beta), dst)
-            Core.normalize(dst, dst, 0.0, 255.0, Core.NORM_MINMAX)
+            src.convertTo(dst, -1, alpha, beta)
             dst.copyTo(src)
 
             // Apply Sharpness

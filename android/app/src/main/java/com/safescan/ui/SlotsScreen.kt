@@ -400,7 +400,7 @@ fun SlotsScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp)
+                        modifier = Modifier.padding(12.dp)
                     ) {
                         Row(
                             modifier = Modifier
@@ -484,7 +484,7 @@ fun SlotsScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 12.dp)
+                                .padding(vertical = 6.dp)
                                 .height(1.dp)
                                 .background(Color.White.copy(alpha = 0.1f))
                         )
@@ -493,7 +493,7 @@ fun SlotsScreen(
                             modifier = Modifier
                                 .weight(1f, fill = false)
                                 .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                            verticalArrangement = Arrangement.spacedBy(0.dp)
                         ) {
                             PopoverToggleRow(
                                 icon = Icons.Default.Grid4x4,
@@ -572,23 +572,16 @@ fun SlotsScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 12.dp)
+                                .padding(vertical = 6.dp)
                                 .height(1.dp)
                                 .background(Color.White.copy(alpha = 0.1f))
-                        )
-
-                        Text(
-                            text = "Quality Mode",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Color.Gray,
-                            modifier = Modifier.padding(bottom = 8.dp)
                         )
 
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                                .padding(4.dp),
+                                .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                .padding(2.dp),
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
                             listOf("Fast", "Standard", "High").forEach { mode ->
@@ -596,10 +589,10 @@ fun SlotsScreen(
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .clip(RoundedCornerShape(8.dp))
+                                        .clip(RoundedCornerShape(6.dp))
                                         .background(if (active) MaterialTheme.colorScheme.primary else Color.Transparent)
                                         .clickable { viewModel.setHdMode(mode) }
-                                        .padding(vertical = 6.dp),
+                                        .padding(vertical = 4.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
@@ -620,7 +613,11 @@ fun SlotsScreen(
         if (isGridViewVisible) {
             DocumentGridView(
                 viewModel = viewModel,
-                onDismiss = { viewModel.isGridViewVisible.value = false }
+                onDismiss = { viewModel.isGridViewVisible.value = false },
+                onScanPage = {
+                    viewModel.isGridViewVisible.value = false
+                    viewModel.selectedSlotId.value = null
+                }
             )
         }
     }
@@ -637,7 +634,7 @@ private fun PopoverToggleRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 4.dp, horizontal = 4.dp),
+            .padding(vertical = 1.dp, horizontal = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -648,7 +645,7 @@ private fun PopoverToggleRow(
             Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             Text(
                 text = label,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
                 color = Color.White
             )
@@ -662,7 +659,7 @@ private fun PopoverToggleRow(
                 uncheckedThumbColor = Color.LightGray,
                 uncheckedTrackColor = Color.DarkGray
             ),
-            modifier = Modifier.scale(0.85f)
+            modifier = Modifier.scale(0.7f)
         )
     }
 }

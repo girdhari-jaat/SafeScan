@@ -80,22 +80,28 @@ fun CropScreen(viewModel: ScannerViewModel) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-                    .padding(horizontal = 4.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 3.dp,
+                shadowElevation = 4.dp
             ) {
-                // 1. Cancel
-                IconButton(
-                    modifier = Modifier.weight(1f),
-                    enabled = !uiState.isAutoRunning,
-                    onClick = { viewModel.closeCrop(save = false) }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .height(56.dp)
+                        .padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.ArrowBack, stringResource(id = R.string.cancel))
-                }
+                    // 1. Cancel
+                    IconButton(
+                        modifier = Modifier.weight(1f),
+                        enabled = !uiState.isAutoRunning,
+                        onClick = { viewModel.closeCrop(save = false) }
+                    ) {
+                        Icon(Icons.Default.ArrowBack, stringResource(id = R.string.cancel))
+                    }
 
                 // 2. Full
                 TextButton(
@@ -195,6 +201,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
                 }
             }
         }
+    }
     ) { padding ->
         Box(
             modifier = Modifier

@@ -53,6 +53,10 @@ fun EditorScreen(viewModel: ScannerViewModel) {
     // Settings State
     val currentMode by viewModel.currentMode.collectAsState()
     val pageSize by viewModel.pageSize.collectAsState()
+    val pdfFilename by viewModel.pdfFilename.collectAsState()
+    val pdfOrientation by viewModel.pdfOrientation.collectAsState()
+    val jpegQuality by viewModel.jpegQuality.collectAsState()
+    val autoPdf by viewModel.autoPdf.collectAsState()
 
     Scaffold(
         topBar = {
@@ -546,17 +550,9 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                                             printManager.print(jobName, printAdapter, null)
                                         } else {
                                             Toast.makeText(context, "Print service not available", Toast.LENGTH_SHORT).show()
-                                        }
+                                         }
                                     }
                                 }
-                            }
-                        )
-                        PopoverMenuItem(
-                            icon = Icons.Default.PictureInPicture,
-                            text = "Preview",
-                            onClick = {
-                                showExportPopover = false
-                                Toast.makeText(context, "Generating Document Preview...", Toast.LENGTH_SHORT).show()
                             }
                         )
                     }
@@ -573,19 +569,140 @@ fun EditorScreen(viewModel: ScannerViewModel) {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Select PDF configuration preferences:")
+                    
+                    // 1. File Naming Template
                     OutlinedTextField(
-                        value = pageSize,
-                        onValueChange = { viewModel.setPageSize(it) },
-                        label = { Text("Page Size (e.g. A4, Letter)") },
+                        value = pdfFilename,
+                        onValueChange = { viewModel.setPdfFilename(it) },
+                        label = { Text("File Name Template") },
                         modifier = Modifier.fillMaxWidth()
                     )
-                    OutlinedTextField(
-                        value = currentMode.name,
-                        onValueChange = { },
-                        enabled = false,
-                        label = { Text("Scanner Mode (Read-only)") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+
+                    // 2. Page Size
+                    var pageSizeExpanded by remember { mutableStateOf(false) }
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = pageSize,
+                            onValueChange = { },
+                            readOnly = true,
+                            label = { Text("Page Size") },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = "Select Page Size",
+                                    modifier = Modifier.clickable { pageSizeExpanded = !pageSizeExpanded }
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clickable { pageSizeExpanded = true }
+                        )
+                        DropdownMenu(
+                            expanded = pageSizeExpanded,
+                            onDismissRequest = { pageSizeExpanded = false }
+                        ) {
+                            com.safescan.utils.PageConfig.ALL_PAGE_SIZES.forEach { size ->
+                                DropdownMenuItem(
+                                    text = { Text(size) },
+                                    onClick = {
+                                        viewModel.setPageSize(size)
+                                        pageSizeExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // 3. Page Orientation
+                    var orientationExpanded by remember { mutableStateOf(false) }
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = pdfOrientation,
+                            onValueChange = { },
+                            readOnly = true,
+                            label = { Text("Page Orientation") },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = "Select Orientation",
+                                    modifier = Modifier.clickable { orientationExpanded = !orientationExpanded }
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clickable { orientationExpanded = true }
+                        )
+                        DropdownMenu(
+                            expanded = orientationExpanded,
+                            onDismissRequest = { orientationExpanded = false }
+                        ) {
+                            listOf("Auto", "Portrait", "Landscape").forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option) },
+                                    onClick = {
+                                        viewModel.setPdfOrientation(option)
+                                        orientationExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // 4. JPEG Quality Slider (5 discrete steps)
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        val qualityPercent = jpegQuality.toInt()
+                        val qualityLabel = when (qualityPercent) {
+                            20 -> "Low (20%) - Minimal size"
+                            40 -> "Draft (40%) - Smaller footprint"
+                            60 -> "Standard (60%) - Balanced"
+                            80 -> "High (80%) - Excellent quality"
+                            100 -> "Maximum (100%) - Lossless sharpness"
+                            else -> "Quality ($qualityPercent%)"
+                        }
+                        Text(
+                            text = "JPEG/Image Quality: $qualityLabel",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Slider(
+                            value = jpegQuality,
+                            onValueChange = { viewModel.setJpegQuality(it) },
+                            valueRange = 20f..100f,
+                            steps = 3, // 3 intermediate steps inside [20..100] = 5 total steps: 20, 40, 60, 80, 100
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    // 5. Auto-PDF Compilation Switch
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Auto-PDF Compilation",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = "Compile PDF immediately upon saving",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = autoPdf,
+                            onCheckedChange = { viewModel.toggleAutoPdf(it) }
+                        )
+                    }
                 }
             },
             confirmButton = {

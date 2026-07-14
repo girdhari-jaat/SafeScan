@@ -82,6 +82,9 @@ class ScannerViewModel @Inject constructor(
     val pageSize: StateFlow<String> = settingsRepository.pageSizeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "A4")
 
+    val pdfOrientation: StateFlow<String> = settingsRepository.pdfOrientationFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Auto")
+
     val doubleFocusEnabled: StateFlow<Boolean> = settingsRepository.doubleFocusFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
@@ -618,6 +621,20 @@ class ScannerViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.setPageSize(value)
             DiagnosticsLogger.info("Export Page Size set to: $value")
+        }
+    }
+
+    fun setPdfOrientation(value: String) {
+        viewModelScope.launch {
+            settingsRepository.setPdfOrientation(value)
+            DiagnosticsLogger.info("Export PDF Orientation set to: $value")
+        }
+    }
+
+    fun setJpegQuality(value: Float) {
+        viewModelScope.launch {
+            settingsRepository.setJpegQuality(value)
+            DiagnosticsLogger.info("JPEG Quality set to: $value")
         }
     }
 
@@ -1220,7 +1237,7 @@ class ScannerViewModel @Inject constructor(
                         }
                     }
                     DiagnosticsLogger.info("Exporting document to PDF at ${pageSize.value} layout off-thread...")
-                    val result = pdfExporter.exportCardsToPdf(slotsToExport, title, currentMode.value, pageSize.value)
+                    val result = pdfExporter.exportCardsToPdf(slotsToExport, title, currentMode.value, pageSize.value, pdfOrientation.value)
                     withContext(Dispatchers.Main) {
                         capturedJpgFiles.clear()
                         originalJpgBitmaps.clear()

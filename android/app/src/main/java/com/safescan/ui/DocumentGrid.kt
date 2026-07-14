@@ -31,7 +31,8 @@ import com.safescan.data.Slot
 @Composable
 fun DocumentGridView(
     viewModel: ScannerViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onScanPage: (() -> Unit)? = null
 ) {
     val slots by viewModel.slots.collectAsState()
     val capturedJpgs = viewModel.capturedJpgFiles
@@ -52,12 +53,33 @@ fun DocumentGridView(
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
+                },
+                actions = {
+                    TextButton(
+                        onClick = {
+                            if (onScanPage != null) {
+                                onScanPage()
+                            } else {
+                                viewModel.isDocumentOpenedFromLibrary.value = false
+                                viewModel.isGridViewVisible.value = false
+                                viewModel.selectedSlotId.value = null
+                            }
+                        }
+                    ) {
+                        Text(
+                            text = "Scan Page",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             )
         },
         bottomBar = {
             Surface(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding(),
                 tonalElevation = 8.dp,
                 shadowElevation = 8.dp
             ) {

@@ -495,6 +495,10 @@ class ScannerFragment : Fragment() {
                                 onDismiss = {
                                     viewModel.isDocumentOpenedFromLibrary.value = false
                                     updateViewMode(FragmentViewMode.LIBRARY)
+                                },
+                                onScanPage = {
+                                    viewModel.isDocumentOpenedFromLibrary.value = false
+                                    viewModel.selectedSlotId.value = null
                                 }
                             )
                         } else {

@@ -17,7 +17,7 @@ import com.safescan.core.ScannerDebugLogger
 class PdfExporter(private val context: Context) {
 
     // IMPROVEMENT: Changed return type to Result<File> instead of throwing or returning nullable File to avoid crashes and support multi-page dynamic size PDF documents
-    suspend fun exportCardsToPdf(slots: List<Slot>, filename: String, mode: ScannerMode, pageSizeStr: String = "A4"): Result<File> = withContext(Dispatchers.IO) {
+    suspend fun exportCardsToPdf(slots: List<Slot>, filename: String, mode: ScannerMode, pageSizeStr: String = "A4", pdfOrientation: String = "Auto"): Result<File> = withContext(Dispatchers.IO) {
         ScannerDebugLogger.logEnter("PdfExporter.exportCardsToPdf")
         val documentDir = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
             ?: run {
@@ -54,7 +54,24 @@ class PdfExporter(private val context: Context) {
                     
                     val (currentWidth, currentHeight) = ExportHelper.getPageDimensions(pageSizeStr, bmp)
 
-                    val pageInfo = PdfDocument.PageInfo.Builder(currentWidth, currentHeight, pageNum++).create()
+                    val finalWidth = when (pdfOrientation) {
+                        "Portrait" -> minOf(currentWidth, currentHeight)
+                        "Landscape" -> maxOf(currentWidth, currentHeight)
+                        else -> { // Auto: dynamically match the individual bitmap's orientation
+                            if (bmp.width > bmp.height) maxOf(currentWidth, currentHeight)
+                            else minOf(currentWidth, currentHeight)
+                        }
+                    }
+                    val finalHeight = when (pdfOrientation) {
+                        "Portrait" -> maxOf(currentWidth, currentHeight)
+                        "Landscape" -> minOf(currentWidth, currentHeight)
+                        else -> { // Auto
+                            if (bmp.width > bmp.height) minOf(currentWidth, currentHeight)
+                            else maxOf(currentWidth, currentHeight)
+                        }
+                    }
+
+                    val pageInfo = PdfDocument.PageInfo.Builder(finalWidth, finalHeight, pageNum++).create()
                     val page = pdfDocument.startPage(pageInfo)
                     val canvas = page.canvas
 
@@ -62,8 +79,8 @@ class PdfExporter(private val context: Context) {
                     val dstRect = ExportHelper.calculateBitmapDrawingRects(
                         bmp.width,
                         bmp.height,
-                        currentWidth,
-                        currentHeight,
+                        finalWidth,
+                        finalHeight,
                         pageSizeStr
                     )
                     canvas.drawBitmap(bmp, srcRect, dstRect, paint)
@@ -74,13 +91,33 @@ class PdfExporter(private val context: Context) {
                 
                 // If no scanned pages, generate a blank placeholder page to avoid empty PDF error
                 if (pageNum == 1) {
-                    val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
+                    val finalWidth = when (pdfOrientation) {
+                        "Portrait" -> minOf(pageWidth, pageHeight)
+                        "Landscape" -> maxOf(pageWidth, pageHeight)
+                        else -> pageWidth
+                    }
+                    val finalHeight = when (pdfOrientation) {
+                        "Portrait" -> maxOf(pageWidth, pageHeight)
+                        "Landscape" -> minOf(pageWidth, pageHeight)
+                        else -> pageHeight
+                    }
+                    val pageInfo = PdfDocument.PageInfo.Builder(finalWidth, finalHeight, 1).create()
                     val page = pdfDocument.startPage(pageInfo)
                     pdfDocument.finishPage(page)
                 }
             } else {
                 // CARD & GRID MODE: Fill slots together on a single A4/Letter page as front/back pairs
-                val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
+                val finalWidth = when (pdfOrientation) {
+                    "Portrait" -> minOf(pageWidth, pageHeight)
+                    "Landscape" -> maxOf(pageWidth, pageHeight)
+                    else -> pageWidth
+                }
+                val finalHeight = when (pdfOrientation) {
+                    "Portrait" -> maxOf(pageWidth, pageHeight)
+                    "Landscape" -> minOf(pageWidth, pageHeight)
+                    else -> pageHeight
+                }
+                val pageInfo = PdfDocument.PageInfo.Builder(finalWidth, finalHeight, 1).create()
                 val page = pdfDocument.startPage(pageInfo)
                 val canvas = page.canvas
 
