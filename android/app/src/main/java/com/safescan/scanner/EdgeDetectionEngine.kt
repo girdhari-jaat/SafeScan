@@ -19,107 +19,118 @@ class EdgeDetectionEngine {
     @Synchronized
     fun detectEdges(bitmap: Bitmap): List<Point>? {
         if (bitmap.isRecycled) return null
-        val src = Mat()
-        Utils.bitmapToMat(bitmap, src)
-        
-        // Working scale for fast and noise-free edge detection
-        val resizeRatio = 600.0 / Math.max(src.width(), src.height())
-        val resized = Mat()
-        if (resizeRatio < 1.0) {
-            Imgproc.resize(src, resized, Size(src.width() * resizeRatio, src.height() * resizeRatio))
-        } else {
-            src.copyTo(resized)
-        }
-
-        val gray = Mat()
-        Imgproc.cvtColor(resized, gray, Imgproc.COLOR_RGBA2GRAY)
-        
-        // Median blur is generally better than Gaussian blur for removing noise while keeping document edges sharp
-        Imgproc.medianBlur(gray, gray, 5)
-        
-        val maxArea = resized.width() * resized.height()
-        val minArea = maxArea * 0.12 // Document must occupy at least 12% of the screen
-        
-        var bestPoints: List<Point>? = null
-        var bestArea = 0.0
-
-        // Multi-scale Canny edge detection to capture varying lighting/contrast scenarios
-        val thresholds = listOf(30, 60, 90, 120)
-        for (threshold in thresholds) {
-            if (bestPoints != null) break // Stop early if we found a perfect candidate
+        var src: Mat? = null
+        var resized: Mat? = null
+        var gray: Mat? = null
+        try {
+            src = Mat()
+            Utils.bitmapToMat(bitmap, src)
             
-            val edges = Mat()
-            Imgproc.Canny(gray, edges, threshold.toDouble(), (threshold * 3).toDouble())
+            // Working scale for fast and noise-free edge detection
+            val resizeRatio = 600.0 / Math.max(src.width(), src.height())
+            resized = Mat()
+            if (resizeRatio < 1.0) {
+                Imgproc.resize(src, resized, Size(src.width() * resizeRatio, src.height() * resizeRatio))
+            } else {
+                src.copyTo(resized)
+            }
+
+            gray = Mat()
+            Imgproc.cvtColor(resized, gray, Imgproc.COLOR_RGBA2GRAY)
             
-            val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
-            Imgproc.morphologyEx(edges, edges, Imgproc.MORPH_CLOSE, kernel)
+            // Median blur is generally better than Gaussian blur for removing noise while keeping document edges sharp
+            Imgproc.medianBlur(gray, gray, 5)
+            
+            val maxArea = resized.width() * resized.height()
+            val minArea = maxArea * 0.12 // Document must occupy at least 12% of the screen
+            
+            var bestPoints: List<Point>? = null
+            var bestArea = 0.0
 
-            val contours = ArrayList<MatOfPoint>()
-            val hierarchy = Mat()
-            Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
-
-            // Sort contours by area descending
-            contours.sortByDescending { Imgproc.contourArea(it) }
-
-            for (contour in contours) {
-                val area = Imgproc.contourArea(contour)
-                if (area < minArea) break // Since they are sorted, we can stop early
+            // Multi-scale Canny edge detection to capture varying lighting/contrast scenarios
+            val thresholds = listOf(30, 60, 90, 120)
+            for (threshold in thresholds) {
+                if (bestPoints != null) break // Stop early if we found a perfect candidate
                 
-                val contour2f = MatOfPoint2f(*contour.toArray())
-                val peri = Imgproc.arcLength(contour2f, true)
-                
-                // Try to approximate with different epsilon factors to get exactly 4 corners
-                var approxSuccess = false
-                for (epsFactor in listOf(0.015, 0.02, 0.03, 0.04)) {
-                    val approx = MatOfPoint2f()
-                    try {
-                        Imgproc.approxPolyDP(contour2f, approx, epsFactor * peri, true)
-                        if (approx.total() == 4L) {
-                            val approxPoints = approx.toArray().map { Point(it.x / resizeRatio, it.y / resizeRatio) }
-                            if (isConvexPoints(approxPoints) && getMaxCosinePoints(approxPoints) < 0.4) {
-                                val scaledArea = area / (resizeRatio * resizeRatio)
-                                if (scaledArea > bestArea) {
-                                    bestArea = scaledArea
-                                    bestPoints = orderPoints(approxPoints)
-                                    approxSuccess = true
-                                    break
+                var edges: Mat? = null
+                var kernel: Mat? = null
+                val contours = ArrayList<MatOfPoint>()
+                var hierarchy: Mat? = null
+                try {
+                    edges = Mat()
+                    Imgproc.Canny(gray, edges, threshold.toDouble(), (threshold * 3).toDouble())
+                    
+                    kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
+                    Imgproc.morphologyEx(edges, edges, Imgproc.MORPH_CLOSE, kernel)
+
+                    hierarchy = Mat()
+                    Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+
+                    // Sort contours by area descending
+                    contours.sortByDescending { Imgproc.contourArea(it) }
+
+                    for (contour in contours) {
+                        val area = Imgproc.contourArea(contour)
+                        if (area < minArea) break // Since they are sorted, we can stop early
+                        
+                        var contour2f: MatOfPoint2f? = null
+                        try {
+                            contour2f = MatOfPoint2f(*contour.toArray())
+                            val peri = Imgproc.arcLength(contour2f, true)
+                            
+                            // Try to approximate with different epsilon factors to get exactly 4 corners
+                            var approxSuccess = false
+                            for (epsFactor in listOf(0.015, 0.02, 0.03, 0.04)) {
+                                val approx = MatOfPoint2f()
+                                try {
+                                    Imgproc.approxPolyDP(contour2f, approx, epsFactor * peri, true)
+                                    if (approx.total() == 4L) {
+                                        val approxPoints = approx.toArray().map { Point(it.x / resizeRatio, it.y / resizeRatio) }
+                                        if (isConvexPoints(approxPoints) && getMaxCosinePoints(approxPoints) < 0.4) {
+                                            val scaledArea = area / (resizeRatio * resizeRatio)
+                                            if (scaledArea > bestArea) {
+                                                bestArea = scaledArea
+                                                bestPoints = orderPoints(approxPoints)
+                                                approxSuccess = true
+                                                break
+                                            }
+                                        }
+                                    }
+                                } finally {
+                                    approx.release()
                                 }
                             }
-                        }
-                    } finally {
-                        approx.release()
-                    }
-                }
 
-                // FALLBACK WITHIN CONTOUR: If approxPolyDP failed but we have a large robust contour,
-                // find its 4 extreme points (Top-Left, Top-Right, Bottom-Right, Bottom-Left)
-                if (!approxSuccess && area > minArea) {
-                    val extremePoints = getExtremePoints(contour).map { Point(it.x / resizeRatio, it.y / resizeRatio) }
-                    if (extremePoints.size == 4 && isConvexPoints(extremePoints) && getMaxCosinePoints(extremePoints) < 0.4) {
-                        val quadArea = getQuadArea(extremePoints)
-                        if (quadArea > bestArea) {
-                            bestArea = quadArea
-                            bestPoints = orderPoints(extremePoints)
+                            // FALLBACK WITHIN CONTOUR: If approxPolyDP failed but we have a large robust contour,
+                            // find its 4 extreme points (Top-Left, Top-Right, Bottom-Right, Bottom-Left)
+                            if (!approxSuccess && area > minArea) {
+                                val extremePoints = getExtremePoints(contour).map { Point(it.x / resizeRatio, it.y / resizeRatio) }
+                                if (extremePoints.size == 4 && isConvexPoints(extremePoints) && getMaxCosinePoints(extremePoints) < 0.4) {
+                                    val quadArea = getQuadArea(extremePoints)
+                                    if (quadArea > bestArea) {
+                                        bestArea = quadArea
+                                        bestPoints = orderPoints(extremePoints)
+                                    }
+                                }
+                            }
+                        } finally {
+                            contour2f?.release()
                         }
                     }
+                } finally {
+                    edges?.release()
+                    kernel?.release()
+                    contours.forEach { it.release() }
+                    hierarchy?.release()
                 }
+            }
 
-                contour2f.release()
-            }
-            
-            edges.release()
-            kernel.release()
-            for (contour in contours) {
-                contour.release()
-            }
-            hierarchy.release()
+            return bestPoints
+        } finally {
+            src?.release()
+            resized?.release()
+            gray?.release()
         }
-
-        src.release()
-        resized.release()
-        gray.release()
-
-        return bestPoints
     }
 
     private fun getExtremePoints(contour: MatOfPoint): List<Point> {

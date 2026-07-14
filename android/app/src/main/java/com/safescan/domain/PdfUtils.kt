@@ -42,6 +42,9 @@ object PdfUtils {
 
                 val scaledBitmap = Bitmap.createScaledBitmap(bitmap, scaledWidth.toInt(), scaledHeight.toInt(), true)
                 canvas.drawBitmap(scaledBitmap, left, top, null)
+                if (scaledBitmap != bitmap) {
+                    scaledBitmap.recycle()
+                }
 
                 pdfDocument.finishPage(page)
             }
@@ -107,6 +110,9 @@ object PdfUtils {
                         true
                     )
                     canvas.drawBitmap(scaledBitmap, leftPt, topPt, null)
+                    if (scaledBitmap != bitmapToDraw) {
+                        scaledBitmap.recycle()
+                    }
                 }
             }
 

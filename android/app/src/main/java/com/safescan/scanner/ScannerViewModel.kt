@@ -1157,6 +1157,8 @@ class ScannerViewModel @Inject constructor(
 
     fun exportPdf(context: android.content.Context, onResult: (java.io.File?) -> Unit) {
         DiagnosticsLogger.info("Starting PDF/Document assembly pipeline...")
+        // FIX: FINAL LEAK
+        val tempBitmapsToRecycle = mutableListOf<Bitmap>()
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 // Also save the captured pages and metadata persistently as a document
@@ -1169,6 +1171,9 @@ class ScannerViewModel @Inject constructor(
                 val pagesData = if (capturedJpgFiles.isNotEmpty()) {
                     capturedJpgFiles.mapIndexed { idx, file ->
                         val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                        if (bmp != null) {
+                            tempBitmapsToRecycle.add(bmp)
+                        }
                         val originalBmp = originalJpgBitmaps[idx] ?: bmp
                         val corners = jpgCorners[idx]
                         com.safescan.data.PageSaveData("p$idx", originalBmp, bmp, corners)
@@ -1202,6 +1207,9 @@ class ScannerViewModel @Inject constructor(
                     val slotsToExport = if (capturedJpgFiles.isNotEmpty()) {
                         capturedJpgFiles.mapIndexed { idx, file ->
                             val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                            if (bmp != null) {
+                                tempBitmapsToRecycle.add(bmp)
+                            }
                             Slot("p$idx", "Page ${idx + 1}", bmp)
                         }
                     } else {
@@ -1233,6 +1241,18 @@ class ScannerViewModel @Inject constructor(
                 withContext(Dispatchers.Main) {
                     onResult(null)
                 }
+            } finally {
+                // FIX: FINAL LEAK
+                for (bmp in tempBitmapsToRecycle) {
+                    if (!bmp.isRecycled) {
+                        val isOriginal = originalJpgBitmaps.values.any { it === bmp } || 
+                                         slots.value.any { it.bitmap === bmp }
+                        if (!isOriginal) {
+                            bmp.recycle()
+                        }
+                    }
+                }
+                tempBitmapsToRecycle.clear()
             }
         }
     }

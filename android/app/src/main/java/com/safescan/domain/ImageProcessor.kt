@@ -89,6 +89,9 @@ object ImageProcessor {
         var src: Mat? = null
         var outMat: Mat? = null
         var blurred: Mat? = null
+        var dst: Mat? = null
+        var hsv: Mat? = null
+        var channels: ArrayList<Mat>? = null
         try {
             src = Mat()
             Utils.bitmapToMat(bitmap, src)
@@ -103,12 +106,11 @@ object ImageProcessor {
             beta = beta.coerceIn(-60.0, 60.0)
             alpha = alpha.coerceIn(0.5, 3.0)
 
-            val dst = Mat()
+            dst = Mat()
             src.convertTo(dst, -1, alpha, 0.0)
             Core.add(dst, org.opencv.core.Scalar(beta, beta, beta, beta), dst)
             Core.normalize(dst, dst, 0.0, 255.0, Core.NORM_MINMAX)
             dst.copyTo(src)
-            dst.release()
 
             // Apply Sharpness
             if (state.sharpness > 0f) {
@@ -121,17 +123,13 @@ object ImageProcessor {
             // Apply Saturation if it's not 0
             if (state.saturation != 0f) {
                 val satFactor = 1.0 + (state.saturation / 100.0)
-                val hsv = Mat()
+                hsv = Mat()
                 Imgproc.cvtColor(src, hsv, Imgproc.COLOR_BGR2HSV)
-                val channels = ArrayList<Mat>()
+                channels = ArrayList()
                 Core.split(hsv, channels)
                 channels[1].convertTo(channels[1], -1, satFactor, 0.0)
                 Core.merge(channels, hsv)
                 Imgproc.cvtColor(hsv, src, Imgproc.COLOR_HSV2BGR)
-                hsv.release()
-                for (ch in channels) {
-                    ch.release()
-                }
             }
 
             // Apply Filter
@@ -152,6 +150,9 @@ object ImageProcessor {
             src?.release()
             outMat?.release()
             blurred?.release()
+            dst?.release()
+            hsv?.release()
+            channels?.forEach { it.release() }
         }
     }
 

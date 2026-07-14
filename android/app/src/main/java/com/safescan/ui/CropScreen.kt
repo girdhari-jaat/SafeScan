@@ -496,6 +496,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
         }
     }
 }
+}
 
 private fun updateOffset(current: Offset, delta: Offset, bounds: IntSize): Offset {
     val newX = (current.x + delta.x).coerceIn(0f, bounds.width.toFloat())

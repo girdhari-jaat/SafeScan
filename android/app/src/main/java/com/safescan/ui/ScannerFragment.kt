@@ -1102,70 +1102,74 @@ class ScannerFragment : Fragment() {
             ContextCompat.getMainExecutor(currentContext),
             object : ImageCapture.OnImageCapturedCallback() {
                 override fun onCaptureSuccess(imageProxy: ImageProxy) {
-                    cameraControl?.cancelFocusAndMetering()
-                    val rawBitmap = imageProxy.toBitmap()
-                    // ALWAYS rotate the raw camera sensor bitmap by imageProxy.imageInfo.rotationDegrees
-                    // so it displays in standard upright portrait/landscape orientation matching the screen preview.
-                    val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-                    com.safescan.core.ScannerDebugLogger.logCameraRotation(rotationDegrees)
-                    val bitmap = if (rotationDegrees != 0) {
-                        val matrix = android.graphics.Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-                        val rotated = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
-                        rawBitmap.recycle()
-                        rotated
-                    } else {
-                        rawBitmap
-                    }
+                    // FIX: FINAL LEAK
+                    try {
+                        cameraControl?.cancelFocusAndMetering()
+                        val rawBitmap = imageProxy.toBitmap()
+                        // ALWAYS rotate the raw camera sensor bitmap by imageProxy.imageInfo.rotationDegrees
+                        // so it displays in standard upright portrait/landscape orientation matching the screen preview.
+                        val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+                        com.safescan.core.ScannerDebugLogger.logCameraRotation(rotationDegrees)
+                        val bitmap = if (rotationDegrees != 0) {
+                            val matrix = android.graphics.Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+                            val rotated = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
+                            rawBitmap.recycle()
+                            rotated
+                        } else {
+                            rawBitmap
+                        }
 
-                    // Precisely crop the high-resolution photo to match the visual cutout frame before processing
-                    val binding = _binding
-                    var finalBitmap = if (binding != null) {
-                        val pw = binding.previewView.width.toFloat()
-                        val ph = binding.previewView.height.toFloat()
-                        val holeRect = getOverlayHoleRect(pw, ph)
-                        if (pw > 0f && ph > 0f && !holeRect.isEmpty) {
-                            com.safescan.core.ScannerDebugLogger.logCrop(holeRect.left, holeRect.top, holeRect.width(), holeRect.height())
-                            val bw = bitmap.width.toFloat()
-                            val bh = bitmap.height.toFloat()
-                            
-                            val scale = maxOf(pw / bw, ph / bh)
-                            val scaledBw = bw * scale
-                            val scaledBh = bh * scale
-                            
-                            val leftOffset = (scaledBw - pw) / 2f
-                            val topOffset = (scaledBh - ph) / 2f
-                            
-                            val cropLeft = ((holeRect.left + leftOffset) / scale).toInt().coerceIn(0, bitmap.width)
-                            val cropTop = ((holeRect.top + topOffset) / scale).toInt().coerceIn(0, bitmap.height)
-                            val cropRight = ((holeRect.right + leftOffset) / scale).toInt().coerceIn(0, bitmap.width)
-                            val cropBottom = ((holeRect.bottom + topOffset) / scale).toInt().coerceIn(0, bitmap.height)
-                            
-                            val cropWidth = (cropRight - cropLeft).coerceAtLeast(100)
-                            val cropHeight = (cropBottom - cropTop).coerceAtLeast(100)
-                            
-                            val safeWidth = cropWidth.coerceAtMost(bitmap.width - cropLeft)
-                            val safeHeight = cropHeight.coerceAtMost(bitmap.height - cropTop)
-                            
-                            val cropped = Bitmap.createBitmap(bitmap, cropLeft, cropTop, safeWidth, safeHeight)
-                            com.safescan.core.ScannerDebugLogger.logCropRoiSize(cropped.width, cropped.height)
-                            bitmap.recycle()
-                            cropped
+                        // Precisely crop the high-resolution photo to match the visual cutout frame before processing
+                        val binding = _binding
+                        var finalBitmap = if (binding != null) {
+                            val pw = binding.previewView.width.toFloat()
+                            val ph = binding.previewView.height.toFloat()
+                            val holeRect = getOverlayHoleRect(pw, ph)
+                            if (pw > 0f && ph > 0f && !holeRect.isEmpty) {
+                                com.safescan.core.ScannerDebugLogger.logCrop(holeRect.left, holeRect.top, holeRect.width(), holeRect.height())
+                                val bw = bitmap.width.toFloat()
+                                val bh = bitmap.height.toFloat()
+                                
+                                val scale = maxOf(pw / bw, ph / bh)
+                                val scaledBw = bw * scale
+                                val scaledBh = bh * scale
+                                
+                                val leftOffset = (scaledBw - pw) / 2f
+                                val topOffset = (scaledBh - ph) / 2f
+                                
+                                val cropLeft = ((holeRect.left + leftOffset) / scale).toInt().coerceIn(0, bitmap.width)
+                                val cropTop = ((holeRect.top + topOffset) / scale).toInt().coerceIn(0, bitmap.height)
+                                val cropRight = ((holeRect.right + leftOffset) / scale).toInt().coerceIn(0, bitmap.width)
+                                val cropBottom = ((holeRect.bottom + topOffset) / scale).toInt().coerceIn(0, bitmap.height)
+                                
+                                val cropWidth = (cropRight - cropLeft).coerceAtLeast(100)
+                                val cropHeight = (cropBottom - cropTop).coerceAtLeast(100)
+                                
+                                val safeWidth = cropWidth.coerceAtMost(bitmap.width - cropLeft)
+                                val safeHeight = cropHeight.coerceAtMost(bitmap.height - cropTop)
+                                
+                                val cropped = Bitmap.createBitmap(bitmap, cropLeft, cropTop, safeWidth, safeHeight)
+                                com.safescan.core.ScannerDebugLogger.logCropRoiSize(cropped.width, cropped.height)
+                                bitmap.recycle()
+                                cropped
+                            } else {
+                                bitmap
+                            }
                         } else {
                             bitmap
                         }
-                    } else {
-                        bitmap
-                    }
 
-                    // If Auto-Rotation is enabled, apply intelligent mode-based aspect ratio/layout correction
-                    // (We always auto-rotate CARD and GRID captures so portrait overlays are transformed to landscape instantly)
-                    if (viewModel.autoRotation.value || viewModel.currentMode.value == com.safescan.data.ScannerMode.CARD || viewModel.currentMode.value == com.safescan.data.ScannerMode.GRID) {
-                        finalBitmap = autoRotateForMode(finalBitmap, viewModel.currentMode.value)
-                    }
+                        // If Auto-Rotation is enabled, apply intelligent mode-based aspect ratio/layout correction
+                        // (We always auto-rotate CARD and GRID captures so portrait overlays are transformed to landscape instantly)
+                        if (viewModel.autoRotation.value || viewModel.currentMode.value == com.safescan.data.ScannerMode.CARD || viewModel.currentMode.value == com.safescan.data.ScannerMode.GRID) {
+                            finalBitmap = autoRotateForMode(finalBitmap, viewModel.currentMode.value)
+                        }
 
-                    viewModel.onCapture(finalBitmap)
-                    viewModel.isFocusing = false
-                    imageProxy.close()
+                        viewModel.onCapture(finalBitmap)
+                        viewModel.isFocusing = false
+                    } finally {
+                        imageProxy.close()
+                    }
                 }
 
                 override fun onError(exception: ImageCaptureException) {
@@ -1276,6 +1280,25 @@ class ScannerFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        // FIX: FINAL LEAK
+        try {
+            context?.let { ctx ->
+                val cameraProviderFuture = androidx.camera.lifecycle.ProcessCameraProvider.getInstance(ctx)
+                if (cameraProviderFuture.isDone) {
+                    cameraProviderFuture.get().unbindAll()
+                } else {
+                    cameraProviderFuture.addListener({
+                        try {
+                            cameraProviderFuture.get().unbindAll()
+                        } catch (e: Exception) {
+                            Log.e("ScannerFragment", "Failed to unbind camera in onDestroyView listener", e)
+                        }
+                    }, androidx.core.content.ContextCompat.getMainExecutor(ctx))
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("ScannerFragment", "Failed to unbind camera in onDestroyView", e)
+        }
         try {
             liveEdgeDetectionEngine.release()
         } catch (e: Exception) {

@@ -17,107 +17,129 @@ object ImageFilterEngine {
                 Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
             }
             FilterType.BLACK_WHITE -> {
-                val gray = Mat()
-                Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY)
-                val cleanGray = removeShadowsGray(gray)
-                
-                // Boost contrast significantly before thresholding
-                cleanGray.convertTo(cleanGray, -1, 1.5, -20.0)
-                
-                Imgproc.threshold(cleanGray, outMat, 0.0, 255.0, Imgproc.THRESH_BINARY or Imgproc.THRESH_OTSU)
-                
-                // Apply slight sharpening to the black and white result to make fonts crisp
-                val blurred = Mat()
-                Imgproc.GaussianBlur(outMat, blurred, Size(0.0, 0.0), 2.0)
-                Core.addWeighted(outMat, 1.5, blurred, -0.5, 0.0, outMat)
-                
-                Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
-                gray.release()
-                cleanGray.release()
-                blurred.release()
+                var gray: Mat? = null
+                var cleanGray: Mat? = null
+                var blurred: Mat? = null
+                try {
+                    gray = Mat()
+                    Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY)
+                    cleanGray = removeShadowsGray(gray)
+                    
+                    // Boost contrast significantly before thresholding
+                    cleanGray.convertTo(cleanGray, -1, 1.5, -20.0)
+                    
+                    Imgproc.threshold(cleanGray, outMat, 0.0, 255.0, Imgproc.THRESH_BINARY or Imgproc.THRESH_OTSU)
+                    
+                    // Apply slight sharpening to the black and white result to make fonts crisp
+                    blurred = Mat()
+                    Imgproc.GaussianBlur(outMat, blurred, Size(0.0, 0.0), 2.0)
+                    Core.addWeighted(outMat, 1.5, blurred, -0.5, 0.0, outMat)
+                    
+                    Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
+                } finally {
+                    gray?.release()
+                    cleanGray?.release()
+                    blurred?.release()
+                }
             }
             FilterType.CARD -> {
-                val gray = Mat()
-                Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY)
-                
-                val clahe = Imgproc.createCLAHE(3.0, org.opencv.core.Size(8.0, 8.0))
-                val claheMat = Mat()
-                clahe.apply(gray, claheMat)
-                
-                val b = Mat()
-                Imgproc.GaussianBlur(claheMat, b, org.opencv.core.Size(0.0, 0.0), 3.0)
-                Core.addWeighted(claheMat, 1.5, b, -0.5, 0.0, outMat)
-                
-                Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
-                
-                gray.release()
-                claheMat.release()
-                b.release()
-                clahe.collectGarbage() // Just in case, or let GC handle
+                var gray: Mat? = null
+                var clahe: org.opencv.imgproc.CLAHE? = null
+                var claheMat: Mat? = null
+                var b: Mat? = null
+                try {
+                    gray = Mat()
+                    Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY)
+                    
+                    clahe = Imgproc.createCLAHE(3.0, Size(8.0, 8.0))
+                    claheMat = Mat()
+                    clahe.apply(gray, claheMat)
+                    
+                    b = Mat()
+                    Imgproc.GaussianBlur(claheMat, b, Size(0.0, 0.0), 3.0)
+                    Core.addWeighted(claheMat, 1.5, b, -0.5, 0.0, outMat)
+                    
+                    Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
+                } finally {
+                    gray?.release()
+                    claheMat?.release()
+                    b?.release()
+                    clahe?.release()
+                }
             }
             FilterType.MAGIC_COLOR -> {
-                val cleanColor = removeShadowsColor(src)
-                
-                val hsv = Mat()
-                Imgproc.cvtColor(cleanColor, hsv, Imgproc.COLOR_BGR2HSV)
-                val hsvChannels = ArrayList<Mat>()
-                Core.split(hsv, hsvChannels)
-                
-                // Boost saturation and contrast
-                hsvChannels[1].convertTo(hsvChannels[1], -1, 1.5, 0.0)
-                hsvChannels[2].convertTo(hsvChannels[2], -1, 1.2, -10.0)
-                
-                Core.merge(hsvChannels, hsv)
-                
-                val enhanced = Mat()
-                Imgproc.cvtColor(hsv, enhanced, Imgproc.COLOR_HSV2BGR)
-                
-                // Apply Unsharp Masking for crisp text
-                val blurred = Mat()
-                Imgproc.GaussianBlur(enhanced, blurred, Size(0.0, 0.0), 3.0)
-                Core.addWeighted(enhanced, 1.5, blurred, -0.5, 0.0, outMat)
-                
-                Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_BGR2RGBA)
-                
-                cleanColor.release()
-                hsv.release()
-                for (ch in hsvChannels) {
-                    ch.release()
+                var cleanColor: Mat? = null
+                var hsv: Mat? = null
+                var hsvChannels: ArrayList<Mat>? = null
+                var enhanced: Mat? = null
+                var blurred: Mat? = null
+                try {
+                    cleanColor = removeShadowsColor(src)
+                    
+                    hsv = Mat()
+                    Imgproc.cvtColor(cleanColor, hsv, Imgproc.COLOR_BGR2HSV)
+                    hsvChannels = ArrayList()
+                    Core.split(hsv, hsvChannels)
+                    
+                    // Boost saturation and contrast
+                    hsvChannels[1].convertTo(hsvChannels[1], -1, 1.5, 0.0)
+                    hsvChannels[2].convertTo(hsvChannels[2], -1, 1.2, -10.0)
+                    
+                    Core.merge(hsvChannels, hsv)
+                    
+                    enhanced = Mat()
+                    Imgproc.cvtColor(hsv, enhanced, Imgproc.COLOR_HSV2BGR)
+                    
+                    // Apply Unsharp Masking for crisp text
+                    blurred = Mat()
+                    Imgproc.GaussianBlur(enhanced, blurred, Size(0.0, 0.0), 3.0)
+                    Core.addWeighted(enhanced, 1.5, blurred, -0.5, 0.0, outMat)
+                    
+                    Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_BGR2RGBA)
+                } finally {
+                    cleanColor?.release()
+                    hsv?.release()
+                    hsvChannels?.forEach { it.release() }
+                    enhanced?.release()
+                    blurred?.release()
                 }
-                enhanced.release()
-                blurred.release()
             }
             FilterType.PAPER -> {
-                val cleanColor = removeShadowsColor(src)
-                
-                val hsv = Mat()
-                Imgproc.cvtColor(cleanColor, hsv, Imgproc.COLOR_BGR2HSV)
-                val hsvChannels = ArrayList<Mat>()
-                Core.split(hsv, hsvChannels)
-                
-                // Increase saturation slightly, and contrast on V channel
-                hsvChannels[1].convertTo(hsvChannels[1], -1, 1.2, 0.0) 
-                hsvChannels[2].convertTo(hsvChannels[2], -1, 1.2, -10.0)
-
-                Core.merge(hsvChannels, hsv)
-                
-                val enhanced = Mat()
-                Imgproc.cvtColor(hsv, enhanced, Imgproc.COLOR_HSV2BGR)
-                
-                // Apply Unsharp Masking for crisp text
-                val blurred = Mat()
-                Imgproc.GaussianBlur(enhanced, blurred, Size(0.0, 0.0), 2.5)
-                Core.addWeighted(enhanced, 1.5, blurred, -0.5, 0.0, outMat)
-                
-                Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_BGR2RGBA)
-                
-                cleanColor.release()
-                hsv.release()
-                for (ch in hsvChannels) {
-                    ch.release()
+                var cleanColor: Mat? = null
+                var hsv: Mat? = null
+                var hsvChannels: ArrayList<Mat>? = null
+                var enhanced: Mat? = null
+                var blurred: Mat? = null
+                try {
+                    cleanColor = removeShadowsColor(src)
+                    
+                    hsv = Mat()
+                    Imgproc.cvtColor(cleanColor, hsv, Imgproc.COLOR_BGR2HSV)
+                    hsvChannels = ArrayList()
+                    Core.split(hsv, hsvChannels)
+                    
+                    // Increase saturation slightly, and contrast on V channel
+                    hsvChannels[1].convertTo(hsvChannels[1], -1, 1.2, 0.0) 
+                    hsvChannels[2].convertTo(hsvChannels[2], -1, 1.2, -10.0)
+                    
+                    Core.merge(hsvChannels, hsv)
+                    
+                    enhanced = Mat()
+                    Imgproc.cvtColor(hsv, enhanced, Imgproc.COLOR_HSV2BGR)
+                    
+                    // Apply Unsharp Masking for crisp text
+                    blurred = Mat()
+                    Imgproc.GaussianBlur(enhanced, blurred, Size(0.0, 0.0), 2.5)
+                    Core.addWeighted(enhanced, 1.5, blurred, -0.5, 0.0, outMat)
+                    
+                    Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_BGR2RGBA)
+                } finally {
+                    cleanColor?.release()
+                    hsv?.release()
+                    hsvChannels?.forEach { it.release() }
+                    enhanced?.release()
+                    blurred?.release()
                 }
-                enhanced.release()
-                blurred.release()
             }
             FilterType.COLOR -> {
                 Imgproc.cvtColor(src, outMat, Imgproc.COLOR_BGR2RGBA)
@@ -127,90 +149,120 @@ object ImageFilterEngine {
     }
 
     private fun removeShadowsGray(gray: Mat): Mat {
-        val dilated = Mat()
-        val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(7.0, 7.0))
-        Imgproc.dilate(gray, dilated, kernel)
-        
-        val bgIllum = Mat()
-        Imgproc.GaussianBlur(dilated, bgIllum, Size(21.0, 21.0), 0.0)
-        
-        val grayFloat = Mat()
-        val bgFloat = Mat()
-        gray.convertTo(grayFloat, CvType.CV_32F)
-        bgIllum.convertTo(bgFloat, CvType.CV_32F)
-        
-        Core.add(bgFloat, org.opencv.core.Scalar(1.0), bgFloat)
-        
-        val div = Mat()
-        Core.divide(grayFloat, bgFloat, div)
-        Core.multiply(div, org.opencv.core.Scalar(255.0), div)
-        
-        Core.normalize(div, div, 0.0, 255.0, Core.NORM_MINMAX)
-        
+        var dilated: Mat? = null
+        var kernel: Mat? = null
+        var bgIllum: Mat? = null
+        var grayFloat: Mat? = null
+        var bgFloat: Mat? = null
+        var div: Mat? = null
         val result = Mat()
-        div.convertTo(result, CvType.CV_8U)
-
-        dilated.release()
-        kernel.release()
-        bgIllum.release()
-        grayFloat.release()
-        bgFloat.release()
-        div.release()
-
+        try {
+            dilated = Mat()
+            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(7.0, 7.0))
+            Imgproc.dilate(gray, dilated, kernel)
+            
+            bgIllum = Mat()
+            Imgproc.GaussianBlur(dilated, bgIllum, Size(21.0, 21.0), 0.0)
+            
+            grayFloat = Mat()
+            bgFloat = Mat()
+            gray.convertTo(grayFloat, CvType.CV_32F)
+            bgIllum.convertTo(bgFloat, CvType.CV_32F)
+            
+            Core.add(bgFloat, org.opencv.core.Scalar(1.0), bgFloat)
+            
+            div = Mat()
+            Core.divide(grayFloat, bgFloat, div)
+            Core.multiply(div, org.opencv.core.Scalar(255.0), div)
+            
+            Core.normalize(div, div, 0.0, 255.0, Core.NORM_MINMAX)
+            
+            div.convertTo(result, CvType.CV_8U)
+        } catch (e: Exception) {
+            result.release()
+            throw e
+        } finally {
+            dilated?.release()
+            kernel?.release()
+            bgIllum?.release()
+            grayFloat?.release()
+            bgFloat?.release()
+            div?.release()
+        }
         return result
     }
 
     private fun removeShadowsColor(src: Mat): Mat {
-        val hsv = Mat()
-        Imgproc.cvtColor(src, hsv, Imgproc.COLOR_BGR2HSV)
-        val channels = ArrayList<Mat>()
-        Core.split(hsv, channels)
-        
-        val vChannel = channels[2]
-        
-        val dilated = Mat()
-        val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(7.0, 7.0))
-        Imgproc.dilate(vChannel, dilated, kernel)
-        
-        val bgIllum = Mat()
-        Imgproc.GaussianBlur(dilated, bgIllum, Size(21.0, 21.0), 0.0)
-        
-        val vFloat = Mat()
-        vChannel.convertTo(vFloat, CvType.CV_32F)
-        
-        val bgFloat = Mat()
-        bgIllum.convertTo(bgFloat, CvType.CV_32F)
-        Core.add(bgFloat, org.opencv.core.Scalar(1.0), bgFloat)
-        
-        val div = Mat()
-        Core.divide(vFloat, bgFloat, div)
-        Core.multiply(div, org.opencv.core.Scalar(255.0), div)
-        
-        Core.normalize(div, div, 0.0, 255.0, Core.NORM_MINMAX)
-        
-        val vOut = Mat()
-        div.convertTo(vOut, CvType.CV_8U)
-        
-        channels[2] = vOut
-        
-        val mergedHsv = Mat()
-        Core.merge(channels, mergedHsv)
-        
+        var hsv: Mat? = null
+        var channels: ArrayList<Mat>? = null
+        var originalV: Mat? = null
+        var dilated: Mat? = null
+        var kernel: Mat? = null
+        var bgIllum: Mat? = null
+        var vFloat: Mat? = null
+        var bgFloat: Mat? = null
+        var div: Mat? = null
+        var vOut: Mat? = null
+        var mergedHsv: Mat? = null
         val outBGR = Mat()
-        Imgproc.cvtColor(mergedHsv, outBGR, Imgproc.COLOR_HSV2BGR)
-
-        hsv.release()
-        vChannel.release()
-        for (ch in channels) {
-            ch.release()
+        
+        try {
+            hsv = Mat()
+            Imgproc.cvtColor(src, hsv, Imgproc.COLOR_BGR2HSV)
+            channels = ArrayList()
+            Core.split(hsv, channels)
+            
+            originalV = channels[2]
+            
+            dilated = Mat()
+            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(7.0, 7.0))
+            Imgproc.dilate(originalV, dilated, kernel)
+            
+            bgIllum = Mat()
+            Imgproc.GaussianBlur(dilated, bgIllum, Size(21.0, 21.0), 0.0)
+            
+            vFloat = Mat()
+            originalV.convertTo(vFloat, CvType.CV_32F)
+            
+            bgFloat = Mat()
+            bgIllum.convertTo(bgFloat, CvType.CV_32F)
+            Core.add(bgFloat, org.opencv.core.Scalar(1.0), bgFloat)
+            
+            div = Mat()
+            Core.divide(vFloat, bgFloat, div)
+            Core.multiply(div, org.opencv.core.Scalar(255.0), div)
+            
+            Core.normalize(div, div, 0.0, 255.0, Core.NORM_MINMAX)
+            
+            vOut = Mat()
+            div.convertTo(vOut, CvType.CV_8U)
+            
+            channels[2] = vOut
+            
+            mergedHsv = Mat()
+            Core.merge(channels, mergedHsv)
+            
+            Imgproc.cvtColor(mergedHsv, outBGR, Imgproc.COLOR_HSV2BGR)
+        } catch (e: Exception) {
+            outBGR.release()
+            throw e
+        } finally {
+            hsv?.release()
+            originalV?.release()
+            channels?.forEach { 
+                if (it != originalV) {
+                    it.release()
+                }
+            }
+            dilated?.release()
+            kernel?.release()
+            bgIllum?.release()
+            vFloat?.release()
+            bgFloat?.release()
+            div?.release()
+            vOut?.release()
+            mergedHsv?.release()
         }
-        dilated.release()
-        kernel.release()
-        bgIllum.release()
-        vFloat.release()
-        bgFloat.release()
-        div.release()
-        mergedHsv.release()
         
         return outBGR
     }

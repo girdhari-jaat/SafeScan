@@ -75,38 +75,45 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
                 val heightB = sqrt((tl.x - bl.x).pow(2) + (tl.y - bl.y).pow(2))
                 val maxHeight = max(heightA, heightB).toInt().coerceAtLeast(1)
 
-                val srcMat = Mat()
-                Utils.bitmapToMat(bitmap, srcMat)
-                
-                val srcMatOfPoint2f = MatOfPoint2f(
-                    org.opencv.core.Point(tl.x, tl.y),
-                    org.opencv.core.Point(tr.x, tr.y),
-                    org.opencv.core.Point(br.x, br.y),
-                    org.opencv.core.Point(bl.x, bl.y)
-                )
+                var srcMat: Mat? = null
+                var dstMat: Mat? = null
+                var srcMatOfPoint2f: MatOfPoint2f? = null
+                var dstMatOfPoint2f: MatOfPoint2f? = null
+                var transformMatrix: Mat? = null
+                try {
+                    srcMat = Mat()
+                    Utils.bitmapToMat(bitmap, srcMat)
+                    
+                    srcMatOfPoint2f = MatOfPoint2f(
+                        org.opencv.core.Point(tl.x, tl.y),
+                        org.opencv.core.Point(tr.x, tr.y),
+                        org.opencv.core.Point(br.x, br.y),
+                        org.opencv.core.Point(bl.x, bl.y)
+                    )
 
-                val dstMatOfPoint2f = MatOfPoint2f(
-                    org.opencv.core.Point(0.0, 0.0),
-                    org.opencv.core.Point(maxWidth.toDouble() - 1, 0.0),
-                    org.opencv.core.Point(maxWidth.toDouble() - 1, maxHeight.toDouble() - 1),
-                    org.opencv.core.Point(0.0, maxHeight.toDouble() - 1)
-                )
+                    dstMatOfPoint2f = MatOfPoint2f(
+                        org.opencv.core.Point(0.0, 0.0),
+                        org.opencv.core.Point(maxWidth.toDouble() - 1, 0.0),
+                        org.opencv.core.Point(maxWidth.toDouble() - 1, maxHeight.toDouble() - 1),
+                        org.opencv.core.Point(0.0, maxHeight.toDouble() - 1)
+                    )
 
-                val transformMatrix = Imgproc.getPerspectiveTransform(srcMatOfPoint2f, dstMatOfPoint2f)
+                    transformMatrix = Imgproc.getPerspectiveTransform(srcMatOfPoint2f, dstMatOfPoint2f)
 
-                val dstMat = Mat()
-                Imgproc.warpPerspective(srcMat, dstMat, transformMatrix, Size(maxWidth.toDouble(), maxHeight.toDouble()))
+                    dstMat = Mat()
+                    Imgproc.warpPerspective(srcMat, dstMat, transformMatrix, Size(maxWidth.toDouble(), maxHeight.toDouble()))
 
-                val outBitmap = Bitmap.createBitmap(maxWidth, maxHeight, Bitmap.Config.ARGB_8888)
-                Utils.matToBitmap(dstMat, outBitmap)
-                
-                srcMat.release()
-                dstMat.release()
-                srcMatOfPoint2f.release()
-                dstMatOfPoint2f.release()
-                transformMatrix.release()
-
-                return@withContext AppResult.Success(ScannedDocument(outBitmap, orderedCorners))
+                    val outBitmap = Bitmap.createBitmap(maxWidth, maxHeight, Bitmap.Config.ARGB_8888)
+                    Utils.matToBitmap(dstMat, outBitmap)
+                    
+                    return@withContext AppResult.Success(ScannedDocument(outBitmap, orderedCorners))
+                } finally {
+                    srcMat?.release()
+                    dstMat?.release()
+                    srcMatOfPoint2f?.release()
+                    dstMatOfPoint2f?.release()
+                    transformMatrix?.release()
+                }
             }
             // If it's exactly 4 points but fallback logic above was weird (should not happen), 
             // return original with fallback quad or similar.
@@ -117,68 +124,77 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
     }
     
     private fun detectCornersOpenCV(bitmap: Bitmap): List<Point>? {
-        val src = Mat()
-        Utils.bitmapToMat(bitmap, src)
-        
-        // Fast downscale for edge detection
-        val resizeRatio = 500.0 / Math.max(src.width(), src.height())
-        val resized = Mat()
-        if (resizeRatio < 1.0) {
-            Imgproc.resize(src, resized, Size(src.width() * resizeRatio, src.height() * resizeRatio))
-        } else {
-            src.copyTo(resized)
-        }
-        
-        val gray = Mat()
-        Imgproc.cvtColor(resized, gray, Imgproc.COLOR_RGBA2GRAY)
-        Imgproc.GaussianBlur(gray, gray, Size(5.0, 5.0), 0.0)
-        
-        val edges = Mat()
-        Imgproc.Canny(gray, edges, 75.0, 200.0)
-        
-        val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(3.0, 3.0))
-        Imgproc.dilate(edges, edges, kernel)
-        
+        var src: Mat? = null
+        var resized: Mat? = null
+        var gray: Mat? = null
+        var edges: Mat? = null
+        var kernel: Mat? = null
         val contours = ArrayList<MatOfPoint>()
-        val hierarchy = Mat()
-        Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
-        
-        contours.sortByDescending { Imgproc.contourArea(it) }
-        var foundCorners: List<Point>? = null
-        
-        for (contour in contours) {
-            val contour2f = MatOfPoint2f(*contour.toArray())
-            val approx = MatOfPoint2f()
-            val peri = Imgproc.arcLength(contour2f, true)
-            Imgproc.approxPolyDP(contour2f, approx, 0.02 * peri, true)
+        var hierarchy: Mat? = null
+        try {
+            src = Mat()
+            Utils.bitmapToMat(bitmap, src)
             
-            if (approx.total() == 4L) {
-                val area = Imgproc.contourArea(approx)
-                if (area > (resized.width() * resized.height() * 0.1)) {
-                    if (isConvex(approx) && getMaxCosine(approx) < 0.3) {
-                        val points = approx.toArray().toList()
-                        foundCorners = orderPoints(points.map { Point(it.x / resizeRatio, it.y / resizeRatio) })
-                        approx.release()
-                        contour2f.release()
-                        break
+            // Fast downscale for edge detection
+            val resizeRatio = 500.0 / Math.max(src.width(), src.height())
+            resized = Mat()
+            if (resizeRatio < 1.0) {
+                Imgproc.resize(src, resized, Size(src.width() * resizeRatio, src.height() * resizeRatio))
+            } else {
+                src.copyTo(resized)
+            }
+            
+            gray = Mat()
+            Imgproc.cvtColor(resized, gray, Imgproc.COLOR_RGBA2GRAY)
+            Imgproc.GaussianBlur(gray, gray, Size(5.0, 5.0), 0.0)
+            
+            edges = Mat()
+            Imgproc.Canny(gray, edges, 75.0, 200.0)
+            
+            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(3.0, 3.0))
+            Imgproc.dilate(edges, edges, kernel)
+            
+            hierarchy = Mat()
+            Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
+            
+            contours.sortByDescending { Imgproc.contourArea(it) }
+            var foundCorners: List<Point>? = null
+            
+            for (contour in contours) {
+                var contour2f: MatOfPoint2f? = null
+                var approx: MatOfPoint2f? = null
+                try {
+                    contour2f = MatOfPoint2f(*contour.toArray())
+                    approx = MatOfPoint2f()
+                    val peri = Imgproc.arcLength(contour2f, true)
+                    Imgproc.approxPolyDP(contour2f, approx, 0.02 * peri, true)
+                    
+                    if (approx.total() == 4L) {
+                        val area = Imgproc.contourArea(approx)
+                        if (area > (resized.width() * resized.height() * 0.1)) {
+                            if (isConvex(approx) && getMaxCosine(approx) < 0.3) {
+                                val points = approx.toArray().toList()
+                                foundCorners = orderPoints(points.map { Point(it.x / resizeRatio, it.y / resizeRatio) })
+                                break
+                            }
+                        }
                     }
+                } finally {
+                    approx?.release()
+                    contour2f?.release()
                 }
             }
-            approx.release()
-            contour2f.release()
+            
+            return foundCorners
+        } finally {
+            contours.forEach { it.release() }
+            src?.release()
+            resized?.release()
+            gray?.release()
+            edges?.release()
+            hierarchy?.release()
+            kernel?.release()
         }
-        
-        for (contour in contours) {
-            contour.release()
-        }
-        src.release()
-        resized.release()
-        gray.release()
-        edges.release()
-        hierarchy.release()
-        kernel.release()
-        
-        return foundCorners
     }
 
     private fun orderPoints(pts: List<Point>): List<Point> {
@@ -210,7 +226,12 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
     }
 
     private fun isConvex(approx: MatOfPoint2f): Boolean {
-        return Imgproc.isContourConvex(MatOfPoint(*approx.toArray()))
+        val mat = MatOfPoint(*approx.toArray())
+        try {
+            return Imgproc.isContourConvex(mat)
+        } finally {
+            mat.release()
+        }
     }
 
     private fun getFallbackQuad(w: Double, h: Double): List<Point> {
