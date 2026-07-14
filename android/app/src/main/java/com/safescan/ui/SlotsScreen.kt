@@ -49,7 +49,8 @@ fun SlotsScreen(
     onFlashToggle: () -> Unit,
     onGalleryClick: () -> Unit,
     onSlotClick: (String) -> Unit,
-    onSlotLongClick: (String) -> Unit
+    onSlotLongClick: (String) -> Unit,
+    onWizardClick: () -> Unit
 ) {
     val currentMode by viewModel.currentMode.collectAsState()
     val slots by viewModel.slots.collectAsState()
@@ -129,7 +130,7 @@ fun SlotsScreen(
                     onClick = { isSettingsPopoverOpen = !isSettingsPopoverOpen },
                     modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
                 ) {
-                    Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+                    Icon(Icons.Default.MoreVert, contentDescription = "Settings", tint = Color.White)
                 }
             }
 
@@ -370,15 +371,19 @@ fun SlotsScreen(
                     }
             )
             
+            val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+            val maxCardHeight = (configuration.screenHeightDp * 0.8).dp
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = 80.dp, end = 16.dp),
-                contentAlignment = Alignment.TopEnd
+                    .padding(top = 80.dp),
+                contentAlignment = Alignment.TopCenter
             ) {
                 Card(
                     modifier = Modifier
                         .width(280.dp)
+                        .heightIn(max = maxCardHeight)
                         .border(
                             width = 1.dp,
                             color = Color.White.copy(alpha = 0.15f),
@@ -398,29 +403,81 @@ fun SlotsScreen(
                         modifier = Modifier.padding(16.dp)
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.Black.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Camera Settings",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            IconButton(
-                                onClick = {
-                                    isSettingsPopoverOpen = false
-                                    viewModel.isSettingsOpen.value = true
-                                },
-                                modifier = Modifier.size(32.dp)
+                            // Tab 1: Settings
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        isSettingsPopoverOpen = false
+                                        viewModel.isSettingsOpen.value = true
+                                    }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = "More Settings",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "Settings",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Settings",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+
+                            // Divider
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(20.dp)
+                                    .background(Color.White.copy(alpha = 0.2f))
+                            )
+
+                            // Tab 2: Wizard
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        isSettingsPopoverOpen = false
+                                        onWizardClick()
+                                    }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoFixHigh,
+                                        contentDescription = "Wizard",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Wizard",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
                         }
                         
@@ -434,7 +491,7 @@ fun SlotsScreen(
 
                         Column(
                             modifier = Modifier
-                                .heightIn(max = 280.dp)
+                                .weight(1f, fill = false)
                                 .verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {

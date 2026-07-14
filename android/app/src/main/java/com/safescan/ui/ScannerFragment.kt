@@ -512,7 +512,8 @@ class ScannerFragment : Fragment() {
                                 },
                                 onSlotLongClick = { slotId ->
                                     viewModel.openEditor(slotId)
-                                }
+                                },
+                                onWizardClick = { updateViewMode(FragmentViewMode.WIZARD) }
                             )
                         }
                     }

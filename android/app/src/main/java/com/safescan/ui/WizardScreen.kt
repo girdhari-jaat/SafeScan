@@ -57,7 +57,7 @@ fun WizardScreen(
     val scrollState = rememberScrollState()
 
     Scaffold(
-        containerColor = Color(0xFF121212)
+        containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -92,7 +92,7 @@ fun WizardScreen(
             // --- Page Size ---
             Text(
                 text = "Page Size",
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(bottom = 2.dp)
             )
@@ -120,7 +120,7 @@ fun WizardScreen(
             // --- Image Quality ---
             Text(
                 text = "Image Quality",
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(bottom = 2.dp)
             )
@@ -148,7 +148,7 @@ fun WizardScreen(
             // --- Warp Correction ---
             Text(
                 text = "Warp Correction",
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(bottom = 2.dp)
             )
@@ -177,7 +177,7 @@ fun WizardScreen(
             // --- Rotation ---
             Text(
                 text = "Rotation",
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(bottom = 2.dp)
             )
@@ -205,7 +205,7 @@ fun WizardScreen(
             // --- Filter Selector (Full Width but compact) ---
             Text(
                 text = "Processing Filter",
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(bottom = 2.dp)
             )
@@ -233,7 +233,7 @@ fun WizardScreen(
             // --- Flash Mode ---
             Text(
                 text = "Flash Mode",
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(bottom = 2.dp)
             )
@@ -261,7 +261,7 @@ fun WizardScreen(
             // --- Focus Mode ---
             Text(
                 text = "Focus Mode",
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(bottom = 2.dp)
             )
@@ -290,7 +290,7 @@ fun WizardScreen(
             // --- Advanced Preferences Checkboxes (2 Columns) ---
             Text(
                 text = "Advanced Preferences",
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(bottom = 2.dp)
             )
@@ -397,7 +397,7 @@ fun WizardScreen(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "Don't Show Again",
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onBackground,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -500,7 +500,7 @@ fun WizardSectionHeader(title: String) {
     Text(
         text = "▼ $title",
         style = MaterialTheme.typography.titleSmall.copy(
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onBackground,
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp
         ),
@@ -518,10 +518,14 @@ fun WizardSelectionButton(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(6.dp))
-            .background(if (selected) MaterialTheme.colorScheme.primary else Color(0xFF1E1E1E))
+            .background(
+                if (selected) MaterialTheme.colorScheme.primary 
+                else MaterialTheme.colorScheme.surfaceVariant
+            )
             .border(
                 width = 1.dp,
-                color = if (selected) MaterialTheme.colorScheme.primary else Color(0xFF333333),
+                color = if (selected) MaterialTheme.colorScheme.primary 
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
                 shape = RoundedCornerShape(6.dp)
             )
             .clickable { onClick() }
@@ -530,7 +534,8 @@ fun WizardSelectionButton(
     ) {
         Text(
             text = text,
-            color = if (selected) Color.White else Color(0xFFBBBBBB),
+            color = if (selected) MaterialTheme.colorScheme.onPrimary 
+                    else MaterialTheme.colorScheme.onSurface,
             fontSize = 11.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
             textAlign = TextAlign.Center,
