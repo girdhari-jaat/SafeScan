@@ -136,7 +136,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         .map { preferences -> preferences[PreferencesKeys.AUTO_ROTATION] ?: false }
 
     val defaultFilterFlow: Flow<String> = safeData
-        .map { preferences -> preferences[PreferencesKeys.DEFAULT_FILTER] ?: "original" }
+        .map { preferences -> preferences[PreferencesKeys.DEFAULT_FILTER] ?: "Original" }
 
     val uiLanguageFlow: Flow<String> = safeData
         .map { preferences -> preferences[PreferencesKeys.UI_LANGUAGE] ?: "en" }

@@ -395,7 +395,7 @@ class ScannerFragment : Fragment() {
                                         repo.setScannerMode(modeObj)
                                         repo.setPageSize(wizardPrefs.pageSize)
                                         repo.setHdMode(wizardPrefs.imageQuality)
-                                        repo.setDefaultFilter(wizardPrefs.filter.lowercase())
+                                        repo.setDefaultFilter(wizardPrefs.filter)
                                         repo.setShadowRemove(wizardPrefs.autoShadow)
                                         
                                         val flashObj = when (wizardPrefs.flash) {
@@ -888,7 +888,7 @@ class ScannerFragment : Fragment() {
                                 }
                             }
                             
-                            liveEdgeDetectionEngine.process(imageProxy, viewModel.documentScanner, viewModel.uiState.value.currentEngine) { corners ->
+                            liveEdgeDetectionEngine.process(imageProxy, viewModel.documentScanner, viewModel.uiState.value.currentEngine) { corners, sharpness ->
                                 val mappedPoints = if (corners != null && corners.isNotEmpty()) {
                                     mapPointsToPreviewView(corners, width, height, rotationDegrees)
                                 } else {
@@ -908,7 +908,7 @@ class ScannerFragment : Fragment() {
                                         isTargetLocked = false
                                     }
                                 }
-                                viewModel.onDocumentDetected(corners)
+                                viewModel.onDocumentDetected(corners, sharpness)
                             }
                         } catch (e: Exception) {
                             Log.e("ScannerFragment", "Live detection error", e)
@@ -917,7 +917,7 @@ class ScannerFragment : Fragment() {
                     } else {
                         imageProxy.close()
                         isTargetLocked = false
-                        viewModel.onDocumentDetected(null)
+                        viewModel.onDocumentDetected(null, 0.0)
                         activity?.runOnUiThread {
                             _binding?.overlayView?.updateCorners(null)
                         }

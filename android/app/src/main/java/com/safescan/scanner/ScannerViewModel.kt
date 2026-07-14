@@ -110,7 +110,7 @@ class ScannerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val defaultFilter: StateFlow<String> = settingsRepository.defaultFilterFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "original")
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Original")
 
     val uiLanguage: StateFlow<String> = settingsRepository.uiLanguageFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "en")
@@ -319,7 +319,7 @@ class ScannerViewModel @Inject constructor(
     private val STABILITY_TOLERANCE = 30.0
     var isFocusing = false
 
-    fun onDocumentDetected(points: List<com.safescan.domain.model.Point>?) {
+    fun onDocumentDetected(points: List<com.safescan.domain.model.Point>?, sharpness: Double = 0.0) {
         ScannerDebugLogger.logEnter("ScannerViewModel.onDocumentDetected")
         if (isFocusing) {
             ScannerDebugLogger.logExit("ScannerViewModel.onDocumentDetected")
@@ -361,8 +361,9 @@ class ScannerViewModel @Inject constructor(
 
         ScannerDebugLogger.logStability(stableFrameCount)
 
-        val trigger = stableFrameCount >= STABLE_FRAME_THRESHOLD
-        ScannerDebugLogger.logAutoCap(inBox = true, sharpness = 0.0, stable = stableFrameCount, trigger = trigger)
+        val isSharp = sharpness > 20.0
+        val trigger = stableFrameCount >= STABLE_FRAME_THRESHOLD && isSharp
+        ScannerDebugLogger.logAutoCap(inBox = true, sharpness = sharpness, stable = stableFrameCount, trigger = trigger)
 
         if (trigger) {
             stableFrameCount = 0

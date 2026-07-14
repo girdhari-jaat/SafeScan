@@ -213,7 +213,7 @@ fun WizardScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                val filters = listOf("Original", "Magic", "Paper", "B&W", "Color", "Card")
+                val filters = listOf("Original", "Magic", "Paper", "Card", "B&W", "Gray")
                 filters.forEach { f ->
                     val selected = filter.equals(f, ignoreCase = true)
                     WizardSelectionButton(
@@ -425,7 +425,7 @@ fun WizardScreen(
                             repo.setHdMode(imageQuality)
 
                             // 4. Filters & Shadow Removal
-                            repo.setDefaultFilter(filter.lowercase())
+                            repo.setDefaultFilter(filter)
                             repo.setShadowRemove(autoShadow)
 
                             // 5. Camera & Flash

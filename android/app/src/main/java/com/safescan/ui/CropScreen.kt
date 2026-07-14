@@ -80,111 +80,120 @@ fun CropScreen(viewModel: ScannerViewModel) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = {},
-                navigationIcon = {
-                    // IMPROVEMENT: Disabled cancel button when auto edge detection is running to prevent crash
-                    IconButton(
-                        enabled = !uiState.isAutoRunning,
-                        onClick = { viewModel.closeCrop(save = false) }
-                    ) {
-                        Icon(Icons.Default.ArrowBack, stringResource(id = R.string.cancel))
-                    }
-                },
-                actions = {
-                    // "Full" Button to select entire image frame
-                    TextButton(
-                        enabled = !uiState.isAutoRunning,
-                        onClick = {
-                            if (imageSize.width > 0 && imageSize.height > 0) {
-                                tl = Offset(0f, 0f)
-                                tr = Offset(imageSize.width.toFloat(), 0f)
-                                br = Offset(imageSize.width.toFloat(), imageSize.height.toFloat())
-                                bl = Offset(0f, imageSize.height.toFloat())
-                            }
-                        }
-                    ) {
-                        Text(stringResource(id = R.string.full), color = MaterialTheme.colorScheme.onPrimaryContainer)
-                    }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 1. Cancel
+                IconButton(
+                    modifier = Modifier.weight(1f),
+                    enabled = !uiState.isAutoRunning,
+                    onClick = { viewModel.closeCrop(save = false) }
+                ) {
+                    Icon(Icons.Default.ArrowBack, stringResource(id = R.string.cancel))
+                }
 
-                    // IMPROVEMENT: Added disabled states and a CircularProgressIndicator during Edge Detection run
-                    TextButton(
-                        enabled = !uiState.isAutoRunning,
-                        onClick = {
-                            val currentBmp = croppingBitmap
-                            if (imageSize.width > 0 && imageSize.height > 0 && currentBmp != null) {
-                                viewModel.detectEdges(currentBmp) { points ->
-                                    if (points != null && points.size == 4) {
-                                        val scaleX = imageSize.width.toFloat() / currentBmp.width.toFloat()
-                                        val scaleY = imageSize.height.toFloat() / currentBmp.height.toFloat()
-                                        tl = Offset((points[0].x * scaleX).toFloat(), (points[0].y * scaleY).toFloat())
-                                        tr = Offset((points[1].x * scaleX).toFloat(), (points[1].y * scaleY).toFloat())
-                                        br = Offset((points[2].x * scaleX).toFloat(), (points[2].y * scaleY).toFloat())
-                                        bl = Offset((points[3].x * scaleX).toFloat(), (points[3].y * scaleY).toFloat())
-                                    } else {
-                                        coroutineScope.launch {
-                                            snackbarHostState.showSnackbar(docNotFoundMsg)
-                                        }
+                // 2. Full
+                TextButton(
+                    modifier = Modifier.weight(1f),
+                    enabled = !uiState.isAutoRunning,
+                    onClick = {
+                        if (imageSize.width > 0 && imageSize.height > 0) {
+                            tl = Offset(0f, 0f)
+                            tr = Offset(imageSize.width.toFloat(), 0f)
+                            br = Offset(imageSize.width.toFloat(), imageSize.height.toFloat())
+                            bl = Offset(0f, imageSize.height.toFloat())
+                        }
+                    }
+                ) {
+                    Text(stringResource(id = R.string.full), color = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+
+                // 3. Auto
+                TextButton(
+                    modifier = Modifier.weight(1f),
+                    enabled = !uiState.isAutoRunning,
+                    onClick = {
+                        val currentBmp = croppingBitmap
+                        if (imageSize.width > 0 && imageSize.height > 0 && currentBmp != null) {
+                            viewModel.detectEdges(currentBmp) { points ->
+                                if (points != null && points.size == 4) {
+                                    val scaleX = imageSize.width.toFloat() / currentBmp.width.toFloat()
+                                    val scaleY = imageSize.height.toFloat() / currentBmp.height.toFloat()
+                                    tl = Offset((points[0].x * scaleX).toFloat(), (points[0].y * scaleY).toFloat())
+                                    tr = Offset((points[1].x * scaleX).toFloat(), (points[1].y * scaleY).toFloat())
+                                    br = Offset((points[2].x * scaleX).toFloat(), (points[2].y * scaleY).toFloat())
+                                    bl = Offset((points[3].x * scaleX).toFloat(), (points[3].y * scaleY).toFloat())
+                                } else {
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar(docNotFoundMsg)
                                     }
                                 }
                             }
                         }
-                    ) {
-                        if (uiState.isAutoRunning) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Text(stringResource(id = R.string.auto), color = MaterialTheme.colorScheme.onPrimaryContainer)
-                        }
                     }
-                    IconButton(
-                        enabled = !uiState.isAutoRunning,
-                        onClick = { 
-                            if (imageSize.width > 0 && imageSize.height > 0 && croppingBitmap != null) {
-                                val bmp = croppingBitmap!!
-                                val scaleX = bmp.width.toFloat() / imageSize.width
-                                val scaleY = bmp.height.toFloat() / imageSize.height
-                                
-                                // IMPROVEMENT: TASK 9 - Clamp all coordinates to image bounds to prevent IndexOutOfBounds
-                                val quad = Quadrilateral(
-                                    Point((tl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
-                                    Point((tr.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tr.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
-                                    Point((br.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (br.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
-                                    Point((bl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (bl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0))
-                                )
-                                viewModel.applyCrop(quad)
-                            }
-                        }
-                    ) {
-                        Icon(Icons.Default.Check, stringResource(id = R.string.save))
-                    }
-
-                    // "Next" Button after the check/save button to apply crop and proceed
-                    TextButton(
-                        enabled = !uiState.isAutoRunning,
-                        onClick = {
-                            if (imageSize.width > 0 && imageSize.height > 0 && croppingBitmap != null) {
-                                val bmp = croppingBitmap!!
-                                val scaleX = bmp.width.toFloat() / imageSize.width
-                                val scaleY = bmp.height.toFloat() / imageSize.height
-                                
-                                val quad = Quadrilateral(
-                                    Point((tl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
-                                    Point((tr.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tr.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
-                                    Point((br.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (br.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
-                                    Point((bl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (bl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0))
-                                )
-                                viewModel.applyCrop(quad, andNext = true)
-                            }
-                        }
-                    ) {
-                        Text(stringResource(id = R.string.next), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
+                ) {
+                    if (uiState.isAutoRunning) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(stringResource(id = R.string.auto), color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                 }
-            )
+
+                // 4. Save
+                IconButton(
+                    modifier = Modifier.weight(1f),
+                    enabled = !uiState.isAutoRunning,
+                    onClick = { 
+                        if (imageSize.width > 0 && imageSize.height > 0 && croppingBitmap != null) {
+                            val bmp = croppingBitmap!!
+                            val scaleX = bmp.width.toFloat() / imageSize.width
+                            val scaleY = bmp.height.toFloat() / imageSize.height
+                            
+                            val quad = Quadrilateral(
+                                Point((tl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                                Point((tr.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tr.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                                Point((br.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (br.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                                Point((bl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (bl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0))
+                            )
+                            viewModel.applyCrop(quad)
+                        }
+                    }
+                ) {
+                    Icon(Icons.Default.Check, stringResource(id = R.string.save))
+                }
+
+                // 5. Next
+                TextButton(
+                    modifier = Modifier.weight(1f),
+                    enabled = !uiState.isAutoRunning,
+                    onClick = {
+                        if (imageSize.width > 0 && imageSize.height > 0 && croppingBitmap != null) {
+                            val bmp = croppingBitmap!!
+                            val scaleX = bmp.width.toFloat() / imageSize.width
+                            val scaleY = bmp.height.toFloat() / imageSize.height
+                            
+                            val quad = Quadrilateral(
+                                Point((tl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                                Point((tr.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tr.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                                Point((br.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (br.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                                Point((bl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (bl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0))
+                            )
+                            viewModel.applyCrop(quad, andNext = true)
+                        }
+                    }
+                ) {
+                    Text(stringResource(id = R.string.next), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
+                }
+            }
         }
     ) { padding ->
         Box(
@@ -198,20 +207,28 @@ fun CropScreen(viewModel: ScannerViewModel) {
                         var draggingHandle by remember { mutableStateOf<String?>(null) }
                     var dragOffset by remember { mutableStateOf(Offset.Zero) }
 
-                    Box(
+                    BoxWithConstraints(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(bmp.width.toFloat() / bmp.height.toFloat())
-                            .onGloballyPositioned { coordinates ->
-                                imageSize = coordinates.size
-                            }
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Image(
-                            bitmap = bmp.asImageBitmap(),
-                            contentDescription = "Crop Image",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Fit
-                        )
+                        val screenRatio = maxWidth.value / maxHeight.value
+                        val imgRatio = bmp.width.toFloat() / bmp.height.toFloat()
+
+                        Box(
+                            modifier = Modifier
+                                .aspectRatio(imgRatio, matchHeightConstraintsFirst = imgRatio < screenRatio)
+                                .onGloballyPositioned { coordinates ->
+                                    imageSize = coordinates.size
+                                }
+                        ) {
+                            Image(
+                                bitmap = bmp.asImageBitmap(),
+                                contentDescription = "Crop Image",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.FillBounds
+                            )
 
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             val path = Path().apply {
@@ -474,7 +491,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
                                 }
                             }
                         }
-                }
+                    }
             }
         }
     }

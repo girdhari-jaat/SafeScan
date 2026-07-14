@@ -9,6 +9,9 @@ import org.opencv.core.MatOfPoint
 import org.opencv.core.MatOfPoint2f
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
+import org.opencv.core.CvType
+import org.opencv.core.MatOfDouble
+import org.opencv.core.Core
 import com.safescan.core.ScannerDebugLogger
 
 class LiveEdgeDetectionEngine {
@@ -63,7 +66,7 @@ class LiveEdgeDetectionEngine {
         imageProxy: ImageProxy, 
         documentScanner: DocumentScanner?, 
         engineType: ScannerEngineType, 
-        onResult: (List<Point>?) -> Unit
+        onResult: (List<Point>?, Double) -> Unit
     ) = synchronized(this) {
         ScannerDebugLogger.logEnter("LiveEdgeDetectionEngine.process")
         initMatsIfNeeded()
@@ -77,6 +80,19 @@ class LiveEdgeDetectionEngine {
             }
             
             var foundCorners: List<Point>? = null
+            var sharpness = 0.0
+
+            // Common processing for both ML and OpenCV (needed for sharpness)
+            Utils.bitmapToMat(bitmap, src!!)
+            val resizeRatio = 400.0 / Math.max(src!!.width(), src!!.height())
+            if (resizeRatio < 1.0) {
+                Imgproc.resize(src!!, resized!!, Size(src!!.width() * resizeRatio, src!!.height() * resizeRatio))
+            } else {
+                src!!.copyTo(resized!!)
+            }
+            Imgproc.cvtColor(resized!!, gray!!, Imgproc.COLOR_RGBA2GRAY)
+            
+            sharpness = calculateSharpness(gray!!)
             
             if (engineType == ScannerEngineType.LOCAL_ML) {
                 // 1. Try TFLite ML first
@@ -93,19 +109,6 @@ class LiveEdgeDetectionEngine {
                 }
             } else {
                 // 2. Use OpenCV directly
-                Utils.bitmapToMat(bitmap, src!!)
-                
-                // Fast downscale for live detection (much faster FPS)
-                val resizeRatio = 400.0 / Math.max(src!!.width(), src!!.height())
-                if (resizeRatio < 1.0) {
-                    Imgproc.resize(src!!, resized!!, Size(src!!.width() * resizeRatio, src!!.height() * resizeRatio))
-                } else {
-                    src!!.copyTo(resized!!)
-                }
-                
-                // Convert to grayscale
-                Imgproc.cvtColor(resized!!, gray!!, Imgproc.COLOR_RGBA2GRAY)
-                
                 // Gaussian blur is faster for live preview and provides good edge smoothing
                 Imgproc.GaussianBlur(gray!!, blurred!!, Size(5.0, 5.0), 0.0)
                 
@@ -212,7 +215,7 @@ class LiveEdgeDetectionEngine {
                 }
             }
             
-            onResult(foundCorners)
+            onResult(foundCorners, sharpness)
         } catch (e: Throwable) {
             ScannerDebugLogger.logError("LiveEdge", "Live edge detection processing error", e)
         } finally {
@@ -231,6 +234,20 @@ class LiveEdgeDetectionEngine {
             }
             ScannerDebugLogger.logExit("LiveEdgeDetectionEngine.process")
         }
+    }
+
+    private fun calculateSharpness(mat: Mat): Double {
+        val laplacian = Mat()
+        Imgproc.Laplacian(mat, laplacian, CvType.CV_64F)
+        val mean = MatOfDouble()
+        val stddev = MatOfDouble()
+        Core.meanStdDev(laplacian, mean, stddev)
+        val stddevVal = stddev.get(0, 0)[0]
+        val variance = stddevVal * stddevVal
+        laplacian.release()
+        mean.release()
+        stddev.release()
+        return variance
     }
 
     private fun getExtremePoints(contour: MatOfPoint): List<Point> {

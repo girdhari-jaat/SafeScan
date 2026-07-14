@@ -684,12 +684,11 @@ fun FilterItem(
 ) {
     val displayName = when (filterType) {
         FilterType.COLOR -> "Original"
-        FilterType.AUTO -> "Auto"
-        FilterType.GRAYSCALE -> "Grayscale"
-        FilterType.BLACK_WHITE -> "B&W"
         FilterType.MAGIC_COLOR -> "Magic"
-        FilterType.PHOTO -> "Photo"
+        FilterType.PAPER -> "Paper"
         FilterType.CARD -> "Card"
+        FilterType.BLACK_WHITE -> "B&W"
+        FilterType.GRAYSCALE -> "Gray"
     }
 
     Box(

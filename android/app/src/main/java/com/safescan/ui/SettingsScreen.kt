@@ -181,17 +181,17 @@ fun SettingsScreen(
                             SettingsClickItem(
                                 icon = Icons.Default.FilterBAndW,
                                 title = "Default Filter",
-                                subtitle = defaultFilter.replaceFirstChar { it.uppercase() },
+                                subtitle = defaultFilter,
                                 onClick = { filterExpanded = true }
                             ) {
                                 DropdownMenu(
                                     expanded = filterExpanded,
                                     onDismissRequest = { filterExpanded = false }
                                 ) {
-                                    val filters = listOf("original", "magic", "grayscale", "threshold")
+                                    val filters = listOf("Original", "Magic", "Paper", "Card", "B&W", "Gray")
                                     filters.forEach { filter ->
                                         DropdownMenuItem(
-                                            text = { Text(filter.replaceFirstChar { it.uppercase() }) },
+                                            text = { Text(filter) },
                                             onClick = {
                                                 viewModel.setDefaultFilter(filter)
                                                 filterExpanded = false

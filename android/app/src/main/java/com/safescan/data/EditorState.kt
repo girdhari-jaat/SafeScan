@@ -1,6 +1,6 @@
 package com.safescan.data
 
-enum class FilterType { COLOR, GRAYSCALE, BLACK_WHITE, MAGIC_COLOR, PHOTO, AUTO, CARD }
+enum class FilterType { COLOR, MAGIC_COLOR, PAPER, CARD, BLACK_WHITE, GRAYSCALE }
 
 data class EditorState(
     val brightness: Float = 0f,
