@@ -8,7 +8,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -67,27 +66,6 @@ fun WizardScreen(
                 .verticalScroll(scrollState)
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
-            // Compact close button at the top-right
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
-                        tint = Color.Gray,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -318,60 +296,68 @@ fun WizardScreen(
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    WizardCheckboxItem(
-                        text = "Live Edge",
-                        checked = liveEdge,
-                        onCheckedChange = {
-                            liveEdge = it
-                            wizardPrefs.liveEdge = it
-                        }
-                    )
-                    WizardCheckboxItem(
-                        text = "Auto Crop",
-                        checked = autoCrop,
-                        onCheckedChange = {
-                            autoCrop = it
-                            wizardPrefs.autoCrop = it
-                        }
-                    )
-                    WizardCheckboxItem(
-                        text = "Manual Crop",
-                        checked = manualCrop,
-                        onCheckedChange = {
-                            manualCrop = it
-                            wizardPrefs.manualCrop = it
-                        }
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    WizardCheckboxItem(
-                        text = "Auto Capture",
-                        checked = autoCapture,
-                        onCheckedChange = {
-                            autoCapture = it
-                            wizardPrefs.autoCapture = it
-                        }
-                    )
-                    WizardCheckboxItem(
-                        text = "Shadow Remove",
-                        checked = autoShadow,
-                        onCheckedChange = {
-                            autoShadow = it
-                            wizardPrefs.autoShadow = it
-                        }
-                    )
-                    WizardCheckboxItem(
-                        text = "Batch Mode",
-                        checked = batchMode,
-                        onCheckedChange = {
-                            batchMode = it
-                            wizardPrefs.batchMode = it
-                        }
-                    )
-                }
+                WizardSelectionButton(
+                    text = "Live Edge",
+                    selected = liveEdge,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        liveEdge = !liveEdge
+                        wizardPrefs.liveEdge = liveEdge
+                    }
+                )
+                WizardSelectionButton(
+                    text = "Auto Capture",
+                    selected = autoCapture,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        autoCapture = !autoCapture
+                        wizardPrefs.autoCapture = autoCapture
+                    }
+                )
+                WizardSelectionButton(
+                    text = "Auto Crop",
+                    selected = autoCrop,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        autoCrop = !autoCrop
+                        wizardPrefs.autoCrop = autoCrop
+                    }
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                WizardSelectionButton(
+                    text = "Shadow Remove",
+                    selected = autoShadow,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        autoShadow = !autoShadow
+                        wizardPrefs.autoShadow = autoShadow
+                    }
+                )
+                WizardSelectionButton(
+                    text = "Manual Crop",
+                    selected = manualCrop,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        manualCrop = !manualCrop
+                        wizardPrefs.manualCrop = manualCrop
+                    }
+                )
+                WizardSelectionButton(
+                    text = "Batch Mode",
+                    selected = batchMode,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        batchMode = !batchMode
+                        wizardPrefs.batchMode = batchMode
+                    }
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -445,12 +431,12 @@ fun WizardScreen(
                             // 5. Camera & Flash
                             val flashObj = when (flash) {
                                 "Auto" -> FlashMode.AUTO
-                                "On" -> FlashMode.TORCH
+                                "On" -> FlashMode.ON
                                 "Torch" -> FlashMode.TORCH
                                 else -> FlashMode.OFF
                             }
                             repo.setFlashMode(flashObj)
-                            repo.setFlashOn(flash == "On" || flash == "Torch")
+                            repo.setFlashOn(flash == "Torch")
 
                             // 6. Focus Mode
                             repo.setDoubleFocus(focusMode == "Double Tap")
@@ -549,37 +535,6 @@ fun WizardSelectionButton(
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
             textAlign = TextAlign.Center,
             maxLines = 1
-        )
-    }
-}
-
-@Composable
-fun WizardCheckboxItem(
-    text: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Checkbox(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = CheckboxDefaults.colors(
-                checkedColor = MaterialTheme.colorScheme.primary,
-                uncheckedColor = Color.Gray,
-                checkmarkColor = Color.White
-            )
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = text,
-            color = Color.White,
-            fontSize = 13.sp
         )
     }
 }

@@ -400,12 +400,12 @@ class ScannerFragment : Fragment() {
                                         
                                         val flashObj = when (wizardPrefs.flash) {
                                             "Auto" -> com.safescan.data.FlashMode.AUTO
-                                            "On" -> com.safescan.data.FlashMode.TORCH
+                                            "On" -> com.safescan.data.FlashMode.ON
                                             "Torch" -> com.safescan.data.FlashMode.TORCH
                                             else -> com.safescan.data.FlashMode.OFF
                                         }
                                         repo.setFlashMode(flashObj)
-                                        repo.setFlashOn(wizardPrefs.flash == "On" || wizardPrefs.flash == "Torch")
+                                        repo.setFlashOn(wizardPrefs.flash == "Torch")
                                         
                                         repo.setDoubleFocus(wizardPrefs.focusMode == "Double Tap")
                                         repo.setLiveDetect(wizardPrefs.liveEdge)
@@ -1223,7 +1223,8 @@ class ScannerFragment : Fragment() {
                     }
                     imageCapture?.flashMode = when (mode) {
                         com.safescan.data.FlashMode.AUTO -> ImageCapture.FLASH_MODE_AUTO
-                        com.safescan.data.FlashMode.TORCH -> ImageCapture.FLASH_MODE_ON
+                        com.safescan.data.FlashMode.ON -> ImageCapture.FLASH_MODE_ON
+                        com.safescan.data.FlashMode.TORCH -> ImageCapture.FLASH_MODE_OFF // Torch uses cameraControl
                         else -> ImageCapture.FLASH_MODE_OFF
                     }
                     _binding?.btnFlash?.alpha = if (mode != com.safescan.data.FlashMode.OFF) 1.0f else 0.5f

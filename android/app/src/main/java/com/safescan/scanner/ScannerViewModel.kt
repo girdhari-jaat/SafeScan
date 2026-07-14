@@ -450,7 +450,8 @@ class ScannerViewModel @Inject constructor(
         viewModelScope.launch {
             val nextMode = when (flashMode.value) {
                 com.safescan.data.FlashMode.OFF -> com.safescan.data.FlashMode.AUTO
-                com.safescan.data.FlashMode.AUTO -> com.safescan.data.FlashMode.TORCH
+                com.safescan.data.FlashMode.AUTO -> com.safescan.data.FlashMode.ON
+                com.safescan.data.FlashMode.ON -> com.safescan.data.FlashMode.TORCH
                 com.safescan.data.FlashMode.TORCH -> com.safescan.data.FlashMode.OFF
             }
             settingsRepository.setFlashMode(nextMode)

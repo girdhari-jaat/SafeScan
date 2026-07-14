@@ -116,7 +116,7 @@ fun SlotsScreen(
                         )
                     ) {
                         Icon(
-                            imageVector = when(flashMode) { com.safescan.data.FlashMode.AUTO -> Icons.Default.FlashAuto; com.safescan.data.FlashMode.TORCH -> Icons.Default.FlashOn; else -> Icons.Default.FlashOff },
+                            imageVector = when(flashMode) { com.safescan.data.FlashMode.AUTO -> Icons.Default.FlashAuto; com.safescan.data.FlashMode.ON -> Icons.Default.FlashOn; com.safescan.data.FlashMode.TORCH -> Icons.Default.FlashOn; else -> Icons.Default.FlashOff },
                             contentDescription = "Toggle Flash",
                             tint = Color.White,
                             modifier = Modifier.size(18.dp)
