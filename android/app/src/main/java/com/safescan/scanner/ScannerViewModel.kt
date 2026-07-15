@@ -631,13 +631,6 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    fun setJpegQuality(value: Float) {
-        viewModelScope.launch {
-            settingsRepository.setJpegQuality(value)
-            DiagnosticsLogger.info("JPEG Quality set to: $value")
-        }
-    }
-
     fun saveImageToGallery(context: android.content.Context, bitmap: Bitmap) {
         viewModelScope.launch(Dispatchers.IO) {
             val resolver = context.contentResolver
