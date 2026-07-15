@@ -86,7 +86,7 @@ class ScannerFragment : Fragment() {
     override fun onPause() {
         super.onPause()
         cameraProvider?.unbindAll() // Stop live camera
-        imageAnalysis?.setAnalyzer(cameraExecutor, null) // Stop live analysis
+        imageAnalysis?.clearAnalyzer() // Stop live analysis
     }
 
     private val requestPermissionLauncher = registerForActivityResult(
