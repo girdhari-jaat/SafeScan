@@ -83,42 +83,69 @@ fun DocumentGridView(
                 tonalElevation = 8.dp,
                 shadowElevation = 8.dp
             ) {
-                Button(
-                    onClick = {
-                        onDismiss()
-                        viewModel.exportPdf(context) { file ->
-                            if (file != null) {
-                                try {
-                                    val uri = androidx.core.content.FileProvider.getUriForFile(
-                                        context,
-                                        "${context.packageName}.fileprovider",
-                                        file
-                                    )
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                        type = "application/pdf"
-                                        putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    }
-                                    context.startActivity(android.content.Intent.createChooser(intent, context.getString(R.string.export_share_pdf)))
-                                } catch (e: Exception) {
-                                    android.widget.Toast.makeText(context, "Sharing error", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            } else {
-                                if (!viewModel.autoPdf.value) {
-                                    android.widget.Toast.makeText(context, "Document saved to Library", android.widget.Toast.LENGTH_SHORT).show()
-                                } else {
-                                    android.widget.Toast.makeText(context, "Export Failed", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        }
-                    },
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp)
-                        .height(52.dp),
-                    shape = RoundedCornerShape(12.dp)
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("COMPILE PDF DOCUMENT", fontWeight = FontWeight.Black, fontSize = 14.sp)
+                    OutlinedButton(
+                        onClick = {
+                            onDismiss()
+                            viewModel.saveDocumentOnly { success ->
+                                if (success) {
+                                    android.widget.Toast.makeText(context, "Document saved offline", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    android.widget.Toast.makeText(context, "Failed to save", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("SAVE DOCUMENT", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+
+                    Button(
+                        onClick = {
+                            onDismiss()
+                            viewModel.exportPdf(context) { file ->
+                                viewModel.endSession()
+                                if (file != null) {
+                                    try {
+                                        val uri = androidx.core.content.FileProvider.getUriForFile(
+                                            context,
+                                            "${context.packageName}.fileprovider",
+                                            file
+                                        )
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                            type = "application/pdf"
+                                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(android.content.Intent.createChooser(intent, context.getString(R.string.export_share_pdf)))
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(context, "Sharing error", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                } else {
+                                    if (!viewModel.autoPdf.value) {
+                                        android.widget.Toast.makeText(context, "Document saved to Library", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        android.widget.Toast.makeText(context, "Export Failed", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1.2f)
+                            .height(52.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("SHARE PDF", fontWeight = FontWeight.Black, fontSize = 12.sp)
+                    }
                 }
             }
         }

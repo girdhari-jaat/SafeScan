@@ -44,6 +44,7 @@ fun WizardScreen(
     val filter by viewModel.defaultFilter.collectAsState()
     val flashObj by viewModel.flashMode.collectAsState()
     val doubleFocus by viewModel.doubleFocusEnabled.collectAsState()
+    val focusModeSetting by viewModel.focusMode.collectAsState()
     val liveEdge by viewModel.liveDetect.collectAsState()
     val autoCapture by viewModel.autoCapture.collectAsState()
     val autoCrop by viewModel.autoCrop.collectAsState()
@@ -65,7 +66,7 @@ fun WizardScreen(
         else -> "Off"
     }
 
-    val focusMode = if (doubleFocus) "Double Tap" else "Continuous"
+    val focusMode = focusModeSetting
 
     val scrollState = rememberScrollState()
 
@@ -291,14 +292,13 @@ fun WizardScreen(
             ) {
                 val focuses = listOf("Continuous", "Single", "Double")
                 focuses.forEach { foc ->
-                    val selected = if (foc == "Double") focusMode == "Double Tap" else focusMode == foc
+                    val selected = focusMode == foc
                     WizardSelectionButton(
                         text = foc,
                         selected = selected,
                         modifier = Modifier.weight(1f),
                         onClick = {
-                            val actualFocusValue = if (foc == "Double") "Double Tap" else foc
-                            viewModel.toggleDoubleFocus(actualFocusValue == "Double Tap")
+                            viewModel.setFocusMode(foc)
                         }
                     )
                 }

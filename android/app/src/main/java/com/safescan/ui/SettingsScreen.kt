@@ -241,6 +241,15 @@ fun SettingsScreen(
                                 onCheckedChange = { viewModel.toggleSaveJpg(it) }
                             )
 
+                            val autoPdf by viewModel.autoPdf.collectAsState()
+                            SettingsToggleItem(
+                                icon = Icons.Default.PictureAsPdf,
+                                title = "Auto PDF Compilation",
+                                description = "Automatically compile PDF when finishing document",
+                                checked = autoPdf,
+                                onCheckedChange = { viewModel.toggleAutoPdf(it) }
+                            )
+
                             val pageSize by viewModel.pageSize.collectAsState()
                             var sizeExpanded by remember { mutableStateOf(false) }
                             SettingsClickItem(

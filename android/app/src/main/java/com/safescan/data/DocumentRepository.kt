@@ -92,6 +92,16 @@ class DocumentRepository @Inject constructor(
         val previewsDir = File(docFolder, "previews")
         if (!previewsDir.exists()) previewsDir.mkdirs()
 
+        // Load existing metadata if any to preserve page edits!
+        val existingMetaFile = File(docFolder, "metadata.json")
+        val existingMeta = if (existingMetaFile.exists()) {
+            try {
+                parseDocumentMetadata(existingMetaFile.readText())
+            } catch (e: Exception) {
+                null
+            }
+        } else null
+
         val pagesMetaList = mutableListOf<PageMetadata>()
 
         for (page in pagesData) {
@@ -101,12 +111,21 @@ class DocumentRepository @Inject constructor(
             saveBitmapToFile(page.originalBitmap, origFile)
             saveBitmapToFile(page.previewBitmap, prevFile)
 
+            val existingPage = existingMeta?.pages?.find { it.id == page.id }
+
             pagesMetaList.add(
                 PageMetadata(
                     id = page.id,
                     originalFilename = "pages/${page.id}.jpg",
                     previewFilename = "previews/${page.id}.jpg",
-                    corners = page.corners
+                    filter = existingPage?.filter ?: "COLOR",
+                    brightness = existingPage?.brightness ?: 0f,
+                    contrast = existingPage?.contrast ?: 1.0f,
+                    sharpness = existingPage?.sharpness ?: 0f,
+                    saturation = existingPage?.saturation ?: 0f,
+                    rotation = existingPage?.rotation ?: 0,
+                    recognizedText = existingPage?.recognizedText,
+                    corners = page.corners ?: existingPage?.corners
                 )
             )
         }
@@ -114,7 +133,7 @@ class DocumentRepository @Inject constructor(
         val meta = DocumentMetadata(
             id = docId,
             title = title,
-            createdAt = System.currentTimeMillis(),
+            createdAt = existingMeta?.createdAt ?: System.currentTimeMillis(),
             mode = mode,
             pages = pagesMetaList
         )

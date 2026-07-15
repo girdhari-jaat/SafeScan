@@ -536,11 +536,11 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                                                     callback: WriteResultCallback?
                                                 ) {
                                                     try {
-                                                        val input = java.io.FileInputStream(file)
-                                                        val output = java.io.FileOutputStream(destination?.fileDescriptor)
-                                                        input.copyTo(output)
-                                                        input.close()
-                                                        output.close()
+                                                        java.io.FileInputStream(file).use { input ->
+                                                            java.io.FileOutputStream(destination?.fileDescriptor).use { output ->
+                                                                input.copyTo(output)
+                                                            }
+                                                        }
                                                         callback?.onWriteFinished(arrayOf(android.print.PageRange.ALL_PAGES))
                                                     } catch (e: Exception) {
                                                         callback?.onWriteFailed(e.message)

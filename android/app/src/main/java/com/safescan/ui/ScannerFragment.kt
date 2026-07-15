@@ -557,7 +557,7 @@ class ScannerFragment : Fragment() {
             }
         })
 
-        binding.previewView.setOnTouchListener { _, event ->
+         binding.previewView.setOnTouchListener { _, event ->
             scaleGestureDetector.onTouchEvent(event)
             if (scaleGestureDetector.isInProgress) {
                 return@setOnTouchListener true
@@ -566,22 +566,32 @@ class ScannerFragment : Fragment() {
                 val factory = binding.previewView.meteringPointFactory
                 val point = factory.createPoint(event.x, event.y)
                 
-                val doubleFocus = viewModel.doubleFocusEnabled.value
-                val action = if (doubleFocus) {
-                    val centerPoint = factory.createPoint(binding.previewView.width / 2f, binding.previewView.height / 2f)
-                    FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
-                        .addPoint(centerPoint, FocusMeteringAction.FLAG_AF)
-                        .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS)
-                        .build()
-                } else {
-                    FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF)
-                        .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS)
-                        .build()
+                val focusMode = viewModel.focusMode.value
+                val action = when (focusMode) {
+                    "Double" -> {
+                        val centerPoint = factory.createPoint(binding.previewView.width / 2f, binding.previewView.height / 2f)
+                        FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
+                            .addPoint(centerPoint, FocusMeteringAction.FLAG_AF)
+                            .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS)
+                            .build()
+                    }
+                    "Single" -> {
+                        FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF)
+                            .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS)
+                            .build()
+                    }
+                    else -> null
                 }
                 
-                cameraControl?.startFocusAndMetering(action)
-                if (doubleFocus) {
-                    Toast.makeText(requireContext(), "Dual-Point Focus Lock Active", Toast.LENGTH_SHORT).show()
+                if (action != null) {
+                    cameraControl?.startFocusAndMetering(action)
+                    if (focusMode == "Double") {
+                        Toast.makeText(requireContext(), "Dual-Point Focus Lock Active", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(requireContext(), "Single-Point Focus Lock Active", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(requireContext(), "Continuous Auto-Focus Active", Toast.LENGTH_SHORT).show()
                 }
                 return@setOnTouchListener true
             }
@@ -1286,6 +1296,13 @@ class ScannerFragment : Fragment() {
             liveEdgeDetectionEngine.release()
         } catch (e: Exception) {
             Log.e("ScannerFragment", "Failed to release liveEdgeDetectionEngine", e)
+        }
+        if (::cameraExecutor.isInitialized) {
+            try {
+                cameraExecutor.shutdown()
+            } catch (e: Exception) {
+                Log.e("ScannerFragment", "Failed to shutdown cameraExecutor", e)
+            }
         }
         _binding = null
         shutterSound?.release()

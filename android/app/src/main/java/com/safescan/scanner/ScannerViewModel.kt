@@ -51,10 +51,10 @@ class ScannerViewModel @Inject constructor(
     private val captureMutex = kotlinx.coroutines.sync.Mutex()
 
     val currentMode: StateFlow<ScannerMode> = settingsRepository.scannerModeFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ScannerMode.CARD)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ScannerMode.CARD)
         
     val autoCapture: StateFlow<Boolean> = settingsRepository.autoCaptureFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     fun toggleAutoCapture() {
         viewModelScope.launch {
@@ -63,97 +63,101 @@ class ScannerViewModel @Inject constructor(
     }
 
     val autoCrop: StateFlow<Boolean> = settingsRepository.autoCropFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
         
     val flashMode: StateFlow<com.safescan.data.FlashMode> = settingsRepository.flashModeFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.safescan.data.FlashMode.OFF)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, com.safescan.data.FlashMode.OFF)
 
     val flashOn: StateFlow<Boolean> = settingsRepository.flashOnFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
         
     val dpi: StateFlow<Float> = settingsRepository.dpiFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 300f)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 300f)
         
     val jpegQuality: StateFlow<Float> = settingsRepository.jpegQualityFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 80f)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 80f)
         
     val pdfFilename: StateFlow<String> = settingsRepository.pdfFilenameFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Scan_Document")
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "Scan_Document")
         
     val pageSize: StateFlow<String> = settingsRepository.pageSizeFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "A4")
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "A4")
 
     val pdfOrientation: StateFlow<String> = settingsRepository.pdfOrientationFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Auto")
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "Auto")
 
     val doubleFocusEnabled: StateFlow<Boolean> = settingsRepository.doubleFocusFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val focusMode: StateFlow<String> = settingsRepository.focusModeFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "Continuous")
 
     val saveJpg: StateFlow<Boolean> = settingsRepository.saveJpgFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val autoPdf: StateFlow<Boolean> = settingsRepository.autoPdfFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val batchScan: StateFlow<Boolean> = settingsRepository.batchScanFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val showGrid: StateFlow<Boolean> = settingsRepository.showGridFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val clickSound: StateFlow<Boolean> = settingsRepository.clickSoundFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val autoOrientation: StateFlow<Boolean> = settingsRepository.autoOrientationFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val shadowRemove: StateFlow<Boolean> = settingsRepository.shadowRemoveFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val autoRotation: StateFlow<Boolean> = settingsRepository.autoRotationFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val defaultFilter: StateFlow<String> = settingsRepository.defaultFilterFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Original")
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "Original")
 
     val uiLanguage: StateFlow<String> = settingsRepository.uiLanguageFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "en")
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "en")
 
     val vibrateOnCapture: StateFlow<Boolean> = settingsRepository.vibrateOnCaptureFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val saveToGallery: StateFlow<Boolean> = settingsRepository.saveToGalleryFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val liveDetect: StateFlow<Boolean> = settingsRepository.liveDetectFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val batterySaver: StateFlow<Boolean> = settingsRepository.batterySaverFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val usePhoneCamera: StateFlow<Boolean> = settingsRepository.usePhoneCameraFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val useNativeScanner: StateFlow<Boolean> = settingsRepository.useNativeScannerFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val hdMode: StateFlow<String> = settingsRepository.hdModeFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Standard")
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "Standard")
 
     val wizardDontShowAgain: StateFlow<Boolean> = settingsRepository.wizardDontShowAgainFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val wizardWarp: StateFlow<String> = settingsRepository.wizardWarpFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Perspective")
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "Perspective")
 
     val wizardRotation: StateFlow<String> = settingsRepository.wizardRotationFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Auto")
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "Auto")
 
     val wizardManualCrop: StateFlow<Boolean> = settingsRepository.wizardManualCropFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val capturedJpgFiles = androidx.compose.runtime.mutableStateListOf<java.io.File>()
     var openedDocumentId: String? = null
+    private var initialDocumentTitle: String? = null
     val originalJpgBitmaps = mutableMapOf<Int, Bitmap>()
     val jpgCorners = mutableMapOf<Int, List<com.safescan.domain.model.Point>>()
 
@@ -270,6 +274,25 @@ class ScannerViewModel @Inject constructor(
             resolved = resolved.replace("Date+Time", timestamp, ignoreCase = true)
         }
         return resolved
+    }
+
+    private fun getOrGenerateDocumentTitle(docId: String?): String {
+        // 1. If we have an initialDocumentTitle stored, return it
+        initialDocumentTitle?.let { return it }
+
+        // 2. If the document is already in savedDocuments, use its title
+        if (docId != null) {
+            val savedDoc = savedDocuments.value.find { it.id == docId }
+            if (savedDoc != null) {
+                initialDocumentTitle = savedDoc.title
+                return savedDoc.title
+            }
+        }
+
+        // 3. Otherwise, generate a new dynamic filename and cache it in initialDocumentTitle
+        val newTitle = resolveDynamicFilename(pdfFilename.value, currentMode.value)
+        initialDocumentTitle = newTitle
+        return newTitle
     }
 
     val slots: MutableStateFlow<List<Slot>> = MutableStateFlow(emptyList())
@@ -520,6 +543,13 @@ class ScannerViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.setDoubleFocus(enabled)
             DiagnosticsLogger.info("Double Focus toggled: $enabled")
+        }
+    }
+
+    fun setFocusMode(mode: String) {
+        viewModelScope.launch {
+            settingsRepository.setFocusMode(mode)
+            DiagnosticsLogger.info("Focus Mode set to: $mode")
         }
     }
 
@@ -775,6 +805,11 @@ class ScannerViewModel @Inject constructor(
 
     fun captureToSlot(bitmap: Bitmap, slotId: String, isCapture: Boolean = false, corners: List<Point>? = null) {
         DiagnosticsLogger.info("Processing captured image for slot $slotId...")
+        if (openedDocumentId == null) {
+            openedDocumentId = "doc_" + System.currentTimeMillis()
+        }
+        val docId = openedDocumentId!!
+
         val currentSlots = slots.value.toMutableList()
         val index = currentSlots.indexOfFirst { it.id == slotId }
         if (index != -1) {
@@ -819,6 +854,58 @@ class ScannerViewModel @Inject constructor(
                     e.printStackTrace()
                 }
             }
+
+            // Auto-save the document state offline immediately to ensure persistent metadata.json exists
+            saveDocumentStateOffline(docId)
+        }
+    }
+
+    private fun saveDocumentStateOffline(docId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val title = getOrGenerateDocumentTitle(docId)
+                val tempBitmapsToRecycle = mutableListOf<Bitmap>()
+                val pagesData = if (capturedJpgFiles.isNotEmpty()) {
+                    capturedJpgFiles.mapIndexed { idx, file ->
+                        val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                        if (bmp != null) {
+                            tempBitmapsToRecycle.add(bmp)
+                        }
+                        val originalBmp = originalJpgBitmaps[idx] ?: bmp
+                        val corners = jpgCorners[idx]
+                        com.safescan.data.PageSaveData("p$idx", originalBmp, bmp, corners)
+                    }
+                } else {
+                    slots.value.filter { it.bitmap != null }.map { slot ->
+                        val fullResProcessed = getFullResBitmap(slot.id, isOriginal = false) ?: slot.bitmap!!
+                        val fullResOriginal = getFullResBitmap(slot.id, isOriginal = true) ?: fullResProcessed
+                        
+                        com.safescan.data.PageSaveData(
+                            id = slot.id,
+                            originalBitmap = fullResOriginal,
+                            previewBitmap = fullResProcessed,
+                            corners = slot.corners
+                        )
+                    }
+                }
+                
+                if (pagesData.isNotEmpty()) {
+                    documentRepository.saveDocument(docId, title, currentMode.value.name, pagesData)
+                    reloadSavedDocuments()
+                }
+                
+                for (bmp in tempBitmapsToRecycle) {
+                    if (!bmp.isRecycled) {
+                        val isOriginal = originalJpgBitmaps.values.any { it === bmp } || 
+                                         slots.value.any { it.bitmap === bmp }
+                        if (!isOriginal) {
+                            bmp.recycle()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                DiagnosticsLogger.error("Error auto-saving document: ${e.message}")
+            }
         }
     }
 
@@ -840,6 +927,8 @@ class ScannerViewModel @Inject constructor(
                 } catch (e: Exception) {}
                 capturedJpgFiles.removeAt(index)
             }
+
+            openedDocumentId?.let { saveDocumentStateOffline(it) }
         }
         if (selectedSlotId.value == slotId) {
             selectedSlotId.value = null
@@ -867,13 +956,37 @@ class ScannerViewModel @Inject constructor(
                 )
                 slots.value = currentSlots
             }
+
+            openedDocumentId?.let { saveDocumentStateOffline(it) }
         }
         checkIfEmptyAndDelete()
     }
 
+    fun endSession() {
+        val mode = currentMode.value
+        slots.value = when (mode) {
+            com.safescan.data.ScannerMode.CARD -> listOf(
+                com.safescan.data.Slot("front", "Front"),
+                com.safescan.data.Slot("back", "Back")
+            )
+            com.safescan.data.ScannerMode.DOCUMENT -> emptyList()
+            com.safescan.data.ScannerMode.GRID -> (1..8).map {
+                com.safescan.data.Slot(it.toString(), "Slot $it")
+            }
+        }
+        selectedSlotId.value = null
+        openedDocumentId = null
+        initialDocumentTitle = null
+        isDocumentOpenedFromLibrary.value = false
+        capturedJpgFiles.clear()
+        originalJpgBitmaps.clear()
+        jpgCorners.clear()
+        DiagnosticsLogger.info("Session ended. All slots and temporary images cleared for a new document.")
+    }
+
     private fun checkIfEmptyAndDelete() {
         val pagesCount = if (capturedJpgFiles.isNotEmpty()) capturedJpgFiles.size else slots.value.count { it.bitmap != null }
-        if (pagesCount == 0 && isDocumentOpenedFromLibrary.value) {
+        if (pagesCount == 0) {
             openedDocumentId?.let { docId ->
                 deleteDocument(docId)
                 isDocumentOpenedFromLibrary.value = false
@@ -1247,11 +1360,10 @@ class ScannerViewModel @Inject constructor(
             try {
                 // Also save the captured pages and metadata persistently as a document
                 val docId = openedDocumentId ?: ("doc_" + System.currentTimeMillis())
-                val title = if (openedDocumentId != null) {
-                    savedDocuments.value.find { it.id == docId }?.title ?: resolveDynamicFilename(pdfFilename.value, currentMode.value)
-                } else {
-                    resolveDynamicFilename(pdfFilename.value, currentMode.value)
+                if (openedDocumentId == null) {
+                    openedDocumentId = docId
                 }
+                val title = getOrGenerateDocumentTitle(docId)
                 val pagesData = if (capturedJpgFiles.isNotEmpty()) {
                     capturedJpgFiles.mapIndexed { idx, file ->
                         val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
@@ -1341,9 +1453,80 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    fun saveDocumentOnly(onResult: (Boolean) -> Unit) {
+        DiagnosticsLogger.info("Starting offline Document save pipeline...")
+        val tempBitmapsToRecycle = mutableListOf<Bitmap>()
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val docId = openedDocumentId ?: ("doc_" + System.currentTimeMillis())
+                if (openedDocumentId == null) {
+                    openedDocumentId = docId
+                }
+                val title = getOrGenerateDocumentTitle(docId)
+                val pagesData = if (capturedJpgFiles.isNotEmpty()) {
+                    capturedJpgFiles.mapIndexed { idx, file ->
+                        val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                        if (bmp != null) {
+                            tempBitmapsToRecycle.add(bmp)
+                        }
+                        val originalBmp = originalJpgBitmaps[idx] ?: bmp
+                        val corners = jpgCorners[idx]
+                        com.safescan.data.PageSaveData("p$idx", originalBmp, bmp, corners)
+                    }
+                } else {
+                    slots.value.filter { it.bitmap != null }.map { slot ->
+                        val fullResProcessed = getFullResBitmap(slot.id, isOriginal = false) ?: slot.bitmap!!
+                        val fullResOriginal = getFullResBitmap(slot.id, isOriginal = true) ?: fullResProcessed
+                        
+                        com.safescan.data.PageSaveData(
+                            id = slot.id,
+                            originalBitmap = fullResOriginal,
+                            previewBitmap = fullResProcessed,
+                            corners = slot.corners
+                        )
+                    }
+                }
+                
+                if (pagesData.isNotEmpty()) {
+                    documentRepository.saveDocument(docId, title, currentMode.value.name, pagesData)
+                    DiagnosticsLogger.info("Saved document meta of ${pagesData.size} pages securely offline.")
+                    reloadSavedDocuments()
+                    withContext(Dispatchers.Main) {
+                        endSession()
+                        onResult(true)
+                    }
+                } else {
+                    documentRepository.deleteDocument(docId)
+                    reloadSavedDocuments()
+                    withContext(Dispatchers.Main) {
+                        endSession()
+                        onResult(false)
+                    }
+                }
+            } catch (e: Exception) {
+                DiagnosticsLogger.error("Document Save Only error: ${e.message}")
+                withContext(Dispatchers.Main) {
+                    onResult(false)
+                }
+            } finally {
+                for (bmp in tempBitmapsToRecycle) {
+                    if (!bmp.isRecycled) {
+                        val isOriginal = originalJpgBitmaps.values.any { it === bmp } || 
+                                         slots.value.any { it.bitmap === bmp }
+                        if (!isOriginal) {
+                            bmp.recycle()
+                        }
+                    }
+                }
+                tempBitmapsToRecycle.clear()
+            }
+        }
+    }
+
     fun loadDocumentIntoSlots(doc: com.safescan.data.DocumentMetadata) {
         isDocumentOpenedFromLibrary.value = true
         openedDocumentId = doc.id
+        initialDocumentTitle = doc.title
         capturedJpgFiles.clear()
         originalJpgBitmaps.clear()
         jpgCorners.clear()
@@ -1401,6 +1584,9 @@ class ScannerViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             documentRepository.renameDocument(docId, newTitle)
             reloadSavedDocuments()
+            if (openedDocumentId == docId) {
+                initialDocumentTitle = newTitle
+            }
         }
     }
 
@@ -1612,6 +1798,8 @@ class ScannerViewModel @Inject constructor(
                 currentSlots.add(toIndex, slot)
                 slots.value = currentSlots
             }
+
+            openedDocumentId?.let { saveDocumentStateOffline(it) }
         }
     }
 
@@ -1621,6 +1809,8 @@ class ScannerViewModel @Inject constructor(
             val slot = currentSlots.removeAt(fromIndex)
             currentSlots.add(toIndex, slot)
             slots.value = currentSlots
+
+            openedDocumentId?.let { saveDocumentStateOffline(it) }
         }
     }
 }

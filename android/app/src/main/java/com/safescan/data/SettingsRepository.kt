@@ -28,6 +28,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         val PAGE_SIZE = stringPreferencesKey("page_size")
         val PDF_ORIENTATION = stringPreferencesKey("pdf_orientation")
         val DOUBLE_FOCUS = booleanPreferencesKey("double_focus")
+        val FOCUS_MODE = stringPreferencesKey("focus_mode")
         val SAVE_JPG = booleanPreferencesKey("save_jpg")
         val AUTO_PDF = booleanPreferencesKey("auto_pdf")
         val BATCH_SCAN = booleanPreferencesKey("batch_scan")
@@ -117,13 +118,23 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         .map { preferences -> preferences[PreferencesKeys.PDF_ORIENTATION] ?: "Auto" }
 
     val doubleFocusFlow: Flow<Boolean> = safeData
-        .map { preferences -> preferences[PreferencesKeys.DOUBLE_FOCUS] ?: false }
+        .map { preferences -> 
+            val mode = preferences[PreferencesKeys.FOCUS_MODE]
+            if (mode != null) {
+                mode == "Double"
+            } else {
+                preferences[PreferencesKeys.DOUBLE_FOCUS] ?: false
+            }
+        }
+
+    val focusModeFlow: Flow<String> = safeData
+        .map { preferences -> preferences[PreferencesKeys.FOCUS_MODE] ?: "Continuous" }
 
     val saveJpgFlow: Flow<Boolean> = safeData
         .map { preferences -> preferences[PreferencesKeys.SAVE_JPG] ?: false }
 
     val autoPdfFlow: Flow<Boolean> = safeData
-        .map { preferences -> preferences[PreferencesKeys.AUTO_PDF] ?: false }
+        .map { preferences -> preferences[PreferencesKeys.AUTO_PDF] ?: true }
 
     val batchScanFlow: Flow<Boolean> = safeData
         .map { preferences -> preferences[PreferencesKeys.BATCH_SCAN] ?: true }
@@ -239,6 +250,14 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     suspend fun setDoubleFocus(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.DOUBLE_FOCUS] = enabled
+            preferences[PreferencesKeys.FOCUS_MODE] = if (enabled) "Double" else "Continuous"
+        }
+    }
+
+    suspend fun setFocusMode(mode: String) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.FOCUS_MODE] = mode
+            preferences[PreferencesKeys.DOUBLE_FOCUS] = (mode == "Double")
         }
     }
 
