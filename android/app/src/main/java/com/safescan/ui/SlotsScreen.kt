@@ -76,8 +76,8 @@ fun SlotsScreen(
     var isSettingsPopoverOpen by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
-        // LAYER 1: Viewfinder Overlay Guides based on Selected Mood
-        ViewfinderOverlay(mode = currentMode, showGrid = showGrid, modifier = Modifier.fillMaxSize())
+        // LAYER 1: Viewfinder Overlay Guides based on Selected Mood - Temporary disabled
+        // ViewfinderOverlay(mode = currentMode, showGrid = showGrid, modifier = Modifier.fillMaxSize())
 
         // LAYER 2: Control Panel and Overlays
         Column(
@@ -263,7 +263,7 @@ fun SlotsScreen(
                             }
                         } else {
                             LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 items(slots) { slot ->
@@ -520,7 +520,7 @@ fun SlotsScreen(
                                 .verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(0.dp)
                         ) {
-                            PopoverToggleRow(
+                            /* PopoverToggleRow(
                                 icon = Icons.Default.Grid4x4,
                                 label = "Grid Lines",
                                 checked = showGrid,
@@ -537,7 +537,7 @@ fun SlotsScreen(
                                 label = "Live Detect",
                                 checked = liveDetect,
                                 onCheckedChange = { viewModel.toggleLiveDetect(it) }
-                            )
+                            ) */
                             PopoverToggleRow(
                                 icon = Icons.Default.CameraAlt,
                                 label = "Auto Capture",
