@@ -85,14 +85,14 @@ fun SlotsScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(16.dp),
+                .padding(start = 16.dp, end = 16.dp, bottom = 16.dp, top = 8.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             // A. TOP BAR
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
+                    .padding(top = 4.dp, bottom = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -104,7 +104,7 @@ fun SlotsScreen(
                     Icon(Icons.Default.ArrowBack, contentDescription = "Close Scanner", tint = Color.White)
                 }
 
-                // Center: Flash Toggle
+                // Center: Flash Toggle & Scan Mode Dropdown
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -122,6 +122,65 @@ fun SlotsScreen(
                             tint = Color.White,
                             modifier = Modifier.size(18.dp)
                         )
+                    }
+
+                    // Small dropdown list for changing the scan mood
+                    var isMoodMenuExpanded by remember { mutableStateOf(false) }
+                    val moodLabel = when (currentMode) {
+                        ScannerMode.DOCUMENT -> "Paper"
+                        ScannerMode.CARD -> "Card"
+                        ScannerMode.GRID -> "Grid"
+                    }
+
+                    Box {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color.Black.copy(alpha = 0.6f))
+                                .clickable { isMoodMenuExpanded = true }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = moodLabel,
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Scan Mood Dropdown",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = isMoodMenuExpanded,
+                            onDismissRequest = { isMoodMenuExpanded = false },
+                            modifier = Modifier.background(Color.DarkGray)
+                        ) {
+                            listOf(
+                                ScannerMode.DOCUMENT to "Paper",
+                                ScannerMode.CARD to "Card",
+                                ScannerMode.GRID to "Grid"
+                            ).forEach { (mode, label) ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = label,
+                                            color = if (currentMode == mode) MaterialTheme.colorScheme.primary else Color.White,
+                                            fontWeight = if (currentMode == mode) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    onClick = {
+                                        viewModel.switchMode(mode)
+                                        isMoodMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -220,50 +279,16 @@ fun SlotsScreen(
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                 }
 
-                // II. Selector Segmented Tab bar for modes ("Paper", "Card", "Grid")
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(24.dp))
-                            .padding(4.dp)
-                    ) {
-                        listOf(
-                            ScannerMode.DOCUMENT to "Paper",
-                            ScannerMode.CARD to "Card",
-                            ScannerMode.GRID to "Grid"
-                        ).forEach { (mode, label) ->
-                            val selected = currentMode == mode
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
-                                    .clickable { viewModel.switchMode(mode) }
-                                    .padding(horizontal = 16.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    text = label,
-                                    color = if (selected) Color.White else Color.LightGray,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                                )
-                            }
-                        }
-                    }
-                }
+
 
                 // III. Premium Camera Action Trigger buttons row
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp),
+                        .padding(start = 8.dp, end = 8.dp, top = 2.dp, bottom = 8.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
