@@ -24,6 +24,7 @@ import androidx.camera.core.CameraControl
 import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.FocusMeteringAction
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
@@ -839,7 +840,9 @@ class ScannerFragment : Fragment() {
                                     val bw = if (isRotated) height.toFloat() else width.toFloat()
                                     val bh = if (isRotated) width.toFloat() else height.toFloat()
                                     
-                                    val scale = maxOf(pw / bw, ph / bh)
+                                    val ratioW = pw / bw
+                                    val ratioH = ph / bh
+                                    val scale = if (ratioW > ratioH) ratioW else ratioH
                                     val scaledBw = bw * scale
                                     val scaledBh = bh * scale
                                     
