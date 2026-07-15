@@ -139,6 +139,18 @@ class ScannerViewModel @Inject constructor(
     val hdMode: StateFlow<String> = settingsRepository.hdModeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Standard")
 
+    val wizardDontShowAgain: StateFlow<Boolean> = settingsRepository.wizardDontShowAgainFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val wizardWarp: StateFlow<String> = settingsRepository.wizardWarpFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Perspective")
+
+    val wizardRotation: StateFlow<String> = settingsRepository.wizardRotationFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Auto")
+
+    val wizardManualCrop: StateFlow<Boolean> = settingsRepository.wizardManualCropFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val capturedJpgFiles = androidx.compose.runtime.mutableStateListOf<java.io.File>()
     var openedDocumentId: String? = null
     val originalJpgBitmaps = mutableMapOf<Int, Bitmap>()
@@ -614,6 +626,34 @@ class ScannerViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.setPdfFilename(value)
             DiagnosticsLogger.info("Default PDF filename set to: '$value'")
+        }
+    }
+
+    fun setWizardDontShowAgain(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setWizardDontShowAgain(enabled)
+            DiagnosticsLogger.info("Wizard Don't Show Again set to: $enabled")
+        }
+    }
+
+    fun setWizardWarp(warp: String) {
+        viewModelScope.launch {
+            settingsRepository.setWizardWarp(warp)
+            DiagnosticsLogger.info("Wizard Warp set to: $warp")
+        }
+    }
+
+    fun setWizardRotation(rotation: String) {
+        viewModelScope.launch {
+            settingsRepository.setWizardRotation(rotation)
+            DiagnosticsLogger.info("Wizard Rotation set to: $rotation")
+        }
+    }
+
+    fun setWizardManualCrop(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setWizardManualCrop(enabled)
+            DiagnosticsLogger.info("Wizard Manual Crop set to: $enabled")
         }
     }
     

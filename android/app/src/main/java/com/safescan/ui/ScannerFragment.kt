@@ -381,43 +381,8 @@ class ScannerFragment : Fragment() {
                             onStartScan = {
                                 viewModel.isDocumentOpenedFromLibrary.value = false
                                 viewModel.openedDocumentId = null
-                                val wizardPrefs = com.safescan.utils.WizardPrefs(requireContext())
-                                if (wizardPrefs.dontShowAgain) {
-                                    // Sync wizard preferences directly to settingsRepository and run scanner
-                                    viewLifecycleOwner.lifecycleScope.launch {
-                                        val repo = viewModel.settingsRepository
-                                        
-                                        val modeObj = when (wizardPrefs.scanType) {
-                                            "Card" -> com.safescan.data.ScannerMode.CARD
-                                            "Grid" -> com.safescan.data.ScannerMode.GRID
-                                            else -> com.safescan.data.ScannerMode.DOCUMENT
-                                        }
-                                        repo.setScannerMode(modeObj)
-                                        repo.setPageSize(wizardPrefs.pageSize)
-                                        repo.setHdMode(wizardPrefs.imageQuality)
-                                        repo.setDefaultFilter(wizardPrefs.filter)
-                                        repo.setShadowRemove(wizardPrefs.autoShadow)
-                                        
-                                        val flashObj = when (wizardPrefs.flash) {
-                                            "Auto" -> com.safescan.data.FlashMode.AUTO
-                                            "On" -> com.safescan.data.FlashMode.ON
-                                            "Torch" -> com.safescan.data.FlashMode.TORCH
-                                            else -> com.safescan.data.FlashMode.OFF
-                                        }
-                                        repo.setFlashMode(flashObj)
-                                        repo.setFlashOn(wizardPrefs.flash == "Torch")
-                                        
-                                        repo.setDoubleFocus(wizardPrefs.focusMode == "Double Tap")
-                                        repo.setLiveDetect(wizardPrefs.liveEdge)
-                                        if (wizardPrefs.autoCapture != viewModel.autoCapture.value) {
-                                            repo.toggleAutoCapture()
-                                        }
-                                        repo.setAutoCrop(wizardPrefs.autoCrop)
-                                        repo.setBatchScan(wizardPrefs.batchMode)
-
-                                        
-                                        checkPermissionAndStartScanner()
-                                    }
+                                if (viewModel.wizardDontShowAgain.value) {
+                                    checkPermissionAndStartScanner()
                                 } else {
                                     updateViewMode(FragmentViewMode.WIZARD)
                                 }

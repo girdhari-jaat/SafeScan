@@ -21,7 +21,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.safescan.scanner.ScannerViewModel
-import com.safescan.utils.WizardPrefs
 import com.safescan.data.ScannerMode
 import com.safescan.data.FlashMode
 import kotlinx.coroutines.launch
@@ -35,24 +34,38 @@ fun WizardScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val wizardPrefs = remember { WizardPrefs(context) }
 
-    // Persistent state variables synced from SharedPreferences
-    var scanType by remember { mutableStateOf(wizardPrefs.scanType) }
-    var pageSize by remember { mutableStateOf(wizardPrefs.pageSize) }
-    var imageQuality by remember { mutableStateOf(wizardPrefs.imageQuality) }
-    var warp by remember { mutableStateOf(wizardPrefs.warp) }
-    var rotation by remember { mutableStateOf(wizardPrefs.rotation) }
-    var filter by remember { mutableStateOf(wizardPrefs.filter) }
-    var flash by remember { mutableStateOf(wizardPrefs.flash) }
-    var focusMode by remember { mutableStateOf(wizardPrefs.focusMode) }
-    var liveEdge by remember { mutableStateOf(wizardPrefs.liveEdge) }
-    var autoCapture by remember { mutableStateOf(wizardPrefs.autoCapture) }
-    var autoCrop by remember { mutableStateOf(wizardPrefs.autoCrop) }
-    var autoShadow by remember { mutableStateOf(wizardPrefs.autoShadow) }
-    var manualCrop by remember { mutableStateOf(wizardPrefs.manualCrop) }
-    var batchMode by remember { mutableStateOf(wizardPrefs.batchMode) }
-    var dontShowAgain by remember { mutableStateOf(wizardPrefs.dontShowAgain) }
+    // Persistent state variables synced from Jetpack DataStore through viewModel StateFlows
+    val scanTypeMode by viewModel.currentMode.collectAsState()
+    val pageSize by viewModel.pageSize.collectAsState()
+    val imageQuality by viewModel.hdMode.collectAsState()
+    val warp by viewModel.wizardWarp.collectAsState()
+    val rotation by viewModel.wizardRotation.collectAsState()
+    val filter by viewModel.defaultFilter.collectAsState()
+    val flashObj by viewModel.flashMode.collectAsState()
+    val doubleFocus by viewModel.doubleFocusEnabled.collectAsState()
+    val liveEdge by viewModel.liveDetect.collectAsState()
+    val autoCapture by viewModel.autoCapture.collectAsState()
+    val autoCrop by viewModel.autoCrop.collectAsState()
+    val autoShadow by viewModel.shadowRemove.collectAsState()
+    val manualCrop by viewModel.wizardManualCrop.collectAsState()
+    val batchMode by viewModel.batchScan.collectAsState()
+    val dontShowAgain by viewModel.wizardDontShowAgain.collectAsState()
+
+    val scanType = when (scanTypeMode) {
+        ScannerMode.CARD -> "Card"
+        ScannerMode.GRID -> "Grid"
+        else -> "Document"
+    }
+
+    val flash = when (flashObj) {
+        FlashMode.AUTO -> "Auto"
+        FlashMode.ON -> "On"
+        FlashMode.TORCH -> "Torch"
+        else -> "Off"
+    }
+
+    val focusMode = if (doubleFocus) "Double Tap" else "Continuous"
 
     val scrollState = rememberScrollState()
 
@@ -80,8 +93,12 @@ fun WizardScreen(
                         selected = selected,
                         modifier = Modifier.weight(1f),
                         onClick = {
-                            scanType = type
-                            wizardPrefs.scanType = type
+                            val modeObj = when (type) {
+                                "Card" -> ScannerMode.CARD
+                                "Grid" -> ScannerMode.GRID
+                                else -> ScannerMode.DOCUMENT
+                            }
+                            viewModel.switchMode(modeObj)
                         }
                     )
                 }
@@ -108,8 +125,7 @@ fun WizardScreen(
                         selected = selected,
                         modifier = Modifier.weight(1f),
                         onClick = {
-                            pageSize = size
-                            wizardPrefs.pageSize = size
+                            viewModel.setPageSize(size)
                         }
                     )
                 }
@@ -136,8 +152,7 @@ fun WizardScreen(
                         selected = selected,
                         modifier = Modifier.weight(1f),
                         onClick = {
-                            imageQuality = quality
-                            wizardPrefs.imageQuality = quality
+                            viewModel.setHdMode(quality)
                         }
                     )
                 }
@@ -165,8 +180,7 @@ fun WizardScreen(
                         modifier = Modifier.weight(1f),
                         onClick = {
                             val actualWarpValue = if (warpItem == "Flat") "Flat Crop Only" else warpItem
-                            warp = actualWarpValue
-                            wizardPrefs.warp = actualWarpValue
+                            viewModel.setWizardWarp(actualWarpValue)
                         }
                     )
                 }
@@ -193,8 +207,7 @@ fun WizardScreen(
                         selected = selected,
                         modifier = Modifier.weight(1f),
                         onClick = {
-                            rotation = rot
-                            wizardPrefs.rotation = rot
+                            viewModel.setWizardRotation(rot)
                         }
                     )
                 }
@@ -221,8 +234,7 @@ fun WizardScreen(
                         selected = selected,
                         modifier = Modifier.weight(1f),
                         onClick = {
-                            filter = f
-                            wizardPrefs.filter = f
+                            viewModel.setDefaultFilter(f)
                         }
                     )
                 }
@@ -249,8 +261,16 @@ fun WizardScreen(
                         selected = selected,
                         modifier = Modifier.weight(1f),
                         onClick = {
-                            flash = fl
-                            wizardPrefs.flash = fl
+                            val newFlashObj = when (fl) {
+                                "Auto" -> FlashMode.AUTO
+                                "On" -> FlashMode.ON
+                                "Torch" -> FlashMode.TORCH
+                                else -> FlashMode.OFF
+                            }
+                            scope.launch {
+                                viewModel.settingsRepository.setFlashMode(newFlashObj)
+                                viewModel.settingsRepository.setFlashOn(fl == "Torch")
+                            }
                         }
                     )
                 }
@@ -278,8 +298,7 @@ fun WizardScreen(
                         modifier = Modifier.weight(1f),
                         onClick = {
                             val actualFocusValue = if (foc == "Double") "Double Tap" else foc
-                            focusMode = actualFocusValue
-                            wizardPrefs.focusMode = actualFocusValue
+                            viewModel.toggleDoubleFocus(actualFocusValue == "Double Tap")
                         }
                     )
                 }
@@ -303,8 +322,7 @@ fun WizardScreen(
                     selected = liveEdge,
                     modifier = Modifier.weight(1f),
                     onClick = {
-                        liveEdge = !liveEdge
-                        wizardPrefs.liveEdge = liveEdge
+                        viewModel.toggleLiveDetect(!liveEdge)
                     }
                 )
                 WizardSelectionButton(
@@ -312,8 +330,7 @@ fun WizardScreen(
                     selected = autoCapture,
                     modifier = Modifier.weight(1f),
                     onClick = {
-                        autoCapture = !autoCapture
-                        wizardPrefs.autoCapture = autoCapture
+                        viewModel.toggleAutoCapture()
                     }
                 )
                 WizardSelectionButton(
@@ -321,8 +338,7 @@ fun WizardScreen(
                     selected = autoCrop,
                     modifier = Modifier.weight(1f),
                     onClick = {
-                        autoCrop = !autoCrop
-                        wizardPrefs.autoCrop = autoCrop
+                        viewModel.toggleAutoCrop(!autoCrop)
                     }
                 )
             }
@@ -336,8 +352,7 @@ fun WizardScreen(
                     selected = autoShadow,
                     modifier = Modifier.weight(1f),
                     onClick = {
-                        autoShadow = !autoShadow
-                        wizardPrefs.autoShadow = autoShadow
+                        viewModel.toggleShadowRemove(!autoShadow)
                     }
                 )
                 WizardSelectionButton(
@@ -345,8 +360,7 @@ fun WizardScreen(
                     selected = manualCrop,
                     modifier = Modifier.weight(1f),
                     onClick = {
-                        manualCrop = !manualCrop
-                        wizardPrefs.manualCrop = manualCrop
+                        viewModel.setWizardManualCrop(!manualCrop)
                     }
                 )
                 WizardSelectionButton(
@@ -354,8 +368,7 @@ fun WizardScreen(
                     selected = batchMode,
                     modifier = Modifier.weight(1f),
                     onClick = {
-                        batchMode = !batchMode
-                        wizardPrefs.batchMode = batchMode
+                        viewModel.toggleBatchScan(!batchMode)
                     }
                 )
             }
@@ -376,8 +389,7 @@ fun WizardScreen(
                         .weight(1.1f)
                         .clip(RoundedCornerShape(6.dp))
                         .clickable {
-                            dontShowAgain = !dontShowAgain
-                            wizardPrefs.dontShowAgain = dontShowAgain
+                            viewModel.setWizardDontShowAgain(!dontShowAgain)
                         }
                         .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -385,8 +397,7 @@ fun WizardScreen(
                     Checkbox(
                         checked = dontShowAgain,
                         onCheckedChange = {
-                            dontShowAgain = it
-                            wizardPrefs.dontShowAgain = it
+                            viewModel.setWizardDontShowAgain(it)
                         },
                         colors = CheckboxDefaults.colors(
                             checkedColor = MaterialTheme.colorScheme.primary,
@@ -406,58 +417,7 @@ fun WizardScreen(
                 // Start Scanning Button
                 Button(
                     onClick = {
-                        // Sync values to settingsRepository / ScannerViewModel before starting scan
-                        scope.launch {
-                            val repo = viewModel.settingsRepository
-
-                            // 1. Scan Type (ScannerMode)
-                            val modeObj = when (scanType) {
-                                "Card" -> ScannerMode.CARD
-                                "Grid" -> ScannerMode.GRID
-                                else -> ScannerMode.DOCUMENT
-                            }
-                            repo.setScannerMode(modeObj)
-
-                            // 2. Page Size
-                            repo.setPageSize(pageSize)
-
-                            // 3. HD Quality/Quality Mode
-                            repo.setHdMode(imageQuality)
-
-                            // 4. Filters & Shadow Removal
-                            repo.setDefaultFilter(filter)
-                            repo.setShadowRemove(autoShadow)
-
-                            // 5. Camera & Flash
-                            val flashObj = when (flash) {
-                                "Auto" -> FlashMode.AUTO
-                                "On" -> FlashMode.ON
-                                "Torch" -> FlashMode.TORCH
-                                else -> FlashMode.OFF
-                            }
-                            repo.setFlashMode(flashObj)
-                            repo.setFlashOn(flash == "Torch")
-
-                            // 6. Focus Mode
-                            repo.setDoubleFocus(focusMode == "Double Tap")
-
-                            // 7. Live Edge Detection & Auto Capture
-                            repo.setLiveDetect(liveEdge)
-                            
-                            // Auto-capture should only toggle settings toggle
-                            if (autoCapture != viewModel.autoCapture.value) {
-                                repo.toggleAutoCapture()
-                            }
-
-                            // 8. Auto Crop & Manual Crop
-                            repo.setAutoCrop(autoCrop)
-
-                            // 9. Batch Mode
-                            repo.setBatchScan(batchMode)
-
-                            // 10. Run scan
-                            onStartScan()
-                        }
+                        onStartScan()
                     },
                     modifier = Modifier
                         .weight(0.9f)

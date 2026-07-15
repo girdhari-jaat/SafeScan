@@ -46,6 +46,10 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         val USE_NATIVE_SCANNER = booleanPreferencesKey("use_native_scanner")
         val HD_MODE = stringPreferencesKey("hd_mode")
         val AUTO_CAPTURE = booleanPreferencesKey("auto_capture")
+        val WIZARD_DONT_SHOW_AGAIN = booleanPreferencesKey("wizard_dont_show_again")
+        val WIZARD_WARP = stringPreferencesKey("wizard_warp")
+        val WIZARD_ROTATION = stringPreferencesKey("wizard_rotation")
+        val WIZARD_MANUAL_CROP = booleanPreferencesKey("wizard_manual_crop")
     }
 
     private val safeData: Flow<Preferences> = context.dataStore.data
@@ -119,7 +123,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         .map { preferences -> preferences[PreferencesKeys.SAVE_JPG] ?: false }
 
     val autoPdfFlow: Flow<Boolean> = safeData
-        .map { preferences -> preferences[PreferencesKeys.AUTO_PDF] ?: true }
+        .map { preferences -> preferences[PreferencesKeys.AUTO_PDF] ?: false }
 
     val batchScanFlow: Flow<Boolean> = safeData
         .map { preferences -> preferences[PreferencesKeys.BATCH_SCAN] ?: true }
@@ -137,7 +141,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         .map { preferences -> preferences[PreferencesKeys.SHADOW_REMOVE] ?: false }
 
     val autoRotationFlow: Flow<Boolean> = safeData
-        .map { preferences -> preferences[PreferencesKeys.AUTO_ROTATION] ?: false }
+        .map { preferences -> preferences[PreferencesKeys.AUTO_ROTATION] ?: true }
 
     val defaultFilterFlow: Flow<String> = safeData
         .map { preferences -> preferences[PreferencesKeys.DEFAULT_FILTER] ?: "Original" }
@@ -165,6 +169,18 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
 
     val hdModeFlow: Flow<String> = safeData
         .map { preferences -> preferences[PreferencesKeys.HD_MODE] ?: "Fast" }
+
+    val wizardDontShowAgainFlow: Flow<Boolean> = safeData
+        .map { preferences -> preferences[PreferencesKeys.WIZARD_DONT_SHOW_AGAIN] ?: false }
+
+    val wizardWarpFlow: Flow<String> = safeData
+        .map { preferences -> preferences[PreferencesKeys.WIZARD_WARP] ?: "Perspective" }
+
+    val wizardRotationFlow: Flow<String> = safeData
+        .map { preferences -> preferences[PreferencesKeys.WIZARD_ROTATION] ?: "Auto" }
+
+    val wizardManualCropFlow: Flow<Boolean> = safeData
+        .map { preferences -> preferences[PreferencesKeys.WIZARD_MANUAL_CROP] ?: false }
 
     suspend fun setScannerMode(mode: ScannerMode) {
         context.dataStore.edit { preferences ->
@@ -325,6 +341,30 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     suspend fun setHdMode(mode: String) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.HD_MODE] = mode
+        }
+    }
+
+    suspend fun setWizardDontShowAgain(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.WIZARD_DONT_SHOW_AGAIN] = enabled
+        }
+    }
+
+    suspend fun setWizardWarp(warp: String) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.WIZARD_WARP] = warp
+        }
+    }
+
+    suspend fun setWizardRotation(rotation: String) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.WIZARD_ROTATION] = rotation
+        }
+    }
+
+    suspend fun setWizardManualCrop(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.WIZARD_MANUAL_CROP] = enabled
         }
     }
 }
