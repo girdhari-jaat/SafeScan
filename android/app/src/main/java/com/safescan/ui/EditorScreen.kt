@@ -654,19 +654,11 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                         }
                     }
 
-                    // 4. JPEG Quality Slider (5 discrete steps)
+                    // 4. JPEG Quality Slider (10% to 100% continuous, matching Settings)
                     Column(modifier = Modifier.fillMaxWidth()) {
                         val qualityPercent = jpegQuality.toInt()
-                        val qualityLabel = when (qualityPercent) {
-                            20 -> "Low (20%) - Minimal size"
-                            40 -> "Draft (40%) - Smaller footprint"
-                            60 -> "Standard (60%) - Balanced"
-                            80 -> "High (80%) - Excellent quality"
-                            100 -> "Maximum (100%) - Lossless sharpness"
-                            else -> "Quality ($qualityPercent%)"
-                        }
                         Text(
-                            text = "JPEG/Image Quality: $qualityLabel",
+                            text = "JPEG/Image Quality: $qualityPercent%",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium
                         )
@@ -674,8 +666,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                         Slider(
                             value = jpegQuality,
                             onValueChange = { viewModel.setJpegQuality(it) },
-                            valueRange = 20f..100f,
-                            steps = 3, // 3 intermediate steps inside [20..100] = 5 total steps: 20, 40, 60, 80, 100
+                            valueRange = 10f..100f,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
