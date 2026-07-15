@@ -195,7 +195,6 @@ fun DocumentGridView(
                                         .align(Alignment.TopStart)
                                         .padding(4.dp)
                                         .size(28.dp)
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.8f), CircleShape)
                                 ) {
                                     Text("✂️", fontSize = 12.sp)
                                 }
@@ -209,7 +208,6 @@ fun DocumentGridView(
                                         .align(Alignment.TopEnd)
                                         .padding(4.dp)
                                         .size(28.dp)
-                                        .background(Color.Black.copy(alpha = 0.6f), CircleShape)
                                 ) {
                                     Icon(Icons.Default.Close, contentDescription = "Delete Page", tint = Color.White, modifier = Modifier.size(16.dp))
                                 }
@@ -298,7 +296,6 @@ fun DocumentGridView(
                                         .align(Alignment.TopStart)
                                         .padding(4.dp)
                                         .size(28.dp)
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.8f), CircleShape)
                                 ) {
                                     Text("✂️", fontSize = 12.sp)
                                 }
@@ -312,7 +309,6 @@ fun DocumentGridView(
                                         .align(Alignment.TopEnd)
                                         .padding(4.dp)
                                         .size(28.dp)
-                                        .background(Color.Black.copy(alpha = 0.6f), CircleShape)
                                 ) {
                                     Icon(Icons.Default.Close, contentDescription = "Delete Page", tint = Color.White, modifier = Modifier.size(16.dp))
                                 }

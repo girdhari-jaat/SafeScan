@@ -1188,8 +1188,7 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    fun saveAndNext() {
-        // Save current changes
+    fun commitActiveEditorChanges() {
         editingBitmapPreview.value?.let { processed ->
             editingSlotId.value?.let { slotId ->
                 captureToSlot(processed, slotId)
@@ -1223,6 +1222,11 @@ class ScannerViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun saveAndNext() {
+        // Save current changes
+        commitActiveEditorChanges()
         
         // Attempt to open the next image
         val currentJpgIndex = editingJpgIndex.value
@@ -1247,39 +1251,7 @@ class ScannerViewModel @Inject constructor(
 
     fun closeEditor(save: Boolean) {
         if (save) {
-            editingBitmapPreview.value?.let { processed ->
-                editingSlotId.value?.let { slotId ->
-                    captureToSlot(processed, slotId)
-                    
-                    // Sync to persistent library JSON if we are editing a saved document
-                    openedDocumentId?.let { docId ->
-                        val currentState = editorState.value
-                        documentRepository.updatePageEdits(
-                            docId = docId,
-                            pageId = slotId,
-                            filter = currentState.filter.name,
-                            brightness = currentState.brightness,
-                            contrast = currentState.contrast,
-                            sharpness = currentState.sharpness,
-                            saturation = currentState.saturation,
-                            rotation = 0,
-                            corners = null,
-                            newPreview = processed
-                        )
-                    }
-                }
-                editingJpgIndex.value?.let { index ->
-                    val file = capturedJpgFiles.getOrNull(index)
-                    if (file != null) {
-                        try {
-                            val out = java.io.FileOutputStream(file)
-                            processed.compress(Bitmap.CompressFormat.JPEG, jpegQuality.value.toInt(), out)
-                            out.flush()
-                            out.close()
-                        } catch (e: Exception) {}
-                    }
-                }
-            }
+            commitActiveEditorChanges()
         }
         isEditing.value = false
         editingSlotId.value = null
@@ -1352,7 +1324,10 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    fun exportPdf(context: android.content.Context, onResult: (java.io.File?) -> Unit) {
+    fun exportPdf(context: android.content.Context, clearSession: Boolean = false, onResult: (java.io.File?) -> Unit) {
+        if (isEditing.value) {
+            commitActiveEditorChanges()
+        }
         DiagnosticsLogger.info("Starting PDF/Document assembly pipeline...")
         // FIX: FINAL LEAK
         val tempBitmapsToRecycle = mutableListOf<Bitmap>()
@@ -1418,17 +1393,21 @@ class ScannerViewModel @Inject constructor(
                     DiagnosticsLogger.info("Exporting document to PDF at ${pageSize.value} layout off-thread...")
                     val result = pdfExporter.exportCardsToPdf(slotsToExport, title, currentMode.value, pageSize.value, pdfOrientation.value)
                     withContext(Dispatchers.Main) {
-                        capturedJpgFiles.clear()
-                        originalJpgBitmaps.clear()
-                        jpgCorners.clear()
+                        if (clearSession) {
+                            capturedJpgFiles.clear()
+                            originalJpgBitmaps.clear()
+                            jpgCorners.clear()
+                        }
                         DiagnosticsLogger.info("PDF document generated successfully.")
                         onResult(result.getOrNull())
                     }
                 } else {
                     withContext(Dispatchers.Main) {
-                        capturedJpgFiles.clear()
-                        originalJpgBitmaps.clear()
-                        jpgCorners.clear()
+                        if (clearSession) {
+                            capturedJpgFiles.clear()
+                            originalJpgBitmaps.clear()
+                            jpgCorners.clear()
+                        }
                         onResult(null)
                     }
                 }
