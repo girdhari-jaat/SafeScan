@@ -92,10 +92,9 @@ class TFLiteEngine(private val context: Context) {
             lastBitmapHeight = bitmap.height
         }
         
-        var binaryMask: Mat? = null
-        var resizedMask: Mat? = null
         var maskMat: Mat? = null
-        val contours = ArrayList<MatOfPoint>()
+        var probmapU8: Mat? = null
+        var probmapSmooth: Mat? = null
         var hierarchy: Mat? = null
 
         try {
@@ -137,76 +136,104 @@ class TFLiteEngine(private val context: Context) {
                     maxConfidence = v
                 }
             }
-            if (maxConfidence < 0.75f) {
+            if (maxConfidence < 0.50f) {
                 lastStableCorners = null
                 stableFrameCount = 0
                 return null
             }
             
-            // Threshold to binary map (0 or 255)
-            binaryMask = Mat()
-            maskMat.convertTo(binaryMask, CvType.CV_8UC1, 255.0)
-            Imgproc.threshold(binaryMask, binaryMask, 127.0, 255.0, Imgproc.THRESH_BINARY)
+            // Convert float32 probability mask to 8-bit [0-255] mask for OpenCV operations
+            probmapU8 = Mat()
+            maskMat.convertTo(probmapU8, CvType.CV_8UC1, 255.0)
             
-            // Resize mask back to original bitmap size
-            resizedMask = Mat()
-            Imgproc.resize(binaryMask, resizedMask, Size(bitmap.width.toDouble(), bitmap.height.toDouble()))
+            // Smooth the mask to reduce noise
+            probmapSmooth = Mat()
+            Imgproc.GaussianBlur(probmapU8, probmapSmooth, Size(3.0, 3.0), 0.0)
             
-            // Find contours on the mask
-            hierarchy = Mat()
-            Imgproc.findContours(resizedMask, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
-            
-            // Sort contours by area in descending order using OpenCV Imgproc.contourArea
-            contours.sortByDescending { Imgproc.contourArea(it) }
-            
-            var bestQuadPoints: List<Point>? = null
-            val minDocumentArea = bitmap.width * bitmap.height * 0.05 // Document must cover at least 5% of the frame
-            
-            if (contours.isNotEmpty()) {
-                val largestContour = contours[0]
-                val area = Imgproc.contourArea(largestContour)
-                
-                if (area > minDocumentArea) {
-                    val contour2f = MatOfPoint2f(*largestContour.toArray())
-                    val peri = Imgproc.arcLength(contour2f, true)
-                    
-                    // 1. Dynamic simplification: iterate epsilon from 0.01 to 0.15 of perimeter to find exactly 4 corners
-                    var approx = MatOfPoint2f()
-                    var found4Points = false
-                    
-                    for (i in 1..15) {
-                        val epsilon = (i * 0.01) * peri
-                        val tempApprox = MatOfPoint2f()
-                        Imgproc.approxPolyDP(contour2f, tempApprox, epsilon, true)
-                        
-                        if (tempApprox.total() == 4L) {
-                            approx.release()
-                            approx = tempApprox
-                            found4Points = true
-                            break
-                        }
-                        tempApprox.release()
-                    }
-                    
-                    if (found4Points) {
-                        val points = approx.toArray()
-                        bestQuadPoints = points.map { Point(it.x, it.y) }
-                        approx.release()
-                    } else {
-                        // 2. Robust fallback: extract extreme projection points of the largest contour directly if simplification didn't yield exactly 4 corners
-                        val points = largestContour.toArray()
-                        if (points.size >= 4) {
-                            bestQuadPoints = points.map { Point(it.x, it.y) }
-                        }
-                    }
-                    contour2f.release()
-                }
+            // Determine adaptive thresholds to iterate over
+            val thresholds = if (isLive) {
+                listOf(0.5, 0.7, 0.85)
+            } else {
+                listOf(0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95)
             }
             
-            val result = bestQuadPoints?.let { pts ->
-                val ordered = orderPoints(pts)
+            var bestQuadPoints: List<Point>? = null
+            var bestScore = -Double.MAX_VALUE
+            
+            hierarchy = Mat()
+            val minArea256 = inputSize * inputSize * 0.01 // At least 1% of the 256x256 canvas
+            
+            for (thr in thresholds) {
+                val bin = Mat()
+                Imgproc.threshold(probmapSmooth, bin, thr * 255.0, 255.0, Imgproc.THRESH_BINARY)
                 
-                if (isLive) {
+                // Morphology close operation to fill any gaps/holes
+                val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, Size(5.0, 5.0))
+                Imgproc.morphologyEx(bin, bin, Imgproc.MORPH_CLOSE, kernel)
+                kernel.release()
+                
+                val contours = ArrayList<MatOfPoint>()
+                Imgproc.findContours(bin, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+                
+                if (contours.isNotEmpty()) {
+                    val largestContour = contours.maxByOrNull { Imgproc.contourArea(it) }
+                    if (largestContour != null) {
+                        val area = Imgproc.contourArea(largestContour)
+                        if (area >= minArea256) {
+                            val contour2f = MatOfPoint2f(*largestContour.toArray())
+                            val peri = Imgproc.arcLength(contour2f, true)
+                            var approxPoints: List<Point>? = null
+                            
+                            // Try to simplify to exactly 4 vertices
+                            for (i in 1..15) {
+                                val epsilon = (i * 0.01) * peri
+                                val approx = MatOfPoint2f()
+                                Imgproc.approxPolyDP(contour2f, approx, epsilon, true)
+                                if (approx.total() == 4L) {
+                                    approxPoints = approx.toArray().map { Point(it.x, it.y) }
+                                    approx.release()
+                                    break
+                                }
+                                approx.release()
+                            }
+                            
+                            // Fallback: Get extreme projection points
+                            if (approxPoints == null && largestContour.toArray().size >= 4) {
+                                approxPoints = getExtremePoints(largestContour)
+                            }
+                            
+                            contour2f.release()
+                            
+                            // Validate and score the quadrilateral
+                            if (approxPoints != null && approxPoints.size == 4 && isConvexPoints(approxPoints)) {
+                                val maxCos = getMaxCosinePoints(approxPoints)
+                                if (maxCos < 0.5) { // Reject highly distorted shapes
+                                    val normArea = area / (inputSize.toDouble() * inputSize.toDouble())
+                                    val score = normArea - maxCos // Score favors larger, straighter shapes
+                                    if (score > bestScore) {
+                                        bestScore = score
+                                        bestQuadPoints = approxPoints
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                bin.release()
+                contours.forEach { it.release() }
+            }
+            
+            var result: Quadrilateral? = null
+            
+            if (bestQuadPoints != null) {
+                // Scale corners back to original bitmap dimensions
+                val scaleX = bitmap.width.toDouble() / inputSize.toDouble()
+                val scaleY = bitmap.height.toDouble() / inputSize.toDouble()
+                val scaledPoints = bestQuadPoints.map { Point(it.x * scaleX, it.y * scaleY) }
+                val ordered = orderPoints(scaledPoints)
+                
+                result = if (isLive) {
                     if (lastStableCorners != null && isSimilar(ordered, lastStableCorners!!)) {
                         stableFrameCount++
                     } else {
@@ -222,10 +249,8 @@ class TFLiteEngine(private val context: Context) {
                 } else {
                     Quadrilateral(ordered[0], ordered[1], ordered[2], ordered[3])
                 }
-            }
-            
-            if (result == null && isLive) {
-                if (bestQuadPoints == null) {
+            } else {
+                if (isLive) {
                     lastStableCorners = null
                     stableFrameCount = 0
                 }
@@ -233,19 +258,62 @@ class TFLiteEngine(private val context: Context) {
             
             return result
         } catch (e: Throwable) {
-            Log.e("TFLiteEngine", "Error running inference", e)
+            Log.e("TFLiteEngine", "Error running inference in adaptive multi-thresholding", e)
         } finally {
             maskMat?.release()
-            binaryMask?.release()
-            resizedMask?.release()
+            probmapU8?.release()
+            probmapSmooth?.release()
             hierarchy?.release()
-            contours.forEach { it.release() }
         }
         return null
     }
 
+    private fun getExtremePoints(contour: MatOfPoint): List<Point> {
+        val pts = contour.toArray().map { Point(it.x, it.y) }
+        if (pts.isEmpty()) return emptyList()
+
+        val sums = pts.map { it.x + it.y }
+        val diffs = pts.map { it.y - it.x }
+
+        val tl = pts[sums.indexOf(sums.minOrNull()!!)]
+        val br = pts[sums.indexOf(sums.maxOrNull()!!)]
+        val tr = pts[diffs.indexOf(diffs.minOrNull()!!)]
+        val bl = pts[diffs.indexOf(diffs.maxOrNull()!!)]
+
+        return listOf(tl, tr, br, bl)
+    }
+
+    private fun isConvexPoints(points: List<Point>): Boolean {
+        if (points.size != 4) return false
+        val matOfPoint = MatOfPoint(*points.map { org.opencv.core.Point(it.x, it.y) }.toTypedArray())
+        val convex = Imgproc.isContourConvex(matOfPoint)
+        matOfPoint.release()
+        return convex
+    }
+
+    private fun getMaxCosinePoints(points: List<Point>): Double {
+        if (points.size != 4) return 1.0
+        var maxCosine = 0.0
+        val cvPoints = points.map { org.opencv.core.Point(it.x, it.y) }
+        for (i in 0..3) {
+            val cosine = Math.abs(angle(cvPoints[(i + 1) % 4], cvPoints[(i + 3) % 4], cvPoints[i]))
+            if (cosine > maxCosine) {
+                maxCosine = cosine
+            }
+        }
+        return maxCosine
+    }
+
+    private fun angle(pt1: org.opencv.core.Point, pt2: org.opencv.core.Point, pt0: org.opencv.core.Point): Double {
+        val dx1 = pt1.x - pt0.x
+        val dy1 = pt1.y - pt0.y
+        val dx2 = pt2.x - pt0.x
+        val dy2 = pt2.y - pt0.y
+        return (dx1 * dx2 + dy1 * dy2) / Math.sqrt((dx1 * dx1 + dy1 * dy1) * (dx2 * dx2 + dy2 * dy2) + 1e-10)
+    }
+
     private fun orderPoints(pts: List<Point>): List<Point> {
-        if (pts.size < 4) return pts // Should not happen with current logic but protects against crashes
+        if (pts.size < 4) return pts
 
         val sums = pts.map { it.x + it.y }
         val diffs = pts.map { it.y - it.x }

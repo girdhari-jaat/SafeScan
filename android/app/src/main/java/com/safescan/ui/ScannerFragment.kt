@@ -69,6 +69,8 @@ class ScannerFragment : Fragment() {
     private var cameraControl: CameraControl? = null
     private var cameraInfo: CameraInfo? = null
 
+    private var cameraProvider: ProcessCameraProvider? = null
+    private var imageAnalysis: ImageAnalysis? = null
     private var flashEnabled = false
 
     private enum class FragmentViewMode {
@@ -80,7 +82,12 @@ class ScannerFragment : Fragment() {
     private var isTargetLocked = false
     private var lastBackPressedTime = 0L
 
-    // On-demand permission launcher
+    override fun onPause() {
+        super.onPause()
+        cameraProvider?.unbindAll() // Stop live camera
+        imageAnalysis?.setAnalyzer(cameraExecutor, null) // Stop live analysis
+    }
+
     private val requestPermissionLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -748,8 +755,8 @@ class ScannerFragment : Fragment() {
                 val cameraProviderFuture = ProcessCameraProvider.getInstance(currentContext)
                 cameraProviderFuture.addListener({
                     try {
-                        val cameraProvider = cameraProviderFuture.get()
-                        cameraProvider.unbindAll()
+                        this@ScannerFragment.cameraProvider = cameraProviderFuture.get()
+                        this@ScannerFragment.cameraProvider?.unbindAll()
                         liveEdgeDetectionEngine.release()
                     } catch (e: Exception) {
                         Log.e("ScannerFragment", "Failed to unbind camera in updateCameraState", e)
@@ -809,12 +816,12 @@ class ScannerFragment : Fragment() {
                     .build()
 
                 // Initialize ImageAnalysis for live edge detection overlay
-                val imageAnalysis = androidx.camera.core.ImageAnalysis.Builder()
+                this@ScannerFragment.imageAnalysis = androidx.camera.core.ImageAnalysis.Builder()
                     .setBackpressureStrategy(androidx.camera.core.ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .setResolutionSelector(analysisSelector)
                     .build()
 
-                imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
+                this@ScannerFragment.imageAnalysis?.setAnalyzer(cameraExecutor) { imageProxy ->
                     val isLiveDetectOn = viewModel.liveDetect.value
                     val isBatterySaverOn = viewModel.batterySaver.value
                     val isOverlayActive = !viewModel.isEditing.value && !viewModel.isCropping.value && !viewModel.isSettingsOpen.value && !viewModel.isDocumentOpenedFromLibrary.value && !viewModel.isGridViewVisible.value
@@ -866,6 +873,7 @@ class ScannerFragment : Fragment() {
                                 }
                                 activity?.runOnUiThread {
                                     val bindingObj = _binding
+                                    bindingObj?.overlayView?.visibility = View.VISIBLE
                                     bindingObj?.overlayView?.updateCorners(mappedPoints)
                                     if (corners != null && corners.isNotEmpty()) {
                                         if (!isTargetLocked) {
@@ -889,6 +897,7 @@ class ScannerFragment : Fragment() {
                         isTargetLocked = false
                         viewModel.onDocumentDetected(null, 0.0)
                         activity?.runOnUiThread {
+                            _binding?.overlayView?.visibility = View.GONE
                             _binding?.overlayView?.updateCorners(null)
                         }
                     }
@@ -942,7 +951,7 @@ class ScannerFragment : Fragment() {
         takePictureLauncher.launch(photoUri)
     }
 
-    private fun focusAndTakePhoto() {
+    private fun focusAndTakePhoto(isAutoCapture: Boolean = false) {
         if (viewModel.isFocusing) return
         viewModel.isFocusing = true
 
@@ -972,9 +981,11 @@ class ScannerFragment : Fragment() {
 
         val factory = previewView.meteringPointFactory
         val point = factory.createPoint(centerX, centerY)
+        // Relaxed settings for Auto Capture
+        val flags = if (isAutoCapture) androidx.camera.core.FocusMeteringAction.FLAG_AF else androidx.camera.core.FocusMeteringAction.FLAG_AF or androidx.camera.core.FocusMeteringAction.FLAG_AE
         val action = androidx.camera.core.FocusMeteringAction.Builder(
             point, 
-            androidx.camera.core.FocusMeteringAction.FLAG_AF or androidx.camera.core.FocusMeteringAction.FLAG_AE
+            flags
         ).build()
         
         val future = cameraControl?.startFocusAndMetering(action)
@@ -1221,7 +1232,7 @@ class ScannerFragment : Fragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.autoCaptureEvent.collect {
                     if (currentViewMode == FragmentViewMode.SCANNER && !viewModel.isEditing.value && !viewModel.isCropping.value) {
-                        focusAndTakePhoto()
+                        focusAndTakePhoto(isAutoCapture = true)
                     }
                 }
             }

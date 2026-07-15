@@ -26,52 +26,51 @@ class EdgeDetectionEngine {
             src = Mat()
             Utils.bitmapToMat(bitmap, src)
             
-            // Working scale for fast and noise-free edge detection
-            val resizeRatio = 600.0 / Math.max(src.width(), src.height())
+            // Working scale for fast, high-quality edge detection (max 1000px)
+            val maxDim = 1000.0
+            val resizeRatio = maxDim / Math.max(src.width(), src.height())
             resized = Mat()
-            if (resizeRatio < 1.0) {
+            val scaleFactor = if (resizeRatio < 1.0) {
                 Imgproc.resize(src, resized, Size(src.width() * resizeRatio, src.height() * resizeRatio))
+                resizeRatio
             } else {
                 src.copyTo(resized)
+                1.0
             }
 
             gray = Mat()
             Imgproc.cvtColor(resized, gray, Imgproc.COLOR_RGBA2GRAY)
             
-            // Median blur is generally better than Gaussian blur for removing noise while keeping document edges sharp
-            Imgproc.medianBlur(gray, gray, 5)
+            // GaussianBlur for removing high-frequency noise while keeping document boundaries
+            Imgproc.GaussianBlur(gray, gray, Size(5.0, 5.0), 0.0)
             
-            val maxArea = resized.width() * resized.height()
-            val minArea = maxArea * 0.12 // Document must occupy at least 12% of the screen
+            val maxArea = (resized.width() * resized.height()).toDouble()
+            val minArea = maxArea * 0.01 // Support small documents (at least 1% of the screen area)
             
             var bestPoints: List<Point>? = null
-            var bestArea = 0.0
+            var bestScore = -Double.MAX_VALUE
 
-            // Multi-scale Canny edge detection to capture varying lighting/contrast scenarios
-            val thresholds = listOf(30, 60, 90, 120)
+            // Canny thresholds [40, 70, 100] as requested
+            val thresholds = listOf(40.0, 70.0, 100.0)
             for (threshold in thresholds) {
-                if (bestPoints != null) break // Stop early if we found a perfect candidate
-                
                 var edges: Mat? = null
                 var kernel: Mat? = null
                 val contours = ArrayList<MatOfPoint>()
                 var hierarchy: Mat? = null
                 try {
                     edges = Mat()
-                    Imgproc.Canny(gray, edges, threshold.toDouble(), (threshold * 3).toDouble())
+                    Imgproc.Canny(gray, edges, threshold, threshold * 2.5)
                     
                     kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
                     Imgproc.morphologyEx(edges, edges, Imgproc.MORPH_CLOSE, kernel)
 
                     hierarchy = Mat()
-                    Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
-
-                    // Sort contours by area descending
-                    contours.sortByDescending { Imgproc.contourArea(it) }
+                    // Use RETR_LIST to find nested contours, allowing detection even with textual boundaries inside the document
+                    Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
 
                     for (contour in contours) {
                         val area = Imgproc.contourArea(contour)
-                        if (area < minArea) break // Since they are sorted, we can stop early
+                        if (area < minArea) continue
                         
                         var contour2f: MatOfPoint2f? = null
                         try {
@@ -79,20 +78,24 @@ class EdgeDetectionEngine {
                             val peri = Imgproc.arcLength(contour2f, true)
                             
                             // Try to approximate with different epsilon factors to get exactly 4 corners
-                            var approxSuccess = false
                             for (epsFactor in listOf(0.015, 0.02, 0.03, 0.04)) {
                                 val approx = MatOfPoint2f()
                                 try {
                                     Imgproc.approxPolyDP(contour2f, approx, epsFactor * peri, true)
                                     if (approx.total() == 4L) {
-                                        val approxPoints = approx.toArray().map { Point(it.x / resizeRatio, it.y / resizeRatio) }
-                                        if (isConvexPoints(approxPoints) && getMaxCosinePoints(approxPoints) < 0.4) {
-                                            val scaledArea = area / (resizeRatio * resizeRatio)
-                                            if (scaledArea > bestArea) {
-                                                bestArea = scaledArea
-                                                bestPoints = orderPoints(approxPoints)
-                                                approxSuccess = true
-                                                break
+                                        val approxPointsResized = approx.toArray().map { Point(it.x, it.y) }
+                                        
+                                        if (isConvexPoints(approxPointsResized)) {
+                                            val maxAngleError = getMaxCosinePoints(approxPointsResized)
+                                            // Ensure the angle error is within threshold (< 0.5) to verify a good rectangular shape
+                                            if (maxAngleError < 0.5) {
+                                                val normArea = area / maxArea
+                                                val score = normArea - maxAngleError
+                                                if (score > bestScore) {
+                                                    bestScore = score
+                                                    val approxPointsOriginal = approxPointsResized.map { Point(it.x / scaleFactor, it.y / scaleFactor) }
+                                                    bestPoints = orderPoints(approxPointsOriginal)
+                                                }
                                             }
                                         }
                                     }
@@ -101,15 +104,20 @@ class EdgeDetectionEngine {
                                 }
                             }
 
-                            // FALLBACK WITHIN CONTOUR: If approxPolyDP failed but we have a large robust contour,
-                            // find its 4 extreme points (Top-Left, Top-Right, Bottom-Right, Bottom-Left)
-                            if (!approxSuccess && area > minArea) {
-                                val extremePoints = getExtremePoints(contour).map { Point(it.x / resizeRatio, it.y / resizeRatio) }
-                                if (extremePoints.size == 4 && isConvexPoints(extremePoints) && getMaxCosinePoints(extremePoints) < 0.4) {
-                                    val quadArea = getQuadArea(extremePoints)
-                                    if (quadArea > bestArea) {
-                                        bestArea = quadArea
-                                        bestPoints = orderPoints(extremePoints)
+                            // FALLBACK WITHIN CONTOUR: If approxPolyDP failed, try extreme points
+                            val extremePointsResized = getExtremePoints(contour).map { Point(it.x, it.y) }
+                            if (extremePointsResized.size == 4 && isConvexPoints(extremePointsResized)) {
+                                val maxAngleError = getMaxCosinePoints(extremePointsResized)
+                                if (maxAngleError < 0.5) {
+                                    val quadArea = getQuadArea(extremePointsResized)
+                                    if (quadArea >= minArea) {
+                                        val normArea = quadArea / maxArea
+                                        val score = normArea - maxAngleError
+                                        if (score > bestScore) {
+                                            bestScore = score
+                                            val extremePointsOriginal = extremePointsResized.map { Point(it.x / scaleFactor, it.y / scaleFactor) }
+                                            bestPoints = orderPoints(extremePointsOriginal)
+                                        }
                                     }
                                 }
                             }
@@ -164,11 +172,14 @@ class EdgeDetectionEngine {
     }
 
     private fun getMaxCosinePoints(points: List<Point>): Double {
+        if (points.size != 4) return 1.0
         var maxCosine = 0.0
         val cvPoints = points.map { org.opencv.core.Point(it.x, it.y) }
-        for (i in 2..4) {
-            val cosine = Math.abs(angle(cvPoints[i % 4], cvPoints[i - 2], cvPoints[i - 1]))
-            maxCosine = Math.max(maxCosine, cosine)
+        for (i in 0..3) {
+            val cosine = Math.abs(angle(cvPoints[(i + 1) % 4], cvPoints[(i + 3) % 4], cvPoints[i]))
+            if (cosine > maxCosine) {
+                maxCosine = cosine
+            }
         }
         return maxCosine
     }

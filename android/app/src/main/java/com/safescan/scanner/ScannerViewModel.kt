@@ -36,6 +36,7 @@ class ScannerViewModel @Inject constructor(
     private val scannerEngine: DocumentScannerEngine,
     val settingsRepository: SettingsRepository,
     private val edgeDetectionEngine: com.safescan.scanner.EdgeDetectionEngine,
+    private val tfLiteEdgeDetectionEngine: com.safescan.scanner.TFLiteEdgeDetectionEngine,
     private val pdfExporter: com.safescan.domain.PdfExporter,
     private val documentRepository: com.safescan.data.DocumentRepository,
     val documentScanner: DocumentScanner
@@ -367,6 +368,8 @@ class ScannerViewModel @Inject constructor(
         }
 
         // Stability Check
+        // Relaxed settings for Auto Capture
+        val threshold = if (autoCapture.value) 2 else 3
         if (lastQuadPoints != null && isStable(lastQuadPoints!!, processedPoints)) {
             stableFrameCount++
         } else {
@@ -377,7 +380,7 @@ class ScannerViewModel @Inject constructor(
         ScannerDebugLogger.logStability(stableFrameCount)
 
         val isSharp = sharpness > 20.0
-        val trigger = stableFrameCount >= STABLE_FRAME_THRESHOLD && isSharp
+        val trigger = stableFrameCount >= threshold && isSharp
         ScannerDebugLogger.logAutoCap(inBox = true, sharpness = sharpness, stable = stableFrameCount, trigger = trigger)
 
         if (trigger) {
@@ -444,6 +447,37 @@ class ScannerViewModel @Inject constructor(
                     onResult(points)
                 } catch (e: Throwable) {
                     Log.e("ScannerViewModel", "detectEdges: Callback onResult failed", e)
+                }
+            }
+        }
+    }
+
+    fun detectEdgesWithTFLite(bitmap: Bitmap, onResult: (List<Point>?) -> Unit) {
+        if (bitmap.isRecycled) {
+            Log.e("ScannerViewModel", "detectEdgesWithTFLite: Provided bitmap is recycled!")
+            onResult(null)
+            return
+        }
+
+        _uiState.update { it.copy(isAutoRunning = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            var points: List<Point>? = null
+            try {
+                if (!bitmap.isRecycled) {
+                    points = tfLiteEdgeDetectionEngine.detectEdges(bitmap)
+                    Log.d("ScannerViewModel", "detectEdgesWithTFLite: Successfully detected corners using TFLite")
+                }
+            } catch (e: Throwable) {
+                Log.e("ScannerViewModel", "detectEdgesWithTFLite: TFLite detection failed", e)
+            }
+
+            _uiState.update { it.copy(isAutoRunning = false) }
+
+            withContext(Dispatchers.Main) {
+                try {
+                    onResult(points)
+                } catch (e: Throwable) {
+                    Log.e("ScannerViewModel", "detectEdgesWithTFLite: Callback onResult failed", e)
                 }
             }
         }

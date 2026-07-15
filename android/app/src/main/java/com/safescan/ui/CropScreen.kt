@@ -119,6 +119,41 @@ fun CropScreen(viewModel: ScannerViewModel) {
                     Text(stringResource(id = R.string.full), color = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
 
+                // 3a. TF Auto (TFLite Model based detection)
+                TextButton(
+                    modifier = Modifier.weight(1f),
+                    enabled = !uiState.isAutoRunning,
+                    onClick = {
+                        val currentBmp = croppingBitmap
+                        if (imageSize.width > 0 && imageSize.height > 0 && currentBmp != null) {
+                            viewModel.detectEdgesWithTFLite(currentBmp) { points ->
+                                if (points != null && points.size == 4) {
+                                    val scaleX = imageSize.width.toFloat() / currentBmp.width.toFloat()
+                                    val scaleY = imageSize.height.toFloat() / currentBmp.height.toFloat()
+                                    tl = Offset((points[0].x * scaleX).toFloat(), (points[0].y * scaleY).toFloat())
+                                    tr = Offset((points[1].x * scaleX).toFloat(), (points[1].y * scaleY).toFloat())
+                                    br = Offset((points[2].x * scaleX).toFloat(), (points[2].y * scaleY).toFloat())
+                                    bl = Offset((points[3].x * scaleX).toFloat(), (points[3].y * scaleY).toFloat())
+                                } else {
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar(docNotFoundMsg)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ) {
+                    if (uiState.isAutoRunning) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("TF", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
+                }
+
                 // 3. Auto
                 TextButton(
                     modifier = Modifier.weight(1f),
