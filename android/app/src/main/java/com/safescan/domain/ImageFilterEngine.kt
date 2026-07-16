@@ -101,7 +101,6 @@ object ImageFilterEngine {
                     sharpened.release()
                     kernel.release()
                     channels.forEach { it.release() }
-                    clahe?.release()
                 }
             }
             FilterType.MAGIC_COLOR -> {

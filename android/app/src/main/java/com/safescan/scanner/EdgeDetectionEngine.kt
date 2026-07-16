@@ -44,7 +44,6 @@ class EdgeDetectionEngine {
             // 1. CLAHE (Contrast Limited Adaptive Histogram Equalization) for contrast equalization under shadows/bad lighting
             val clahe = Imgproc.createCLAHE(2.0, Size(8.0, 8.0))
             clahe.apply(gray, gray)
-            clahe.release()
             
             // 2. Bilateral filter for excellent edge-preserving smoothing (clears internal text & textures)
             val filtered = Mat()
