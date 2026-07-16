@@ -313,22 +313,29 @@ class TFLiteEngine(private val context: Context) {
     }
 
     private fun orderPoints(pts: List<Point>): List<Point> {
-        if (pts.size < 4) return pts
+        if (pts.size != 4) return pts
 
-        val sums = pts.map { it.x + it.y }
-        val diffs = pts.map { it.y - it.x }
+        val cx = pts.map { it.x }.average()
+        val cy = pts.map { it.y }.average()
 
-        val minSum = sums.minOrNull() ?: 0.0
-        val maxSum = sums.maxOrNull() ?: 0.0
-        val minDiff = diffs.minOrNull() ?: 0.0
-        val maxDiff = diffs.maxOrNull() ?: 0.0
+        val sorted = pts.sortedBy { Math.atan2(it.y - cy, it.x - cx) }
 
-        val tl = pts[sums.indexOf(minSum)]
-        val br = pts[sums.indexOf(maxSum)]
-        val tr = pts[diffs.indexOf(minDiff)]
-        val bl = pts[diffs.indexOf(maxDiff)]
+        var minIdx = 0
+        var minSum = Double.MAX_VALUE
+        for (i in 0 until 4) {
+            val sum = sorted[i].x + sorted[i].y
+            if (sum < minSum) {
+                minSum = sum
+                minIdx = i
+            }
+        }
 
-        return listOf(tl, tr, br, bl)
+        return listOf(
+            sorted[minIdx],
+            sorted[(minIdx + 1) % 4],
+            sorted[(minIdx + 2) % 4],
+            sorted[(minIdx + 3) % 4]
+        )
     }
     
     fun close() {

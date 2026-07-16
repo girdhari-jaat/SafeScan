@@ -43,5 +43,20 @@ object ExportHelper {
     ): RectF {
         return com.safescan.utils.PageConfig.calculateBitmapDrawingRects(bmpWidth, bmpHeight, pageWidth, pageHeight, pageSizeStr)
     }
+
+    /**
+     * Calculates the drawing bounds of a bitmap stretched to perfectly match the target PDF page size
+     * (respecting margins), ensuring true warp/stretch without any cropping.
+     */
+    fun calculateStretchedDrawingRect(
+        pageWidth: Int,
+        pageHeight: Int,
+        pageSizeStr: String
+    ): RectF {
+        val margin = if (pageSizeStr.equals("Original", ignoreCase = true)) 0f else 36f
+        val printableWidth = pageWidth - 2 * margin
+        val printableHeight = pageHeight - 2 * margin
+        return RectF(margin, margin, margin + printableWidth, margin + printableHeight)
+    }
 }
 

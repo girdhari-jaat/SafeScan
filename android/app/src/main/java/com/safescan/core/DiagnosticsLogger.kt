@@ -18,7 +18,7 @@ object DiagnosticsLogger {
         val formattedLog = "[$timestamp] $message"
         val currentList = _logs.value.toMutableList()
         currentList.add(formattedLog)
-        if (currentList.size > 100) {
+        if (currentList.size > 1000) {
             currentList.removeAt(0)
         }
         _logs.value = currentList

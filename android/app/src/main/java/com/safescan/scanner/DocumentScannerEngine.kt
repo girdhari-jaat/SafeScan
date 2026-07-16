@@ -198,13 +198,29 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
     }
 
     private fun orderPoints(pts: List<Point>): List<Point> {
-        val sums = pts.map { it.x + it.y }
-        val diffs = pts.map { it.y - it.x }
-        val tl = pts[sums.indexOf(sums.minOrNull()!!)]
-        val br = pts[sums.indexOf(sums.maxOrNull()!!)]
-        val tr = pts[diffs.indexOf(diffs.minOrNull()!!)]
-        val bl = pts[diffs.indexOf(diffs.maxOrNull()!!)]
-        return listOf(tl, tr, br, bl)
+        if (pts.size != 4) return pts
+
+        val cx = pts.map { it.x }.average()
+        val cy = pts.map { it.y }.average()
+
+        val sorted = pts.sortedBy { Math.atan2(it.y - cy, it.x - cx) }
+
+        var minIdx = 0
+        var minSum = Double.MAX_VALUE
+        for (i in 0 until 4) {
+            val sum = sorted[i].x + sorted[i].y
+            if (sum < minSum) {
+                minSum = sum
+                minIdx = i
+            }
+        }
+
+        return listOf(
+            sorted[minIdx],
+            sorted[(minIdx + 1) % 4],
+            sorted[(minIdx + 2) % 4],
+            sorted[(minIdx + 3) % 4]
+        )
     }
 
     private fun getMaxCosine(approx: MatOfPoint2f): Double {

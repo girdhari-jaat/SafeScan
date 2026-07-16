@@ -76,9 +76,7 @@ class PdfExporter(private val context: Context) {
                     val canvas = page.canvas
 
                     val srcRect = Rect(0, 0, bmp.width, bmp.height)
-                    val dstRect = ExportHelper.calculateBitmapDrawingRects(
-                        bmp.width,
-                        bmp.height,
+                    val dstRect = ExportHelper.calculateStretchedDrawingRect(
                         finalWidth,
                         finalHeight,
                         pageSizeStr

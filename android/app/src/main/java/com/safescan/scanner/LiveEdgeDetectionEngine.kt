@@ -78,6 +78,7 @@ class LiveEdgeDetectionEngine {
         imageProxy: ImageProxy, 
         documentScanner: DocumentScanner?, 
         engineType: ScannerEngineType, 
+        mode: com.safescan.data.ScannerMode? = null,
         onResult: (List<Point>?, Double) -> Unit
     ) = synchronized(this) {
         ScannerDebugLogger.logEnter("LiveEdgeDetectionEngine.process")
@@ -122,13 +123,32 @@ class LiveEdgeDetectionEngine {
             } else {
                 // 2. Use OpenCV directly
                 // Gaussian blur is faster for live preview and provides good edge smoothing
-                Imgproc.GaussianBlur(gray!!, blurred!!, Size(5.0, 5.0), 0.0)
+                val blurSize = when (mode) {
+                    com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> Size(5.0, 5.0)
+                    com.safescan.data.ScannerMode.DOCUMENT -> Size(5.0, 5.0)
+                    null -> Size(5.0, 5.0)
+                }
+                Imgproc.GaussianBlur(gray!!, blurred!!, blurSize, 0.0)
+                
+                val (lowThresh, highThresh) = when (mode) {
+                    com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> Pair(50.0, 125.0)
+                    com.safescan.data.ScannerMode.DOCUMENT -> Pair(40.0, 100.0)
+                    null -> Pair(40.0, 100.0)
+                }
                 
                 // Enhance contrast slightly using equalization could be heavy, so we rely on adaptive threshold or Canny
-                Imgproc.Canny(blurred!!, edges!!, 40.0, 120.0) 
+                Imgproc.Canny(blurred!!, edges!!, lowThresh, highThresh) 
+                
+                val morphSize = when (mode) {
+                    com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> Size(7.0, 7.0)
+                    com.safescan.data.ScannerMode.DOCUMENT -> Size(5.0, 5.0)
+                    null -> Size(5.0, 5.0)
+                }
+                val morphKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, morphSize)
                 
                 // Morphological closing to connect fragmented edges
-                Imgproc.morphologyEx(edges!!, edges!!, Imgproc.MORPH_CLOSE, kernel!!)
+                Imgproc.morphologyEx(edges!!, edges!!, Imgproc.MORPH_CLOSE, morphKernel)
+                morphKernel.release()
                 
                 // RETR_EXTERNAL is faster and we only care about the outermost document contour
                 Imgproc.findContours(edges!!, contours, hierarchy!!, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
@@ -137,7 +157,11 @@ class LiveEdgeDetectionEngine {
                 contours.sortByDescending { Imgproc.contourArea(it) }
                 
                 val maxArea = resized!!.width() * resized!!.height()
-                val minArea = maxArea * 0.12 // Document must occupy at least 12% of the frame
+                val minArea = when (mode) {
+                    com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> maxArea * 0.06 // Card/Grid must occupy at least 6% of the frame
+                    com.safescan.data.ScannerMode.DOCUMENT -> maxArea * 0.12 // Document must occupy at least 12% of the frame
+                    null -> maxArea * 0.12
+                }
                 
                 for (contour in contours) {
                     val area = Imgproc.contourArea(contour)
@@ -292,13 +316,29 @@ class LiveEdgeDetectionEngine {
     }
 
     private fun orderPoints(pts: List<Point>): List<Point> {
-        val sums = pts.map { it.x + it.y }
-        val diffs = pts.map { it.y - it.x }
-        val tl = pts[sums.indexOf(sums.minOrNull()!!)]
-        val br = pts[sums.indexOf(sums.maxOrNull()!!)]
-        val tr = pts[diffs.indexOf(diffs.minOrNull()!!)]
-        val bl = pts[diffs.indexOf(diffs.maxOrNull()!!)]
-        return listOf(tl, tr, br, bl)
+        if (pts.size != 4) return pts
+
+        val cx = pts.map { it.x }.average()
+        val cy = pts.map { it.y }.average()
+
+        val sorted = pts.sortedBy { Math.atan2(it.y - cy, it.x - cx) }
+
+        var minIdx = 0
+        var minSum = Double.MAX_VALUE
+        for (i in 0 until 4) {
+            val sum = sorted[i].x + sorted[i].y
+            if (sum < minSum) {
+                minSum = sum
+                minIdx = i
+            }
+        }
+
+        return listOf(
+            sorted[minIdx],
+            sorted[(minIdx + 1) % 4],
+            sorted[(minIdx + 2) % 4],
+            sorted[(minIdx + 3) % 4]
+        )
     }
 
     private fun angle(pt1: org.opencv.core.Point, pt2: org.opencv.core.Point, pt0: org.opencv.core.Point): Double {

@@ -359,9 +359,7 @@ class ScannerViewModel @Inject constructor(
     var isFocusing = false
 
     fun onDocumentDetected(points: List<com.safescan.domain.model.Point>?, sharpness: Double = 0.0) {
-        ScannerDebugLogger.logEnter("ScannerViewModel.onDocumentDetected")
         if (isFocusing) {
-            ScannerDebugLogger.logExit("ScannerViewModel.onDocumentDetected")
             return
         }
         
@@ -372,7 +370,6 @@ class ScannerViewModel @Inject constructor(
         if (!autoCapture.value || processedPoints == null || processedPoints.size != 4) {
             stableFrameCount = 0
             lastQuadPoints = null
-            ScannerDebugLogger.logExit("ScannerViewModel.onDocumentDetected")
             return
         }
 
@@ -411,7 +408,6 @@ class ScannerViewModel @Inject constructor(
             lastQuadPoints = null
             triggerAutoCapture()
         }
-        ScannerDebugLogger.logExit("ScannerViewModel.onDocumentDetected")
     }
 
     private fun averageCorners(p1: List<com.safescan.domain.model.Point>, p2: List<com.safescan.domain.model.Point>): List<com.safescan.domain.model.Point> {
@@ -456,7 +452,7 @@ class ScannerViewModel @Inject constructor(
             var points: List<Point>? = null
             try {
                 if (!bitmap.isRecycled) {
-                    points = edgeDetectionEngine.detectEdges(bitmap)
+                    points = edgeDetectionEngine.detectEdges(bitmap, currentMode.value)
                     Log.d("ScannerViewModel", "detectEdges: Successfully detected corners using OpenCV")
                 }
             } catch (e: Throwable) {

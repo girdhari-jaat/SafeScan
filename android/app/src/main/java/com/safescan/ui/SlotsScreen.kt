@@ -79,6 +79,38 @@ fun SlotsScreen(
 
     var isSettingsPopoverOpen by remember { mutableStateOf(false) }
 
+    val view = androidx.compose.ui.platform.LocalView.current
+    DisposableEffect(key1 = Unit) {
+        var activityContext = context
+        while (activityContext is android.content.ContextWrapper) {
+            if (activityContext is android.app.Activity) break
+            activityContext = activityContext.baseContext
+        }
+
+        val window = (activityContext as? android.app.Activity)?.window
+        val originalNavBarColor = window?.navigationBarColor
+        val originalAppearanceLightNavigationBars = window?.let {
+            androidx.core.view.WindowCompat.getInsetsController(it, view).isAppearanceLightNavigationBars
+        }
+
+        if (window != null) {
+            // Make navigation bar transparent on the dark capture screen
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
+            androidx.core.view.WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
+        }
+
+        onDispose {
+            if (window != null) {
+                if (originalNavBarColor != null) {
+                    window.navigationBarColor = originalNavBarColor
+                }
+                if (originalAppearanceLightNavigationBars != null) {
+                    androidx.core.view.WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = originalAppearanceLightNavigationBars
+                }
+            }
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
         // LAYER 1: Viewfinder Overlay Guides based on Selected Mood
         // ViewfinderOverlay(mode = currentMode, showGrid = showGrid, modifier = Modifier.fillMaxSize())

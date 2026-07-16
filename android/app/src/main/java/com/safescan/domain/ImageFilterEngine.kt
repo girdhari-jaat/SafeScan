@@ -43,27 +43,65 @@ object ImageFilterEngine {
                 }
             }
             FilterType.CARD -> {
-                var gray: Mat? = null
+                val hsv = Mat()
+                val mask = Mat()
+                val whiteLayer = Mat()
+                val greenSuppressed = Mat()
+                val denoised = Mat()
+                val lab = Mat()
+                val mergedLab = Mat()
+                val enhancedBgr = Mat()
+                val sharpened = Mat()
+                val kernel = Mat(3, 3, CvType.CV_32F)
+                val channels = ArrayList<Mat>()
                 var clahe: org.opencv.imgproc.CLAHE? = null
-                var claheMat: Mat? = null
-                var b: Mat? = null
+
                 try {
-                    gray = Mat()
-                    Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY)
-                    
-                    clahe = Imgproc.createCLAHE(3.0, Size(8.0, 8.0))
-                    claheMat = Mat()
-                    clahe.apply(gray, claheMat)
-                    
-                    b = Mat()
-                    Imgproc.GaussianBlur(claheMat, b, Size(0.0, 0.0), 3.0)
-                    Core.addWeighted(claheMat, 1.5, b, -0.5, 0.0, outMat)
-                    
-                    Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
+                    // STEP 1: Green Suppression for CNIC/Card background cleanup
+                    Imgproc.cvtColor(src, hsv, Imgproc.COLOR_BGR2HSV)
+                    Core.inRange(hsv, org.opencv.core.Scalar(35.0, 30.0, 40.0), org.opencv.core.Scalar(95.0, 255.0, 255.0), mask)
+
+                    whiteLayer.create(src.size(), src.type())
+                    whiteLayer.setTo(org.opencv.core.Scalar(240.0, 240.0, 240.0))
+                    src.copyTo(greenSuppressed)
+                    whiteLayer.copyTo(greenSuppressed, mask)
+
+                    // STEP 2: Denoise via edge-preserving Bilateral Filter
+                    Imgproc.bilateralFilter(greenSuppressed, denoised, 5, 50.0, 50.0)
+
+                    // STEP 3: CLAHE on L (Lightness) channel only to preserve text and equalize lighting safely
+                    Imgproc.cvtColor(denoised, lab, Imgproc.COLOR_BGR2Lab)
+                    Core.split(lab, channels) // channels[0]=L, [1]=A, [2]=B
+
+                    clahe = Imgproc.createCLAHE(1.5, Size(8.0, 8.0)) // 1.5 for text safety
+                    clahe.apply(channels[0], channels[0]) // L channel enhance
+
+                    Core.merge(channels, mergedLab)
+                    Imgproc.cvtColor(mergedLab, enhancedBgr, Imgproc.COLOR_Lab2BGR)
+
+                    // STEP 4: Sharpening filter to make fonts crisp
+                    kernel.put(0, 0, floatArrayOf(0f, -0.5f, 0f, -0.5f, 3f, -0.5f, 0f, -0.5f, 0f))
+                    Imgproc.filter2D(enhancedBgr, sharpened, -1, kernel)
+
+                    // Convert to final RGBA output
+                    Imgproc.cvtColor(sharpened, outMat, Imgproc.COLOR_BGR2RGBA)
+
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    Imgproc.cvtColor(src, outMat, Imgproc.COLOR_BGR2RGBA)
                 } finally {
-                    gray?.release()
-                    claheMat?.release()
-                    b?.release()
+                    hsv.release()
+                    mask.release()
+                    whiteLayer.release()
+                    greenSuppressed.release()
+                    denoised.release()
+                    lab.release()
+                    mergedLab.release()
+                    enhancedBgr.release()
+                    sharpened.release()
+                    kernel.release()
+                    channels.forEach { it.release() }
+                    clahe?.release()
                 }
             }
             FilterType.MAGIC_COLOR -> {

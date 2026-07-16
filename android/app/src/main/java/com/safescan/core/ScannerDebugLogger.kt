@@ -5,16 +5,20 @@ import android.util.Log
 object ScannerDebugLogger {
     private const val TAG = "ScannerDebug"
 
+    // State tracking to prevent high-frequency UI log spam while keeping necessary transitions
+    private var lastDocumentDetected: Boolean? = null
+    private var lastStableCount = -1
+
     fun logEnter(functionName: String) {
         val msg = "ENTER: $functionName"
-        Log.i(TAG, msg)
-        DiagnosticsLogger.log("ℹ️ $msg")
+        Log.d(TAG, msg)
+        // High frequency: skip DiagnosticsLogger to keep UI smooth and lightweight
     }
 
     fun logExit(functionName: String) {
         val msg = "EXIT: $functionName"
-        Log.i(TAG, msg)
-        DiagnosticsLogger.log("ℹ️ $msg")
+        Log.d(TAG, msg)
+        // High frequency: skip DiagnosticsLogger to keep UI smooth and lightweight
     }
 
     fun logCameraX(resolution: String, mode: String) {
@@ -43,38 +47,56 @@ object ScannerDebugLogger {
 
     fun logLiveEdge(contours: Int) {
         val msg = "[LiveEdge] Frame processed. Found contours: $contours"
-        Log.i(TAG, msg)
-        DiagnosticsLogger.log("ℹ️ $msg")
+        Log.d(TAG, msg)
+        // High frequency: skip DiagnosticsLogger to keep UI smooth and lightweight
     }
 
     fun logLiveEdgePoints(p1: String, p2: String, p3: String, p4: String) {
         val msg = "[LiveEdge] Best contour points: [p1=$p1, p2=$p2, p3=$p3, p4=$p4]"
-        Log.i(TAG, msg)
-        DiagnosticsLogger.log("ℹ️ $msg")
+        Log.d(TAG, msg)
+        
+        // Only log to DiagnosticsLogger on state change to avoid 30fps spam
+        if (lastDocumentDetected != true) {
+            lastDocumentDetected = true
+            DiagnosticsLogger.log("🟢 [Document] Document detected in live stream!")
+        }
     }
 
     fun logLiveEdgeArea(area: Double, percentage: Double) {
         val msg = "[LiveEdge] Contour Area: $area. Area% of Overlay: ${String.format("%.2f", percentage)}%"
-        Log.i(TAG, msg)
-        DiagnosticsLogger.log("ℹ️ $msg")
+        Log.d(TAG, msg)
+        // High frequency: skip DiagnosticsLogger to keep UI smooth and lightweight
     }
 
     fun logSmoothing(distance: Double) {
         val msg = "[LiveEdge] Smoothing: Prev vs New corner distance: ${String.format("%.2f", distance)} pixels"
-        Log.i(TAG, msg)
-        DiagnosticsLogger.log("ℹ️ $msg")
+        Log.d(TAG, msg)
+        // High frequency: skip DiagnosticsLogger to keep UI smooth and lightweight
     }
 
     fun logStability(stableCount: Int) {
         val msg = "[Stability] Stable frame count: $stableCount/3"
-        Log.i(TAG, msg)
-        DiagnosticsLogger.log("ℹ️ $msg")
+        Log.d(TAG, msg)
+        
+        if (stableCount == 0) {
+            if (lastDocumentDetected == true) {
+                lastDocumentDetected = false
+                DiagnosticsLogger.log("⚪ [Document] Document lost / tracking reset.")
+            }
+            lastStableCount = 0
+        } else if (stableCount != lastStableCount) {
+            lastStableCount = stableCount
+            DiagnosticsLogger.log("⚡ [Stability] Frame stable: $stableCount/3")
+        }
     }
 
     fun logAutoCap(inBox: Boolean, sharpness: Double, stable: Int, trigger: Boolean) {
         val msg = "[AutoCap] InBox: $inBox, Sharpness: ${String.format("%.2f", sharpness)}, Stable: $stable. Trigger: $trigger"
-        Log.i(TAG, msg)
-        DiagnosticsLogger.log("ℹ️ $msg")
+        Log.d(TAG, msg)
+        
+        if (trigger) {
+            DiagnosticsLogger.log("📸 [AutoCap] Auto-capture triggered! (Sharpness: ${String.format("%.2f", sharpness)})")
+        }
     }
 
     fun logCrop(x: Float, y: Float, w: Float, h: Float) {

@@ -82,6 +82,7 @@ class ScannerFragment : Fragment() {
     private var currentViewMode = FragmentViewMode.LIBRARY
     private var isTargetLocked = false
     private var lastBackPressedTime = 0L
+    private var lastAnalysisTime = 0L
 
     override fun onPause() {
         super.onPause()
@@ -843,6 +844,16 @@ class ScannerFragment : Fragment() {
                     val isOverlayActive = !viewModel.isEditing.value && !viewModel.isCropping.value && !viewModel.isSettingsOpen.value && !viewModel.isDocumentOpenedFromLibrary.value && !viewModel.isGridViewVisible.value
                     if (isLiveDetectOn && !isBatterySaverOn && isOverlayActive) {
                         try {
+                            val currentTime = System.currentTimeMillis()
+                            val isDocDetected = viewModel.isDocumentDetected.value
+                            val delayThreshold = if (isDocDetected) 400L else 200L
+                            
+                            if (currentTime - lastAnalysisTime < delayThreshold) {
+                                imageProxy.close()
+                                return@setAnalyzer
+                            }
+                            lastAnalysisTime = currentTime
+
                             val rotationDegrees = imageProxy.imageInfo.rotationDegrees
                             val width = imageProxy.width
                             val height = imageProxy.height
@@ -883,7 +894,7 @@ class ScannerFragment : Fragment() {
                                 }
                             }
                             
-                            liveEdgeDetectionEngine.process(imageProxy, viewModel.documentScanner, viewModel.uiState.value.currentEngine) { corners, sharpness ->
+                            liveEdgeDetectionEngine.process(imageProxy, viewModel.documentScanner, viewModel.uiState.value.currentEngine, viewModel.currentMode.value) { corners, sharpness ->
                                 val mappedPoints = if (corners != null && corners.isNotEmpty()) {
                                     mapPointsToPreviewView(corners, width, height, rotationDegrees)
                                 } else {

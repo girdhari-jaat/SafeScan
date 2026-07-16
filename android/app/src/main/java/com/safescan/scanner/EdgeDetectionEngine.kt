@@ -12,12 +12,12 @@ import org.opencv.imgproc.Imgproc
 class EdgeDetectionEngine {
 
     @Synchronized
-    fun detectEdgesSafe(bitmap: Bitmap): List<Point> {
-        return detectEdges(bitmap) ?: getFallbackQuad(bitmap.width.toDouble(), bitmap.height.toDouble())
+    fun detectEdgesSafe(bitmap: Bitmap, mode: com.safescan.data.ScannerMode? = null): List<Point> {
+        return detectEdges(bitmap, mode) ?: getFallbackQuad(bitmap.width.toDouble(), bitmap.height.toDouble())
     }
 
     @Synchronized
-    fun detectEdges(bitmap: Bitmap): List<Point>? {
+    fun detectEdges(bitmap: Bitmap, mode: com.safescan.data.ScannerMode? = null): List<Point>? {
         if (bitmap.isRecycled) return null
         var src: Mat? = null
         var resized: Mat? = null
@@ -41,17 +41,37 @@ class EdgeDetectionEngine {
             gray = Mat()
             Imgproc.cvtColor(resized, gray, Imgproc.COLOR_RGBA2GRAY)
             
-            // GaussianBlur for removing high-frequency noise while keeping document boundaries
-            Imgproc.GaussianBlur(gray, gray, Size(5.0, 5.0), 0.0)
+            // 1. CLAHE (Contrast Limited Adaptive Histogram Equalization) for contrast equalization under shadows/bad lighting
+            val clahe = Imgproc.createCLAHE(2.0, Size(8.0, 8.0))
+            clahe.apply(gray, gray)
+            clahe.release()
             
-            val maxArea = (resized.width() * resized.height()).toDouble()
-            val minArea = maxArea * 0.01 // Support small documents (at least 1% of the screen area)
+            // 2. Bilateral filter for excellent edge-preserving smoothing (clears internal text & textures)
+            val filtered = Mat()
+            Imgproc.bilateralFilter(gray, filtered, 9, 75.0, 75.0)
+            filtered.copyTo(gray)
+            filtered.release()
+            
+            val imageArea = (resized.width() * resized.height()).toDouble()
+            val minArea = imageArea * 0.10   // 10%
+            val maxArea = imageArea * 0.95   // 95%
             
             var bestPoints: List<Point>? = null
             var bestScore = -Double.MAX_VALUE
 
-            // Canny thresholds [40, 70, 100] as requested
-            val thresholds = listOf(40.0, 70.0, 100.0)
+            // Define thresholds and morphology kernel size for each mode
+            val thresholds = when (mode) {
+                com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> listOf(40.0, 60.0, 80.0, 100.0)
+                com.safescan.data.ScannerMode.DOCUMENT -> listOf(30.0, 50.0, 70.0, 90.0)
+                null -> listOf(35.0, 55.0, 75.0, 95.0)
+            }
+
+            val morphSize = when (mode) {
+                com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> Size(7.0, 7.0)
+                com.safescan.data.ScannerMode.DOCUMENT -> Size(5.0, 5.0)
+                null -> Size(5.0, 5.0)
+            }
+
             for (threshold in thresholds) {
                 var edges: Mat? = null
                 var kernel: Mat? = null
@@ -61,23 +81,21 @@ class EdgeDetectionEngine {
                     edges = Mat()
                     Imgproc.Canny(gray, edges, threshold, threshold * 2.5)
                     
-                    kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
+                    kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, morphSize)
                     Imgproc.morphologyEx(edges, edges, Imgproc.MORPH_CLOSE, kernel)
 
                     hierarchy = Mat()
-                    // Use RETR_LIST to find nested contours, allowing detection even with textual boundaries inside the document
                     Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
 
                     for (contour in contours) {
                         val area = Imgproc.contourArea(contour)
-                        if (area < minArea) continue
+                        if (area < minArea || area > maxArea) continue
                         
                         var contour2f: MatOfPoint2f? = null
                         try {
                             contour2f = MatOfPoint2f(*contour.toArray())
                             val peri = Imgproc.arcLength(contour2f, true)
                             
-                            // Try to approximate with different epsilon factors to get exactly 4 corners
                             for (epsFactor in listOf(0.015, 0.02, 0.03, 0.04)) {
                                 val approx = MatOfPoint2f()
                                 try {
@@ -87,10 +105,14 @@ class EdgeDetectionEngine {
                                         
                                         if (isConvexPoints(approxPointsResized)) {
                                             val maxAngleError = getMaxCosinePoints(approxPointsResized)
-                                            // Ensure the angle error is within threshold (< 0.5) to verify a good rectangular shape
                                             if (maxAngleError < 0.5) {
-                                                val normArea = area / maxArea
-                                                val score = normArea - maxAngleError
+                                                val normArea = area / imageArea
+                                                val quadArea = getQuadArea(approxPointsResized)
+                                                val areaRatio = if (quadArea > 0) Math.min(area, quadArea) / Math.max(area, quadArea) else 0.0
+                                                val aspect = getQuadAspectRatio(approxPointsResized)
+                                                val aspectPenalty = if (aspect > 2.2) (aspect - 2.2) * 0.3 else 0.0
+                                                
+                                                val score = normArea * 0.6 + areaRatio * 0.4 - maxAngleError - aspectPenalty
                                                 if (score > bestScore) {
                                                     bestScore = score
                                                     val approxPointsOriginal = approxPointsResized.map { Point(it.x / scaleFactor, it.y / scaleFactor) }
@@ -104,15 +126,19 @@ class EdgeDetectionEngine {
                                 }
                             }
 
-                            // FALLBACK WITHIN CONTOUR: If approxPolyDP failed, try extreme points
+                            // FALLBACK WITHIN CONTOUR
                             val extremePointsResized = getExtremePoints(contour).map { Point(it.x, it.y) }
                             if (extremePointsResized.size == 4 && isConvexPoints(extremePointsResized)) {
                                 val maxAngleError = getMaxCosinePoints(extremePointsResized)
                                 if (maxAngleError < 0.5) {
                                     val quadArea = getQuadArea(extremePointsResized)
-                                    if (quadArea >= minArea) {
-                                        val normArea = quadArea / maxArea
-                                        val score = normArea - maxAngleError
+                                    if (quadArea in minArea..maxArea) {
+                                        val normArea = quadArea / imageArea
+                                        val areaRatio = if (quadArea > 0) Math.min(area, quadArea) / Math.max(area, quadArea) else 0.0
+                                        val aspect = getQuadAspectRatio(extremePointsResized)
+                                        val aspectPenalty = if (aspect > 2.2) (aspect - 2.2) * 0.3 else 0.0
+                                        
+                                        val score = normArea * 0.6 + areaRatio * 0.4 - maxAngleError - aspectPenalty
                                         if (score > bestScore) {
                                             bestScore = score
                                             val extremePointsOriginal = extremePointsResized.map { Point(it.x / scaleFactor, it.y / scaleFactor) }
@@ -131,6 +157,37 @@ class EdgeDetectionEngine {
                     contours.forEach { it.release() }
                     hierarchy?.release()
                 }
+            }
+
+            // Automatic identification logic for offline edge detection
+            if (bestPoints != null && bestPoints.size == 4) {
+                val tl = bestPoints[0]
+                val tr = bestPoints[1]
+                val br = bestPoints[2]
+                val bl = bestPoints[3]
+
+                val widthA = Math.hypot(br.x - bl.x, br.y - bl.y)
+                val widthB = Math.hypot(tr.x - tl.x, tr.y - tl.y)
+                val avgWidth = (widthA + widthB) / 2.0
+
+                val heightA = Math.hypot(tr.x - br.x, tr.y - br.y)
+                val heightB = Math.hypot(tl.x - bl.x, tl.y - bl.y)
+                val avgHeight = (heightA + heightB) / 2.0
+
+                val aspectRatio = if (avgHeight > 0) {
+                    Math.max(avgWidth / avgHeight, avgHeight / avgWidth)
+                } else {
+                    1.0
+                }
+
+                // If aspect ratio is close to standard Card (1.586, e.g., between 1.45 and 1.75)
+                val identifiedType = if (aspectRatio in 1.45..1.75) {
+                    "CARD"
+                } else {
+                    "DOCUMENT"
+                }
+                
+                com.safescan.core.DiagnosticsLogger.log("🔍 [Offline Auto-Detect] Identified type: $identifiedType (Aspect Ratio: ${String.format("%.3f", aspectRatio)})")
             }
 
             return bestPoints
@@ -193,22 +250,47 @@ class EdgeDetectionEngine {
     }
 
     private fun orderPoints(pts: List<Point>): List<Point> {
-        if (pts.size < 4) return pts
+        if (pts.size != 4) return pts
 
-        val sums = pts.map { it.x + it.y }
-        val diffs = pts.map { it.y - it.x }
+        val cx = pts.map { it.x }.average()
+        val cy = pts.map { it.y }.average()
 
-        val minSum = sums.minOrNull() ?: 0.0
-        val maxSum = sums.maxOrNull() ?: 0.0
-        val minDiff = diffs.minOrNull() ?: 0.0
-        val maxDiff = diffs.maxOrNull() ?: 0.0
+        val sorted = pts.sortedBy { Math.atan2(it.y - cy, it.x - cx) }
 
-        val tl = pts[sums.indexOf(minSum)]
-        val br = pts[sums.indexOf(maxSum)]
-        val tr = pts[diffs.indexOf(minDiff)]
-        val bl = pts[diffs.indexOf(maxDiff)]
+        var minIdx = 0
+        var minSum = Double.MAX_VALUE
+        for (i in 0 until 4) {
+            val sum = sorted[i].x + sorted[i].y
+            if (sum < minSum) {
+                minSum = sum
+                minIdx = i
+            }
+        }
 
-        return listOf(tl, tr, br, bl)
+        return listOf(
+            sorted[minIdx],
+            sorted[(minIdx + 1) % 4],
+            sorted[(minIdx + 2) % 4],
+            sorted[(minIdx + 3) % 4]
+        )
+    }
+
+    private fun getQuadAspectRatio(points: List<Point>): Double {
+        if (points.size != 4) return 1.0
+        val tl = points[0]
+        val tr = points[1]
+        val br = points[2]
+        val bl = points[3]
+
+        val widthA = Math.hypot(br.x - bl.x, br.y - bl.y)
+        val widthB = Math.hypot(tr.x - tl.x, tr.y - tl.y)
+        val avgWidth = (widthA + widthB) / 2.0
+
+        val heightA = Math.hypot(tr.x - br.x, tr.y - br.y)
+        val heightB = Math.hypot(tl.x - bl.x, tl.y - bl.y)
+        val avgHeight = (heightA + heightB) / 2.0
+
+        return if (avgHeight > 0) Math.max(avgWidth / avgHeight, avgHeight / avgWidth) else 1.0
     }
     
     fun getFallbackQuad(w: Double, h: Double): List<Point> {

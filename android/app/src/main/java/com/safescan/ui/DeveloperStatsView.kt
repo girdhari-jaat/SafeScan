@@ -39,10 +39,28 @@ fun DeveloperStatsView(viewModel: ScannerViewModel) {
     
     val logs by DiagnosticsLogger.logs.collectAsState()
     val listState = rememberLazyListState()
+    
+    var logFilterMode by remember { mutableStateOf("Diagnostics") }
+    
+    val filteredLogs = remember(logs, logFilterMode) {
+        logs.filter { log ->
+            val isHighFrequency = log.contains("[LiveEdge]") ||
+                    log.contains("[Stability]") ||
+                    log.contains("[AutoCap]") ||
+                    log.contains("LiveEdgeDetectionEngine.process") ||
+                    log.contains("onDocumentDetected")
+            
+            when (logFilterMode) {
+                "Diagnostics" -> !isHighFrequency
+                "Debug" -> isHighFrequency
+                else -> true
+            }
+        }
+    }
 
-    LaunchedEffect(logs.size) {
-        if (logs.isNotEmpty()) {
-            listState.animateScrollToItem(logs.size - 1)
+    LaunchedEffect(filteredLogs.size) {
+        if (filteredLogs.isNotEmpty()) {
+            listState.animateScrollToItem(filteredLogs.size - 1)
         }
     }
 
@@ -336,6 +354,46 @@ fun DeveloperStatsView(viewModel: ScannerViewModel) {
                         }
                         
                         Spacer(modifier = Modifier.height(8.dp))
+
+                        // Filter Chips Row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf("Diagnostics", "Debug", "All").forEach { mode ->
+                                val isSelected = logFilterMode == mode
+                                val containerColor = if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFF252525)
+                                val contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else Color.LightGray
+                                Surface(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { logFilterMode = mode }
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFF3C3C3C),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = containerColor
+                                ) {
+                                    Box(
+                                        modifier = Modifier.padding(vertical = 6.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = mode,
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                fontSize = 11.sp
+                                            ),
+                                            color = contentColor
+                                        )
+                                    }
+                                }
+                            }
+                        }
                         
                         // Console Box
                         Box(
@@ -346,9 +404,13 @@ fun DeveloperStatsView(viewModel: ScannerViewModel) {
                                 .border(1.dp, Color(0xFF333333), shape = RoundedCornerShape(8.dp))
                                 .padding(8.dp)
                         ) {
-                            if (logs.isEmpty()) {
+                            if (filteredLogs.isEmpty()) {
                                 Text(
-                                    text = "No diagnostic events captured yet. Perform actions to stream live logs.",
+                                    text = when (logFilterMode) {
+                                        "Diagnostics" -> "No core diagnostic events captured. Standard operations will stream here."
+                                        "Debug" -> "No live frame debug events active. Stream live view to capture frames."
+                                        else -> "No logs captured yet."
+                                    },
                                     style = androidx.compose.ui.text.TextStyle(
                                         fontFamily = FontFamily.Monospace,
                                         fontSize = 11.sp,
@@ -361,7 +423,7 @@ fun DeveloperStatsView(viewModel: ScannerViewModel) {
                                     state = listState,
                                     modifier = Modifier.fillMaxSize()
                                 ) {
-                                    items(logs) { log ->
+                                    items(filteredLogs) { log ->
                                         val color = when {
                                             log.contains("🔴") || log.contains("ERROR") || log.contains("error") -> Color(0xFFF44336)
                                             log.contains("⚠️") || log.contains("WARN") || log.contains("warn") -> Color(0xFFFFEB3B)
