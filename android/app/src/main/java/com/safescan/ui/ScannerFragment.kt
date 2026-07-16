@@ -628,16 +628,21 @@ class ScannerFragment : Fragment() {
         val dy: Float
 
         if (frameRatio > viewRatio) {
-            // The scaled frame is wider than the view, so height fits exactly, and left/right are cropped
-            scale = viewHeight / rotatedHeight
-            dx = (rotatedWidth * scale - viewWidth) / 2f
-            dy = 0f
-        } else {
-            // The scaled frame is taller than the view, so width fits exactly, and top/bottom are cropped
+            // fitCenter logic:
+            // The scaled frame is wider than the view, so width fits exactly, and top/bottom have black bars
             scale = viewWidth / rotatedWidth
             dx = 0f
-            dy = (rotatedHeight * scale - viewHeight) / 2f
+            dy = -(viewHeight - rotatedHeight * scale) / 2f
+        } else {
+            // fitCenter logic:
+            // The scaled frame is taller than the view, so height fits exactly, and left/right have black bars
+            scale = viewHeight / rotatedHeight
+            dx = -(viewWidth - rotatedWidth * scale) / 2f
+            dy = 0f
         }
+
+        android.util.Log.d("ScannerTest", "fitCenter dx=$dx dy=$dy scale=$scale previewW=$viewWidth previewH=$viewHeight")
+        com.safescan.core.DiagnosticsLogger.info("ScannerTest: fitCenter dx=$dx dy=$dy scale=$scale previewW=$viewWidth previewH=$viewHeight")
 
         return points.map { pt ->
             // 1. First, normalize coordinates relative to the bitmap (0.0 to 1.0)
@@ -852,7 +857,7 @@ class ScannerFragment : Fragment() {
                                     
                                     val ratioW = pw / bw
                                     val ratioH = ph / bh
-                                    val scale = if (ratioW > ratioH) ratioW else ratioH
+                                    val scale = if (ratioW < ratioH) ratioW else ratioH
                                     val scaledBw = bw * scale
                                     val scaledBh = bh * scale
                                     
@@ -1027,6 +1032,17 @@ class ScannerFragment : Fragment() {
         }, androidx.core.content.ContextCompat.getMainExecutor(requireContext()))
     }
 
+    private fun runAccuracyTest(previewCorners: List<android.graphics.PointF>?) {
+        android.util.Log.d("ScannerTest", "=== ACCURACY TEST START ===")
+        com.safescan.core.DiagnosticsLogger.info("ScannerTest: === ACCURACY TEST START ===")
+        previewCorners?.forEachIndexed { i, p -> 
+            android.util.Log.d("ScannerTest", "Corner $i: View(${p.x},${p.y})")
+            com.safescan.core.DiagnosticsLogger.info("ScannerTest: Corner $i: View(${p.x},${p.y})")
+        }
+        android.util.Log.d("ScannerTest", "=== ACCURACY TEST END ===")
+        com.safescan.core.DiagnosticsLogger.info("ScannerTest: === ACCURACY TEST END ===")
+    }
+
     private fun takePhoto() {
         if (viewModel.usePhoneCamera.value) {
             viewModel.isFocusing = false
@@ -1091,6 +1107,8 @@ class ScannerFragment : Fragment() {
             }
         }
 
+        runAccuracyTest(_binding?.overlayView?.getCorners())
+
         imageCapture.takePicture(
             ContextCompat.getMainExecutor(currentContext),
             object : ImageCapture.OnImageCapturedCallback() {
@@ -1123,7 +1141,7 @@ class ScannerFragment : Fragment() {
                                 val bw = bitmap.width.toFloat()
                                 val bh = bitmap.height.toFloat()
                                 
-                                val scale = maxOf(pw / bw, ph / bh)
+                                val scale = minOf(pw / bw, ph / bh)
                                 val scaledBw = bw * scale
                                 val scaledBh = bh * scale
                                 

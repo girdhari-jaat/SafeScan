@@ -1,5 +1,9 @@
 package com.safescan.ui
 
+// QA CHECKLIST:
+// 1. DISTANCE TEST: Place A4 at 8 inch. Full page must be visible. If need 1.5ft then FAIL.
+// 2. ACCURACY TEST: After capture, compare final cropped image with green box. Must match 100%.
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -77,7 +81,7 @@ fun SlotsScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
         // LAYER 1: Viewfinder Overlay Guides based on Selected Mood
-        ViewfinderOverlay(mode = currentMode, showGrid = showGrid, modifier = Modifier.fillMaxSize())
+        // ViewfinderOverlay(mode = currentMode, showGrid = showGrid, modifier = Modifier.fillMaxSize())
 
         // LAYER 2: Control Panel and Overlays
         Column(
