@@ -76,8 +76,8 @@ fun SlotsScreen(
     var isSettingsPopoverOpen by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
-        // LAYER 1: Viewfinder Overlay Guides based on Selected Mood - Temporary disabled
-        // ViewfinderOverlay(mode = currentMode, showGrid = showGrid, modifier = Modifier.fillMaxSize())
+        // LAYER 1: Viewfinder Overlay Guides based on Selected Mood
+        ViewfinderOverlay(mode = currentMode, showGrid = showGrid, modifier = Modifier.fillMaxSize())
 
         // LAYER 2: Control Panel and Overlays
         Column(
@@ -264,6 +264,7 @@ fun SlotsScreen(
                         } else {
                             LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                                verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 items(slots) { slot ->

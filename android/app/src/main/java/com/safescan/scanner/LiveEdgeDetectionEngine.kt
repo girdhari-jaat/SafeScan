@@ -182,15 +182,15 @@ class LiveEdgeDetectionEngine {
                         Math.hypot(p.x - previousCorners!![index].x, p.y - previousCorners!![index].y)
                     }.maxOrNull() ?: 0.0
                     
-                    if (maxDistance > 400) { 
+                    if (maxDistance > 200) { 
                         // Large jump, reset smoothing
                         previousCorners = foundCorners
                     } else {
-                        // Exponential Moving Average for stabilization (lowered for smoother tracking)
+                        // Exponential Moving Average for stabilization
                         foundCorners = foundCorners!!.mapIndexed { index, p ->
                             Point(
-                                previousCorners!![index].x + 0.15 * (p.x - previousCorners!![index].x),
-                                previousCorners!![index].y + 0.15 * (p.y - previousCorners!![index].y)
+                                previousCorners!![index].x + 0.35 * (p.x - previousCorners!![index].x),
+                                previousCorners!![index].y + 0.35 * (p.y - previousCorners!![index].y)
                             )
                         }
                         previousCorners = foundCorners
@@ -207,8 +207,8 @@ class LiveEdgeDetectionEngine {
                 )
             } else {
                 framesWithoutDetection++
-                if (framesWithoutDetection < 12 && previousCorners != null) {
-                    // Keep showing previous corners for more frames to prevent flickering
+                if (framesWithoutDetection < 5 && previousCorners != null) {
+                    // Keep showing previous corners for a few frames to prevent flickering
                     foundCorners = previousCorners
                 } else {
                     previousCorners = null

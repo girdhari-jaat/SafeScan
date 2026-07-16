@@ -355,12 +355,15 @@ class ScannerViewModel @Inject constructor(
     private var stableFrameCount = 0
     private var lastQuadPoints: List<com.safescan.domain.model.Point>? = null
     private val STABLE_FRAME_THRESHOLD = 3
-    private val STABILITY_TOLERANCE = 80.0
+    private val STABILITY_TOLERANCE = 30.0
     var isFocusing = false
 
     fun onDocumentDetected(points: List<com.safescan.domain.model.Point>?, sharpness: Double = 0.0) {
         ScannerDebugLogger.logEnter("ScannerViewModel.onDocumentDetected")
-        // Removed isFocusing block to allow auto capture even during focus shifts
+        if (isFocusing) {
+            ScannerDebugLogger.logExit("ScannerViewModel.onDocumentDetected")
+            return
+        }
         
         // Use mutable points variable for smoothing
         var processedPoints = points
@@ -388,8 +391,8 @@ class ScannerViewModel @Inject constructor(
         }
 
         // Stability Check
-        // Greatly relaxed settings for Auto Capture (1 stable frame)
-        val threshold = if (autoCapture.value) 1 else 3
+        // Relaxed settings for Auto Capture
+        val threshold = if (autoCapture.value) 2 else 3
         if (lastQuadPoints != null && isStable(lastQuadPoints!!, processedPoints)) {
             stableFrameCount++
         } else {
@@ -399,12 +402,11 @@ class ScannerViewModel @Inject constructor(
 
         ScannerDebugLogger.logStability(stableFrameCount)
 
-        // Lower sharpness requirement for low light
-        val isSharp = sharpness > 8.0
+        val isSharp = sharpness > 20.0
         val trigger = stableFrameCount >= threshold && isSharp
         ScannerDebugLogger.logAutoCap(inBox = true, sharpness = sharpness, stable = stableFrameCount, trigger = trigger)
 
-        if (trigger && !isFocusing) { // Only trigger if not already capturing
+        if (trigger) {
             stableFrameCount = 0
             lastQuadPoints = null
             triggerAutoCapture()
