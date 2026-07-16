@@ -1,0 +1,226 @@
+├── .env.example
+├── .github
+│   └── workflows
+│       ├── android-lint.yml
+│       ├── android.yml
+│       ├── build.opencv.yml
+│       └── react_capacitor.yml
+├── .gitignore
+├── AGENTS.md
+├── GEMINI.md
+├── README.md
+├── android
+│   ├── .gitignore
+│   ├── GEMINI.md
+│   ├── README_TEST.md
+│   ├── RELEASE_CHECKLIST.md
+│   ├── android_tree.txt
+│   ├── app
+│   │   ├── build.gradle.kts
+│   │   ├── download-tflite.gradle.kts
+│   │   ├── proguard-rules.pro
+│   │   └── src
+│   │       ├── androidTest
+│   │       │   ├── assets
+│   │       │   │   ├── sample_a4.jpg
+│   │       │   │   ├── sample_cnic_1.jpg
+│   │       │   │   └── sample_cnic_2.jpg
+│   │       │   └── java
+│   │       │       └── com
+│   │       │           └── safescan
+│   │       │               ├── DocumentScannerEngineTest.kt
+│   │       │               ├── MainActivityLaunchTest.kt
+│   │       │               ├── OcrEngineTest.kt
+│   │       │               ├── PdfExporterTest.kt
+│   │       │               └── SampleImageProvider.kt
+│   │       └── main
+│   │           ├── AndroidManifest.xml
+│   │           ├── java
+│   │           │   └── com
+│   │           │       └── safescan
+│   │           │           ├── MainActivity.kt
+│   │           │           ├── OverlayView.kt
+│   │           │           ├── SafeScanApplication.kt
+│   │           │           ├── ScannerForegroundService.kt
+│   │           │           ├── core
+│   │           │           │   ├── AppResult.kt
+│   │           │           │   ├── DiagnosticsLogger.kt
+│   │           │           │   ├── GlobalExceptionHandler.kt
+│   │           │           │   └── ScannerDebugLogger.kt
+│   │           │           ├── data
+│   │           │           │   ├── DocumentModels.kt
+│   │           │           │   ├── DocumentRepository.kt
+│   │           │           │   ├── EditorState.kt
+│   │           │           │   ├── FlashMode.kt
+│   │           │           │   ├── ScannerMode.kt
+│   │           │           │   ├── SettingsRepository.kt
+│   │           │           │   ├── Slot.kt
+│   │           │           │   └── UiState.kt
+│   │           │           ├── di
+│   │           │           │   ├── AppModule.kt
+│   │           │           │   └── ScannerModule.kt
+│   │           │           ├── domain
+│   │           │           │   ├── ExportHelper.kt
+│   │           │           │   ├── ImageFilterEngine.kt
+│   │           │           │   ├── ImageProcessor.kt
+│   │           │           │   ├── PdfExporter.kt
+│   │           │           │   ├── PdfUtils.kt
+│   │           │           │   └── model
+│   │           │           │       └── Quadrilateral.kt
+│   │           │           ├── scanner
+│   │           │           │   ├── CameraHardwareConfig.kt
+│   │           │           │   ├── DocumentScanner.kt
+│   │           │           │   ├── DocumentScannerEngine.kt
+│   │           │           │   ├── EdgeDetectionEngine.kt
+│   │           │           │   ├── LiveEdgeDetectionEngine.kt
+│   │           │           │   ├── OcrEngine.kt
+│   │           │           │   ├── ScannerViewModel.kt
+│   │           │           │   ├── TFLiteEdgeDetectionEngine.kt
+│   │           │           │   └── TFLiteEngine.kt
+│   │           │           ├── ui
+│   │           │           │   ├── CardScanScreen.kt
+│   │           │           │   ├── CropScreen.kt
+│   │           │           │   ├── DeveloperStatsView.kt
+│   │           │           │   ├── DocumentGrid.kt
+│   │           │           │   ├── EditorScreen.kt
+│   │           │           │   ├── LibraryScreen.kt
+│   │           │           │   ├── ScannerFragment.kt
+│   │           │           │   ├── SettingsScreen.kt
+│   │           │           │   ├── SlotsScreen.kt
+│   │           │           │   ├── TopBar.kt
+│   │           │           │   ├── WizardScreen.kt
+│   │           │           │   ├── ZoomableImage.kt
+│   │           │           │   └── theme
+│   │           │           │       ├── Font.kt
+│   │           │           │       └── Theme.kt
+│   │           │           └── utils
+│   │           │               └── PageConfig.kt
+│   │           └── res
+│   │               ├── drawable
+│   │               │   ├── ic_launcher_background.xml
+│   │               │   └── ic_launcher_foreground.xml
+│   │               ├── layout
+│   │               │   ├── activity_main.xml
+│   │               │   ├── fragment_scanner.xml
+│   │               │   └── wizard_activity.xml
+│   │               ├── mipmap
+│   │               │   └── ic_launcher.xml
+│   │               ├── mipmap-anydpi-v26
+│   │               │   ├── ic_launcher.xml
+│   │               │   └── ic_launcher_round.xml
+│   │               ├── navigation
+│   │               │   └── nav_graph.xml
+│   │               ├── values
+│   │               │   └── strings.xml
+│   │               ├── values-hi
+│   │               │   └── strings.xml
+│   │               ├── values-ur
+│   │               │   └── strings.xml
+│   │               └── xml
+│   │                   └── file_paths.xml
+│   ├── build.gradle.kts
+│   ├── gradle
+│   │   └── wrapper
+│   │       ├── gradle-wrapper.jar
+│   │       └── gradle-wrapper.properties
+│   ├── gradle.properties
+│   ├── gradlew
+│   ├── gradlew.bat
+│   ├── settings.gradle.kts
+│   └── signing.properties.template
+├── android_tree.txt
+├── bun.lock
+├── capacitor.config.json
+├── index.html
+├── metadata.json
+├── package-lock.json
+├── package.json
+├── patch_live_edge.kt
+├── patch_script.sh
+├── patch_script2.sh
+├── public
+│   ├── favicon.svg
+│   ├── icon192.png
+│   ├── icon512.png
+│   ├── manifest.json
+│   ├── shortcut_doc.png
+│   ├── shortcut_id.png
+│   └── sw.js
+├── scripts
+│   ├── generate-icons.js
+│   └── patch-media-plugin.js
+├── server.ts
+├── src
+│   ├── .aistudio
+│   │   └── .gitignore
+│   ├── App.tsx
+│   ├── AppHook.ts
+│   ├── components
+│   │   ├── CardScanner.tsx
+│   │   ├── CardScannerHook.ts
+│   │   ├── Crop.tsx
+│   │   ├── CropHook.ts
+│   │   ├── DocumentGrid.tsx
+│   │   ├── DocumentGridHook.ts
+│   │   ├── Editor.tsx
+│   │   ├── EditorHook.ts
+│   │   ├── ExportModal.tsx
+│   │   ├── ExportModalHook.ts
+│   │   ├── Home.tsx
+│   │   ├── PDFReader
+│   │   │   ├── PDFPage.tsx
+│   │   │   └── PasswordModal.tsx
+│   │   ├── PDFReader.tsx
+│   │   ├── PDFReaderHook.ts
+│   │   ├── Scanner.tsx
+│   │   ├── ScannerHook.ts
+│   │   ├── Settings.tsx
+│   │   ├── SettingsHook.ts
+│   │   ├── UnifiedScanner.tsx
+│   │   ├── UnifiedViewfinder.tsx
+│   │   ├── UnifiedscannerHook.ts
+│   │   └── ZoomableImage.tsx
+│   ├── constants.ts
+│   ├── contexts
+│   │   └── CameraContext.tsx
+│   ├── hooks
+│   │   └── index.ts
+│   ├── index.css
+│   ├── lib
+│   │   ├── i18n.ts
+│   │   └── useSharedSettings.tsx
+│   ├── main.tsx
+│   ├── services
+│   │   ├── BarcodeService.ts
+│   │   ├── DocumentScannerService.ts
+│   │   └── OCRService.ts
+│   ├── theme.css
+│   ├── types
+│   │   └── settings.ts
+│   ├── types.ts
+│   ├── utils
+│   │   ├── db.ts
+│   │   ├── edge
+│   │   │   ├── filters.ts
+│   │   │   ├── geometry.ts
+│   │   │   ├── morphology.ts
+│   │   │   ├── profiler.ts
+│   │   │   ├── ransac.ts
+│   │   │   ├── threshold.ts
+│   │   │   └── types.ts
+│   │   ├── edgeDetection.ts
+│   │   ├── feedback.ts
+│   │   ├── globalImageCache.ts
+│   │   ├── image.worker.ts
+│   │   ├── imageProcess.ts
+│   │   ├── imageWorkerClient.ts
+│   │   ├── pdfExport.ts
+│   │   └── renderStats.ts
+│   └── vite-env.d.ts
+├── test.sh
+├── test_flow.kt
+├── tsconfig.json
+├── tsconfig2.json
+├── update.py
+├── update_engine.py
+└── vite.config.ts

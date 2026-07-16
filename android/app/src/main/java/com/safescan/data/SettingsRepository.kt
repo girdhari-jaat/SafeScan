@@ -72,6 +72,8 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             preferences[PreferencesKeys.AUTO_CAPTURE] = newState
             if (newState) {
                 preferences[PreferencesKeys.LIVE_DETECT] = true
+            } else {
+                preferences[PreferencesKeys.LIVE_DETECT] = false
             }
         }
     }

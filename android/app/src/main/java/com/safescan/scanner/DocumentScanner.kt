@@ -38,13 +38,8 @@ class DocumentScanner(
         val isA4 = CameraHardwareConfig.isA4Supported(context)
 
         if (mode == "DOCUMENT") {
-            // DOCUMENT try A4 first, fallback to 4:3
-            val targetRatio = if (isA4) 1.4142f else 1.3333f
-            if (maxHeight > maxWidth) {
-                maxHeight = (maxWidth * targetRatio).toInt()
-            } else {
-                maxWidth = (maxHeight * targetRatio).toInt()
-            }
+            // Use the naturally detected dimensions. No need to force an artificial 4:3 ratio.
+            // If the user wants a specific format, they can crop later.
         } else if (mode == "CARD" || mode == "GRID") {
             // CARD/GRID use ID-1 Card aspect ratio (1.5857) in landscape
             val targetRatio = 1.5857f

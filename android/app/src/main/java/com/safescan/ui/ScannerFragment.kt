@@ -970,7 +970,7 @@ class ScannerFragment : Fragment() {
     }
 
     private fun focusAndTakePhoto(isAutoCapture: Boolean = false) {
-        if (viewModel.isFocusing) return
+        if (!isAutoCapture && viewModel.isFocusing) return
         viewModel.isFocusing = true
 
         val binding = _binding

@@ -24,6 +24,9 @@ class LiveEdgeDetectionEngine {
     private var edges: Mat? = null
     private var hierarchy: Mat? = null
     private var kernel: Mat? = null
+    private var laplacian: Mat? = null
+    private var meanStdDevMean: MatOfDouble? = null
+    private var meanStdDevStdDev: MatOfDouble? = null
     
     private var previousCorners: List<Point>? = null
     private var framesWithoutDetection = 0
@@ -37,6 +40,9 @@ class LiveEdgeDetectionEngine {
             edges = Mat()
             hierarchy = Mat()
             kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
+            laplacian = Mat()
+            meanStdDevMean = MatOfDouble()
+            meanStdDevStdDev = MatOfDouble()
         }
     }
 
@@ -56,6 +62,12 @@ class LiveEdgeDetectionEngine {
             hierarchy = null
             kernel?.release()
             kernel = null
+            laplacian?.release()
+            laplacian = null
+            meanStdDevMean?.release()
+            meanStdDevMean = null
+            meanStdDevStdDev?.release()
+            meanStdDevStdDev = null
             Log.d("LiveEdgeDetectionEngine", "Mats released successfully")
         } catch (e: Throwable) {
             Log.e("LiveEdgeDetectionEngine", "Failed to release Mats", e)
@@ -238,16 +250,11 @@ class LiveEdgeDetectionEngine {
     }
 
     private fun calculateSharpness(mat: Mat): Double {
-        val laplacian = Mat()
-        Imgproc.Laplacian(mat, laplacian, CvType.CV_64F)
-        val mean = MatOfDouble()
-        val stddev = MatOfDouble()
-        Core.meanStdDev(laplacian, mean, stddev)
-        val stddevVal = stddev.get(0, 0)[0]
+        if (laplacian == null) initMatsIfNeeded()
+        Imgproc.Laplacian(mat, laplacian!!, CvType.CV_64F)
+        Core.meanStdDev(laplacian!!, meanStdDevMean!!, meanStdDevStdDev!!)
+        val stddevVal = meanStdDevStdDev!!.get(0, 0)[0]
         val variance = stddevVal * stddevVal
-        laplacian.release()
-        mean.release()
-        stddev.release()
         return variance
     }
 

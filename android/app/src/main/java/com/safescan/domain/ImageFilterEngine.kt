@@ -104,38 +104,85 @@ object ImageFilterEngine {
                 }
             }
             FilterType.PAPER -> {
-                var cleanColor: Mat? = null
                 var hsv: Mat? = null
                 var hsvChannels: ArrayList<Mat>? = null
+                var v: Mat? = null
+                var smallV: Mat? = null
+                var bgSmall: Mat? = null
+                var kernel: Mat? = null
+                var bg: Mat? = null
+                var vFloat: Mat? = null
+                var bgFloat: Mat? = null
+                var div: Mat? = null
+                var cleanV: Mat? = null
                 var enhanced: Mat? = null
                 var blurred: Mat? = null
+                
                 try {
-                    cleanColor = removeShadowsColor(src)
-                    
                     hsv = Mat()
-                    Imgproc.cvtColor(cleanColor, hsv, Imgproc.COLOR_BGR2HSV)
+                    Imgproc.cvtColor(src, hsv, Imgproc.COLOR_BGR2HSV)
                     hsvChannels = ArrayList()
                     Core.split(hsv, hsvChannels)
                     
-                    // Increase saturation slightly, and contrast on V channel
-                    hsvChannels[1].convertTo(hsvChannels[1], -1, 1.2, 0.0) 
-                    hsvChannels[2].convertTo(hsvChannels[2], -1, 1.2, -10.0)
+                    v = hsvChannels[2]
+                    
+                    // 1. Adaptive method for Shadow removal (Fast background division)
+                    smallV = Mat()
+                    val scale = 0.2
+                    Imgproc.resize(v, smallV, Size(), scale, scale, Imgproc.INTER_LINEAR)
+                    
+                    bgSmall = Mat()
+                    kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(9.0, 9.0))
+                    Imgproc.dilate(smallV, bgSmall, kernel)
+                    Imgproc.GaussianBlur(bgSmall, bgSmall, Size(21.0, 21.0), 0.0)
+                    
+                    bg = Mat()
+                    Imgproc.resize(bgSmall, bg, v.size(), 0.0, 0.0, Imgproc.INTER_LINEAR)
+                    
+                    vFloat = Mat()
+                    bgFloat = Mat()
+                    v.convertTo(vFloat, CvType.CV_32F)
+                    bg.convertTo(bgFloat, CvType.CV_32F)
+                    Core.add(bgFloat, org.opencv.core.Scalar(1.0), bgFloat)
+                    
+                    div = Mat()
+                    Core.divide(vFloat, bgFloat, div)
+                    Core.multiply(div, org.opencv.core.Scalar(255.0), div)
+                    
+                    cleanV = Mat()
+                    div.convertTo(cleanV, CvType.CV_8U)
+                    
+                    // 2. Paper ko zyada safed aur background ko clean karo
+                    Imgproc.threshold(cleanV, cleanV, 230.0, 255.0, Imgproc.THRESH_TRUNC)
+                    Core.normalize(cleanV, cleanV, 0.0, 255.0, Core.NORM_MINMAX)
+                    
+                    cleanV.copyTo(hsvChannels[2])
+                    
+                    // 3. Saturation thodi kam rakho (Reduce to 40%)
+                    hsvChannels[1].convertTo(hsvChannels[1], -1, 0.4, 0.0)
                     
                     Core.merge(hsvChannels, hsv)
                     
                     enhanced = Mat()
                     Imgproc.cvtColor(hsv, enhanced, Imgproc.COLOR_HSV2BGR)
                     
-                    // Apply Unsharp Masking for crisp text
+                    // 4. Text ko crisp/sharp karo
                     blurred = Mat()
                     Imgproc.GaussianBlur(enhanced, blurred, Size(0.0, 0.0), 2.5)
                     Core.addWeighted(enhanced, 1.5, blurred, -0.5, 0.0, outMat)
                     
                     Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_BGR2RGBA)
                 } finally {
-                    cleanColor?.release()
                     hsv?.release()
                     hsvChannels?.forEach { it.release() }
+                    smallV?.release()
+                    bgSmall?.release()
+                    kernel?.release()
+                    bg?.release()
+                    vFloat?.release()
+                    bgFloat?.release()
+                    div?.release()
+                    cleanV?.release()
                     enhanced?.release()
                     blurred?.release()
                 }
