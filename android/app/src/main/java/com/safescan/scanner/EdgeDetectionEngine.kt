@@ -6,6 +6,7 @@ import com.safescan.domain.model.Point
 import org.opencv.android.Utils
 import org.opencv.core.Core
 import org.opencv.core.Mat
+import org.opencv.core.MatOfDouble
 import org.opencv.core.MatOfInt
 import org.opencv.core.MatOfPoint
 import org.opencv.core.MatOfPoint2f
@@ -75,13 +76,10 @@ class EdgeDetectionEngine {
             clahe1.apply(gray, shadowFree)
             val clahe2 = Imgproc.createCLAHE(2.0, Size(16.0, 16.0))
             clahe2.apply(shadowFree, shadowFree)
-            clahe1.release()
-            clahe2.release()
 
             claheMat = Mat()
             val clahe3 = Imgproc.createCLAHE(3.0, Size(8.0, 8.0))
             clahe3.apply(shadowFree, claheMat)
-            clahe3.release()
 
             blurred = Mat()
             Imgproc.GaussianBlur(claheMat, blurred, Size(5.0, 5.0), 0.0)
@@ -123,7 +121,7 @@ class EdgeDetectionEngine {
 
                         // ✅ FIXED VOTING LOGIC
                         if (quadCandidate != null && isValidQuadrilateral(quadCandidate, imageArea)) {
-                            val score = scoreQuadrilateral(quadCandidate, imageArea, blurScore, imageCenter, resized.width(), resized.height())
+                            val score = scoreQuadrilateral(quadCandidate, imageArea, blurScore, imageCenter, resized.width().toDouble(), resized.height().toDouble())
                             val hash = getQuadHash(quadCandidate)
 
                             val existing = voteMap[hash] // Fetch by unique geometric hash key
@@ -253,7 +251,21 @@ class EdgeDetectionEngine {
     }
     
     private fun scoreQuadrilateral(points: List<Point>, imageArea: Double, blurScore: Double, imageCenter: Point, imgW: Double, imgH: Double): Double { val normArea = getQuadArea(points) / imageArea; val aspect = getQuadAspectRatio(points); val aspectPenalty = if (aspect > 2.5) (aspect - 2.5) * 0.7 else 0.0; val angleScore = (1.0 - getMaxCosinePoints(points)) * 0.25; val qc = Point(points.map { it.x }.average(), points.map { it.y }.average()); val dist = hypot(qc.x - imageCenter.x, qc.y - imageCenter.y); val maxDist = hypot(imgW / 2.0, imgH / 2.0); val centerScore = (1.0 - dist / maxDist) * CENTER_BIAS_WEIGHT; val blurFactor = Math.min(1.0, blurScore / 300.0); val areaWeight = 0.4 + (1.0 - blurFactor) * 0.1; return (normArea * areaWeight) + angleScore - aspectPenalty + centerScore }
-    private fun getLaplacianVariance(gray: Mat): Double { var lap = Mat(); try { Imgproc.Laplacian(gray, lap, org.opencv.core.CvType.CV_64F); val m = Mat(); val s = Mat(); Core.meanStdDev(lap, m, s); val v = Math.pow(s.get(0,0)[0], 2.0); m.release(); s.release(); return v } finally { lap.release() } }
+    private fun getLaplacianVariance(gray: Mat): Double {
+        val lap = Mat()
+        val m = MatOfDouble()
+        val s = MatOfDouble()
+        try {
+            Imgproc.Laplacian(gray, lap, org.opencv.core.CvType.CV_64F)
+            Core.meanStdDev(lap, m, s)
+            val v = Math.pow(s.get(0, 0)[0], 2.0)
+            return v
+        } finally {
+            lap.release()
+            m.release()
+            s.release()
+        }
+    }
     private fun getQuadHash(points: List<Point>): String { return points.map { Point(Math.round(it.x / 8.0) * 8.0, Math.round(it.y / 8.0) * 8.0) }.sortedBy { it.x + it.y }.joinToString("|") { "${it.x},${it.y}" } }
     
     private fun findLargestQuadrilateral(points: List<Point>): List<Point>? { 
