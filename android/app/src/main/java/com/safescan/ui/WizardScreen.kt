@@ -49,7 +49,7 @@ fun WizardScreen(
     val autoCapture by viewModel.autoCapture.collectAsState()
     val autoCrop by viewModel.autoCrop.collectAsState()
     val autoShadow by viewModel.shadowRemove.collectAsState()
-    val manualCrop by viewModel.wizardManualCrop.collectAsState()
+    val useNativeScanner by viewModel.useNativeScanner.collectAsState()
     val batchMode by viewModel.batchScan.collectAsState()
     val dontShowAgain by viewModel.wizardDontShowAgain.collectAsState()
 
@@ -356,11 +356,11 @@ fun WizardScreen(
                     }
                 )
                 WizardSelectionButton(
-                    text = "Manual Crop",
-                    selected = manualCrop,
+                    text = "Native Scanner",
+                    selected = useNativeScanner,
                     modifier = Modifier.weight(1f),
                     onClick = {
-                        viewModel.setWizardManualCrop(!manualCrop)
+                        viewModel.toggleUseNativeScanner(!useNativeScanner)
                     }
                 )
                 WizardSelectionButton(
