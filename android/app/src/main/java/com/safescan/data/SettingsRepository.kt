@@ -43,6 +43,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         val SAVE_TO_GALLERY = booleanPreferencesKey("save_to_gallery")
         val LIVE_DETECT = booleanPreferencesKey("live_detect")
         val BATTERY_SAVER = booleanPreferencesKey("battery_saver")
+        val START_WITH_CAMERA = booleanPreferencesKey("start_with_camera")
         val USE_PHONE_CAMERA = booleanPreferencesKey("use_phone_camera")
         val USE_NATIVE_SCANNER = booleanPreferencesKey("use_native_scanner")
         val HD_MODE = stringPreferencesKey("hd_mode")
@@ -173,6 +174,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
 
     val batterySaverFlow: Flow<Boolean> = safeData
         .map { preferences -> preferences[PreferencesKeys.BATTERY_SAVER] ?: false }
+
+    val startWithCameraFlow: Flow<Boolean> = safeData
+        .map { preferences -> preferences[PreferencesKeys.START_WITH_CAMERA] ?: false }
 
     val usePhoneCameraFlow: Flow<Boolean> = safeData
         .map { preferences -> preferences[PreferencesKeys.USE_PHONE_CAMERA] ?: false }
@@ -344,6 +348,12 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     suspend fun setBatterySaver(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.BATTERY_SAVER] = enabled
+        }
+    }
+
+    suspend fun setStartWithCamera(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.START_WITH_CAMERA] = enabled
         }
     }
 

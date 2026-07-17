@@ -43,6 +43,7 @@ import com.safescan.scanner.ScannerViewModel
 import com.safescan.domain.model.Point
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -364,8 +365,19 @@ class ScannerFragment : Fragment() {
         }
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, callback)
 
-        // Default app to Library on startup
-        updateViewMode(FragmentViewMode.LIBRARY)
+        // Check if we should start with camera or default to Library on startup
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val startWithCam = viewModel.startWithCamera.first()
+                if (startWithCam) {
+                    checkPermissionAndStartScanner()
+                } else {
+                    updateViewMode(FragmentViewMode.LIBRARY)
+                }
+            } catch (e: Exception) {
+                updateViewMode(FragmentViewMode.LIBRARY)
+            }
+        }
     }
 
     private fun updateViewMode(mode: FragmentViewMode) {

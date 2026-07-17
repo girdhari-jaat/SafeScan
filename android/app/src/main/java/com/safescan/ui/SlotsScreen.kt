@@ -239,7 +239,6 @@ fun SlotsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(115.dp)
-                            .background(Color.Black.copy(alpha = 0.4f), shape = RoundedCornerShape(12.dp))
                             .padding(8.dp)
                     ) {
                         if (slots.isEmpty()) {

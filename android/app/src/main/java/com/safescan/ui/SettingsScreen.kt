@@ -335,6 +335,15 @@ fun SettingsScreen(
                                 onCheckedChange = { viewModel.setVibrateOnCapture(it) }
                             )
 
+                            val startWithCamera by viewModel.startWithCamera.collectAsState()
+                            SettingsToggleItem(
+                                icon = Icons.Default.CameraAlt,
+                                title = "Start with Camera",
+                                description = "Open camera automatically on app launch",
+                                checked = startWithCamera,
+                                onCheckedChange = { viewModel.toggleStartWithCamera(it) }
+                            )
+
                             val batterySaver by viewModel.batterySaver.collectAsState()
                             SettingsToggleItem(
                                 icon = Icons.Default.BatteryChargingFull,

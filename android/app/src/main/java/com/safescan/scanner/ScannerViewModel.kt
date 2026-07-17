@@ -134,6 +134,9 @@ class ScannerViewModel @Inject constructor(
     val batterySaver: StateFlow<Boolean> = settingsRepository.batterySaverFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    val startWithCamera: StateFlow<Boolean> = settingsRepository.startWithCameraFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     val usePhoneCamera: StateFlow<Boolean> = settingsRepository.usePhoneCameraFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
@@ -644,6 +647,13 @@ class ScannerViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.setBatterySaver(enabled)
             DiagnosticsLogger.info("Battery Saver toggled: $enabled")
+        }
+    }
+
+    fun toggleStartWithCamera(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setStartWithCamera(enabled)
+            DiagnosticsLogger.info("Start with Camera toggled: $enabled")
         }
     }
 
