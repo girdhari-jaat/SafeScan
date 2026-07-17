@@ -100,7 +100,11 @@ fun SafeScanTheme(
             if (context is Activity) {
                 val window = context.window
                 window.statusBarColor = colorScheme.primary.toArgb()
-                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+                // Set the navigation bar color to match the theme's surface color
+                window.navigationBarColor = colorScheme.surface.toArgb()
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                insetsController.isAppearanceLightStatusBars = !darkTheme
+                insetsController.isAppearanceLightNavigationBars = !darkTheme
             }
         }
     }

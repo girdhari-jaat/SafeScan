@@ -390,6 +390,10 @@ class ScannerFragment : Fragment() {
                             onStartScan = {
                                 viewModel.isDocumentOpenedFromLibrary.value = false
                                 viewModel.openedDocumentId = null
+                                // CRITICAL PERFORMANCE & STATE RESET: Do not remove endSession()!
+                                // Calling endSession() ensures that starting a 'New Scan' clears any 
+                                // previously viewed or loaded document slots from memory.
+                                viewModel.endSession()
                                 if (viewModel.wizardDontShowAgain.value) {
                                     checkPermissionAndStartScanner()
                                 } else {
@@ -468,6 +472,10 @@ class ScannerFragment : Fragment() {
                                 viewModel = viewModel,
                                 onDismiss = {
                                     viewModel.isDocumentOpenedFromLibrary.value = false
+                                    // CRITICAL CLEANUP: Do not remove endSession()!
+                                    // This resets and clears document slot states when closing the 
+                                    // document view and returning to the Library screen.
+                                    viewModel.endSession()
                                     updateViewMode(FragmentViewMode.LIBRARY)
                                 },
                                 onScanPage = {
@@ -902,8 +910,22 @@ class ScannerFragment : Fragment() {
                                 }
                                 activity?.runOnUiThread {
                                     val bindingObj = _binding
-                                    bindingObj?.overlayView?.visibility = View.VISIBLE
-                                    bindingObj?.overlayView?.updateCorners(mappedPoints)
+                                    // CRITICAL PERFORMANCE GUARD: Do not remove this active overlay check!
+                                    // Checks if the scanner overlay is active before toggling visibility.
+                                    // This prevents the green box from showing up over DocumentGridView/Editor/Crop screens
+                                    // due to frame analysis race conditions on asynchronous callbacks.
+                                    val isOverlayStillActive = !viewModel.isEditing.value && 
+                                            !viewModel.isCropping.value && 
+                                            !viewModel.isSettingsOpen.value && 
+                                            !viewModel.isDocumentOpenedFromLibrary.value && 
+                                            !viewModel.isGridViewVisible.value
+                                    if (isOverlayStillActive) {
+                                        bindingObj?.overlayView?.visibility = View.VISIBLE
+                                        bindingObj?.overlayView?.updateCorners(mappedPoints)
+                                    } else {
+                                        bindingObj?.overlayView?.visibility = View.GONE
+                                        bindingObj?.overlayView?.updateCorners(null)
+                                    }
                                     if (corners != null && corners.isNotEmpty()) {
                                         if (!isTargetLocked) {
                                             isTargetLocked = true
