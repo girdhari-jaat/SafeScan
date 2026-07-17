@@ -452,7 +452,6 @@ fun DeveloperStatsView(viewModel: ScannerViewModel) {
             }
         }
     }
-    }
 }
 
 @Composable
