@@ -329,18 +329,20 @@ class ScannerViewModel @Inject constructor(
         reloadSavedDocuments()
         viewModelScope.launch {
             currentMode.collect { mode ->
-                slots.value = when (mode) {
-                    ScannerMode.CARD -> listOf(
-                        Slot("front", "Front"),
-                        Slot("back", "Back")
-                    )
-                    ScannerMode.DOCUMENT -> emptyList()
-                    ScannerMode.GRID -> (1..8).map {
-                        Slot(it.toString(), "Slot $it")
+                if (!isDocumentOpenedFromLibrary.value) {
+                    slots.value = when (mode) {
+                        ScannerMode.CARD -> listOf(
+                            Slot("front", "Front"),
+                            Slot("back", "Back")
+                        )
+                        ScannerMode.DOCUMENT -> emptyList()
+                        ScannerMode.GRID -> (1..8).map {
+                            Slot(it.toString(), "Slot $it")
+                        }
                     }
+                    selectedSlotId.value = null
+                    capturedJpgFiles.clear()
                 }
-                selectedSlotId.value = null
-                capturedJpgFiles.clear()
             }
         }
     }
@@ -1509,6 +1511,7 @@ class ScannerViewModel @Inject constructor(
     }
 
     fun loadDocumentIntoSlots(doc: com.safescan.data.DocumentMetadata) {
+        _uiState.update { it.copy(isLoading = true, error = null) }
         isDocumentOpenedFromLibrary.value = true
         openedDocumentId = doc.id
         initialDocumentTitle = doc.title
@@ -1554,6 +1557,7 @@ class ScannerViewModel @Inject constructor(
                 settingsRepository.setScannerMode(mode)
                 // Let collect trigger but instantly override slots with actual persistent files
                 slots.value = loadedSlots
+                _uiState.update { it.copy(isLoading = false, error = null) }
             }
         }
     }
@@ -1591,7 +1595,10 @@ class ScannerViewModel @Inject constructor(
         if (saveJpg.value) {
             val savedFile = documentRepository.saveJpgToScans(bitmap, jpegQuality.value.toInt())
             if (savedFile != null) {
-                capturedJpgFiles.add(savedFile)
+                // Keep capturedJpgFiles empty so the app's document compilation & grid always use the unified slots pipeline,
+                // preventing duplicate pages, index-shifting, and ensuring edits/crops/filters are perfectly compiled and shared.
+                // capturedJpgFiles.add(savedFile)
+                DiagnosticsLogger.info("[Save] Raw captured JPG saved to Scans folder: ${savedFile.absolutePath}")
             }
         }
         

@@ -91,13 +91,13 @@ fun DocumentGridView(
                 ) {
                     OutlinedButton(
                         onClick = {
-                            onDismiss()
                             viewModel.saveDocumentOnly { success ->
                                 if (success) {
                                     android.widget.Toast.makeText(context, "Document saved offline", android.widget.Toast.LENGTH_SHORT).show()
                                 } else {
                                     android.widget.Toast.makeText(context, "Failed to save", android.widget.Toast.LENGTH_SHORT).show()
                                 }
+                                onDismiss()
                             }
                         },
                         modifier = Modifier
@@ -111,9 +111,9 @@ fun DocumentGridView(
 
                     Button(
                         onClick = {
-                            onDismiss()
                             viewModel.exportPdf(context) { file ->
                                 viewModel.endSession()
+                                onDismiss()
                                 if (file != null) {
                                     try {
                                         val uri = androidx.core.content.FileProvider.getUriForFile(
@@ -150,13 +150,18 @@ fun DocumentGridView(
             }
         }
     ) { paddingValues ->
+        val uiState by viewModel.uiState.collectAsState()
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            if (pagesCount == 0) {
+            if (uiState.isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (pagesCount == 0) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("No pages captured yet.", color = Color.Gray)
                 }
