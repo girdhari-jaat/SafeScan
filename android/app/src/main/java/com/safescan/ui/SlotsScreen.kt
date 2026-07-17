@@ -79,38 +79,6 @@ fun SlotsScreen(
 
     var isSettingsPopoverOpen by remember { mutableStateOf(false) }
 
-    val view = androidx.compose.ui.platform.LocalView.current
-    DisposableEffect(key1 = Unit) {
-        var activityContext = context
-        while (activityContext is android.content.ContextWrapper) {
-            if (activityContext is android.app.Activity) break
-            activityContext = activityContext.baseContext
-        }
-
-        val window = (activityContext as? android.app.Activity)?.window
-        val originalNavBarColor = window?.navigationBarColor
-        val originalAppearanceLightNavigationBars = window?.let {
-            androidx.core.view.WindowCompat.getInsetsController(it, view).isAppearanceLightNavigationBars
-        }
-
-        if (window != null) {
-            // Make navigation bar transparent on the dark capture screen
-            window.navigationBarColor = android.graphics.Color.TRANSPARENT
-            androidx.core.view.WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
-        }
-
-        onDispose {
-            if (window != null) {
-                if (originalNavBarColor != null) {
-                    window.navigationBarColor = originalNavBarColor
-                }
-                if (originalAppearanceLightNavigationBars != null) {
-                    androidx.core.view.WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = originalAppearanceLightNavigationBars
-                }
-            }
-        }
-    }
-
     Box(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
         // LAYER 1: Viewfinder Overlay Guides based on Selected Mood
         // ViewfinderOverlay(mode = currentMode, showGrid = showGrid, modifier = Modifier.fillMaxSize())
@@ -124,27 +92,28 @@ fun SlotsScreen(
                 .padding(start = 16.dp, end = 16.dp, bottom = 16.dp, top = 8.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // A. TOP BAR
-            Row(
+            // A. TOP BAR CONTAINER
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 4.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Left: Close Button
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                ) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Close Scanner", tint = Color.White)
-                }
-
-                // Center: Flash Toggle & Scan Mode Dropdown
+                // First Row: Close Button, Centered Flash, Right Settings Button
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Left: Close Button
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    ) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Close Scanner", tint = Color.White)
+                    }
+
+                    // Center: Flash Toggle (separated on its own)
                     IconButton(
                         onClick = onFlashToggle,
                         modifier = Modifier.background(
@@ -160,72 +129,52 @@ fun SlotsScreen(
                         )
                     }
 
-                    // Small dropdown list for changing the scan mood
-                    var isMoodMenuExpanded by remember { mutableStateOf(false) }
-                    val moodLabel = when (currentMode) {
-                        ScannerMode.DOCUMENT -> "Paper"
-                        ScannerMode.CARD -> "Card"
-                        ScannerMode.GRID -> "Grid"
+                    // Right: Settings Menu Button
+                    IconButton(
+                        onClick = { isSettingsPopoverOpen = !isSettingsPopoverOpen },
+                        modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    ) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Settings", tint = Color.White)
                     }
+                }
 
-                    Box {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color.Black.copy(alpha = 0.6f))
-                                .clickable { isMoodMenuExpanded = true }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = moodLabel,
-                                color = Color.White,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = "Scan Mood Dropdown",
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = isMoodMenuExpanded,
-                            onDismissRequest = { isMoodMenuExpanded = false },
-                            modifier = Modifier.background(Color.DarkGray)
-                        ) {
-                            listOf(
-                                ScannerMode.DOCUMENT to "Paper",
-                                ScannerMode.CARD to "Card",
-                                ScannerMode.GRID to "Grid"
-                            ).forEach { (mode, label) ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = label,
-                                            color = if (currentMode == mode) MaterialTheme.colorScheme.primary else Color.White,
-                                            fontWeight = if (currentMode == mode) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    },
-                                    onClick = {
-                                        viewModel.switchMode(mode)
-                                        isMoodMenuExpanded = false
-                                    }
+                // Second Row: Scanning Mood Tabs with solid dark background
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color(0xFF121212)) // Solid dark background
+                            .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
+                            .padding(2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        listOf(
+                            ScannerMode.DOCUMENT to "Paper",
+                            ScannerMode.CARD to "Card",
+                            ScannerMode.GRID to "Grid"
+                        ).forEach { (mode, label) ->
+                            val isSelected = currentMode == mode
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                    .clickable { viewModel.switchMode(mode) }
+                                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (isSelected) Color.Black else Color.White,
+                                    fontSize = 16.sp, // Large and clear size
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
                     }
-                }
-
-                // Right: Settings Menu Button
-                IconButton(
-                    onClick = { isSettingsPopoverOpen = !isSettingsPopoverOpen },
-                    modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                ) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "Settings", tint = Color.White)
                 }
             }
 

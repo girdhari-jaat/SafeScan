@@ -99,9 +99,10 @@ object ImageProcessor {
             // Convert ARGB to BGR for proper processing
             Imgproc.cvtColor(src, src, Imgproc.COLOR_RGBA2BGR)
 
-            // Apply Brightness & Contrast
+            // Apply Brightness & Contrast (centered around midpoint 127.5 to prevent blowout and preserve shapes/text)
             val alpha = state.contrast.toDouble().coerceIn(0.5, 3.0)
-            val beta = (state.brightness.toDouble() * 255.0 / 100.0).coerceIn(-60.0, 60.0)
+            val brightnessOffset = (state.brightness.toDouble() * 255.0 / 100.0).coerceIn(-100.0, 100.0)
+            val beta = 127.5 * (1.0 - alpha) + brightnessOffset
 
             dst = Mat()
             src.convertTo(dst, -1, alpha, beta)

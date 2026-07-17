@@ -444,12 +444,20 @@ class ScannerFragment : Fragment() {
             binding.composeView.apply {
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
                 setContent {
-                    SafeScanTheme {
-                        val isEditing by viewModel.isEditing.collectAsState()
-                        val isCropping by viewModel.isCropping.collectAsState()
-                        val isSettingsOpen by viewModel.isSettingsOpen.collectAsState()
-                        val isDocOpenFromLib by viewModel.isDocumentOpenedFromLibrary.collectAsState()
+                    val isEditing by viewModel.isEditing.collectAsState()
+                    val isCropping by viewModel.isCropping.collectAsState()
+                    val isSettingsOpen by viewModel.isSettingsOpen.collectAsState()
+                    val isDocOpenFromLib by viewModel.isDocumentOpenedFromLibrary.collectAsState()
 
+                    val isDarkScreen = isEditing || isCropping || (!isSettingsOpen && !isDocOpenFromLib)
+                    val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
+                    val forceDark = isDarkScreen || systemDark
+
+                    SafeScanTheme(
+                        darkTheme = forceDark,
+                        statusBarColor = if (isDarkScreen) androidx.compose.ui.graphics.Color.Transparent else null,
+                        navigationBarColor = if (isDarkScreen) androidx.compose.ui.graphics.Color.Black else null
+                    ) {
                         val showOverlay = !isSettingsOpen && !isCropping && !isEditing && !isDocOpenFromLib
                         androidx.compose.runtime.LaunchedEffect(showOverlay) {
                             binding.overlayView.visibility = if (showOverlay) View.VISIBLE else View.GONE

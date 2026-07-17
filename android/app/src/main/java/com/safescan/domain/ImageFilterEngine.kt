@@ -25,14 +25,30 @@ object ImageFilterEngine {
                     Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY)
                     cleanGray = removeShadowsGray(gray)
                     
-                    // Boost contrast significantly before thresholding
-                    cleanGray.convertTo(cleanGray, -1, 1.5, -20.0)
+                    // Compute block size dynamically based on image size to be resolution-independent
+                    val maxDim = Math.max(cleanGray.cols(), cleanGray.rows())
+                    var blockSize = maxDim / 40
+                    if (blockSize % 2 == 0) {
+                        blockSize += 1
+                    }
+                    if (blockSize < 15) {
+                        blockSize = 15
+                    }
                     
-                    Imgproc.threshold(cleanGray, outMat, 0.0, 255.0, Imgproc.THRESH_BINARY or Imgproc.THRESH_OTSU)
+                    // Use Gaussian adaptive thresholding to retain shapes, lines, and text details perfectly
+                    Imgproc.adaptiveThreshold(
+                        cleanGray,
+                        outMat,
+                        255.0,
+                        Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C,
+                        Imgproc.THRESH_BINARY,
+                        blockSize,
+                        10.0
+                    )
                     
                     // Apply slight sharpening to the black and white result to make fonts crisp
                     blurred = Mat()
-                    Imgproc.GaussianBlur(outMat, blurred, Size(0.0, 0.0), 2.0)
+                    Imgproc.GaussianBlur(outMat, blurred, Size(0.0, 0.0), 1.0)
                     Core.addWeighted(outMat, 1.5, blurred, -0.5, 0.0, outMat)
                     
                     Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)

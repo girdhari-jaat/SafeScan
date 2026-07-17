@@ -78,6 +78,8 @@ private val AppTypography = Typography(
 fun SafeScanTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
+    statusBarColor: Color? = null,
+    navigationBarColor: Color? = null,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -99,9 +101,9 @@ fun SafeScanTheme(
             }
             if (context is Activity) {
                 val window = context.window
-                window.statusBarColor = colorScheme.primary.toArgb()
-                // Set the navigation bar color to match the theme's surface color
-                window.navigationBarColor = colorScheme.surface.toArgb()
+                window.statusBarColor = (statusBarColor ?: colorScheme.primary).toArgb()
+                // Set the navigation bar color to match the theme's surface color or custom color
+                window.navigationBarColor = (navigationBarColor ?: colorScheme.surface).toArgb()
                 val insetsController = WindowCompat.getInsetsController(window, view)
                 insetsController.isAppearanceLightStatusBars = !darkTheme
                 insetsController.isAppearanceLightNavigationBars = !darkTheme

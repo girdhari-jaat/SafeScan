@@ -84,6 +84,15 @@ fun SettingsScreen(
                 0 -> {
                     item {
                         SettingsSection(title = "Scanning") {
+                            val showGrid by viewModel.showGrid.collectAsState()
+                            SettingsToggleItem(
+                                icon = Icons.Default.Grid4x4,
+                                title = "Show Grid Lines",
+                                description = "Display helpful grid lines on camera view",
+                                checked = showGrid,
+                                onCheckedChange = { viewModel.toggleShowGrid(it) }
+                            )
+
                             val batchScan by viewModel.batchScan.collectAsState()
                             SettingsToggleItem(
                                 icon = Icons.Default.Layers,
@@ -91,6 +100,15 @@ fun SettingsScreen(
                                 description = "Capture multiple pages in one go",
                                 checked = batchScan,
                                 onCheckedChange = { viewModel.toggleBatchScan(it) }
+                            )
+
+                            val autoCapture by viewModel.autoCapture.collectAsState()
+                            SettingsToggleItem(
+                                icon = Icons.Default.CameraAlt,
+                                title = "Auto Capture",
+                                description = "Automatically capture document when stable",
+                                checked = autoCapture,
+                                onCheckedChange = { viewModel.toggleAutoCapture() }
                             )
                             
                             val liveDetect by viewModel.liveDetect.collectAsState()
@@ -109,6 +127,15 @@ fun SettingsScreen(
                                 description = "Automatically detect and crop document edges",
                                 checked = autoCrop,
                                 onCheckedChange = { viewModel.toggleAutoCrop(it) }
+                            )
+
+                            val useNativeScanner by viewModel.useNativeScanner.collectAsState()
+                            SettingsToggleItem(
+                                icon = Icons.Default.DocumentScanner,
+                                title = "Native Scanner",
+                                description = "Use ML Kit Document Scanner API if available",
+                                checked = useNativeScanner,
+                                onCheckedChange = { viewModel.toggleUseNativeScanner(it) }
                             )
 
                             val hdMode by viewModel.hdMode.collectAsState()
@@ -134,24 +161,6 @@ fun SettingsScreen(
                                     }
                                 }
                             }
-
-                            val showGrid by viewModel.showGrid.collectAsState()
-                            SettingsToggleItem(
-                                icon = Icons.Default.Grid4x4,
-                                title = "Show Grid Lines",
-                                description = "Display helpful grid lines on camera view",
-                                checked = showGrid,
-                                onCheckedChange = { viewModel.toggleShowGrid(it) }
-                            )
-
-                            val useNativeScanner by viewModel.useNativeScanner.collectAsState()
-                            SettingsToggleItem(
-                                icon = Icons.Default.DocumentScanner,
-                                title = "Native Scanner",
-                                description = "Use ML Kit Document Scanner API if available",
-                                checked = useNativeScanner,
-                                onCheckedChange = { viewModel.toggleUseNativeScanner(it) }
-                            )
                         }
                     }
                 }
@@ -206,14 +215,6 @@ fun SettingsScreen(
                 2 -> {
                     item {
                         SettingsSection(title = "Export & Quality") {
-                            val pdfFilename by viewModel.pdfFilename.collectAsState()
-                            SettingsInputItem(
-                                icon = Icons.Default.Description,
-                                title = "Default PDF Filename",
-                                value = pdfFilename,
-                                onValueChange = { viewModel.setPdfFilename(it) }
-                            )
-
                             val dpi by viewModel.dpi.collectAsState()
                             SettingsSliderItem(
                                 icon = Icons.Default.HighQuality,
@@ -248,6 +249,14 @@ fun SettingsScreen(
                                 description = "Automatically compile PDF when finishing document",
                                 checked = autoPdf,
                                 onCheckedChange = { viewModel.toggleAutoPdf(it) }
+                            )
+
+                            val pdfFilename by viewModel.pdfFilename.collectAsState()
+                            SettingsInputItem(
+                                icon = Icons.Default.Description,
+                                title = "Default PDF Filename",
+                                value = pdfFilename,
+                                onValueChange = { viewModel.setPdfFilename(it) }
                             )
 
                             val pageSize by viewModel.pageSize.collectAsState()
@@ -338,6 +347,10 @@ fun SettingsScreen(
                     }
 
                     item {
+                        DeveloperStatsView(viewModel = viewModel)
+                    }
+
+                    item {
                         SettingsSection(title = "About") {
                             SettingsInfoItem(
                                 icon = Icons.Default.Info,
@@ -351,10 +364,6 @@ fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                    }
-
-                    item {
-                        DeveloperStatsView(viewModel = viewModel)
                     }
                 }
             }
