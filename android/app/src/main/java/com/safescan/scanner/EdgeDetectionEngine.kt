@@ -1,6 +1,7 @@
 package com.safescan.scanner
 
 import android.graphics.Bitmap
+import android.util.Log
 import com.safescan.domain.model.Point
 import org.opencv.android.Utils
 import org.opencv.core.Mat
@@ -11,6 +12,10 @@ import org.opencv.imgproc.Imgproc
 
 class EdgeDetectionEngine {
 
+    companion object {
+        private const val TAG = "EdgeDetectionEngine"
+    }
+
     @Synchronized
     fun detectEdgesSafe(bitmap: Bitmap, mode: com.safescan.data.ScannerMode? = null): List<Point> {
         return detectEdges(bitmap, mode) ?: getFallbackQuad(bitmap.width.toDouble(), bitmap.height.toDouble())
@@ -18,10 +23,18 @@ class EdgeDetectionEngine {
 
     @Synchronized
     fun detectEdges(bitmap: Bitmap, mode: com.safescan.data.ScannerMode? = null): List<Point>? {
-        if (bitmap.isRecycled) return null
+        if (bitmap.isRecycled) {
+            Log.e(TAG, "detectEdges: Bitmap is already recycled")
+            return null
+        }
+        
+        Log.d(TAG, "Starting advanced offline edge detection. Mode: $mode")
         var src: Mat? = null
         var resized: Mat? = null
         var gray: Mat? = null
+        var claheMat: Mat? = null
+        var filtered: Mat? = null
+        
         try {
             src = Mat()
             Utils.bitmapToMat(bitmap, src)
@@ -41,124 +54,77 @@ class EdgeDetectionEngine {
             gray = Mat()
             Imgproc.cvtColor(resized, gray, Imgproc.COLOR_RGBA2GRAY)
             
-            // 1. CLAHE (Contrast Limited Adaptive Histogram Equalization) for contrast equalization under shadows/bad lighting
-            val clahe = Imgproc.createCLAHE(2.0, Size(8.0, 8.0))
-            clahe.apply(gray, gray)
+            // 1. Contrast Limited Adaptive Histogram Equalization (CLAHE) for illumination balancing
+            claheMat = Mat()
+            val clahe = Imgproc.createCLAHE(3.0, Size(8.0, 8.0))
+            clahe.apply(gray, claheMat)
+            clahe.release()
             
-            // 2. Bilateral filter for excellent edge-preserving smoothing (clears internal text & textures)
-            val filtered = Mat()
-            Imgproc.bilateralFilter(gray, filtered, 9, 75.0, 75.0)
-            filtered.copyTo(gray)
-            filtered.release()
+            // 2. Bilateral Filter for edge-preserving smoothing (removes document content/text noise)
+            filtered = Mat()
+            Imgproc.bilateralFilter(claheMat, filtered, 9, 75.0, 75.0)
             
             val imageArea = (resized.width() * resized.height()).toDouble()
-            val minArea = imageArea * 0.10   // 10%
-            val maxArea = imageArea * 0.95   // 95%
+            val minArea = imageArea * 0.08   // Relaxed area lower bound (8%)
+            val maxArea = imageArea * 0.99   // Relaxed area upper bound (99%)
             
             var bestPoints: List<Point>? = null
             var bestScore = -Double.MAX_VALUE
 
-            // Define thresholds and morphology kernel size for each mode
-            val thresholds = when (mode) {
-                com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> listOf(40.0, 60.0, 80.0, 100.0)
-                com.safescan.data.ScannerMode.DOCUMENT -> listOf(30.0, 50.0, 70.0, 90.0)
-                null -> listOf(35.0, 55.0, 75.0, 95.0)
-            }
+            // We use a hybrid approach trying 4 different preprocessing methods to ensure we capture boundaries
+            // under any background contrast or shadow scenario (Adaptive thresholds + Canny thresholds)
+            val totalPreprocessingMethods = 4
 
-            val morphSize = when (mode) {
-                com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> Size(7.0, 7.0)
-                com.safescan.data.ScannerMode.DOCUMENT -> Size(5.0, 5.0)
-                null -> Size(5.0, 5.0)
-            }
-
-            for (threshold in thresholds) {
-                var edges: Mat? = null
-                var kernel: Mat? = null
-                val contours = ArrayList<MatOfPoint>()
+            for (methodIdx in 0 until totalPreprocessingMethods) {
+                var thresh: Mat? = null
                 var hierarchy: Mat? = null
+                val contours = ArrayList<MatOfPoint>()
+                
                 try {
-                    edges = Mat()
-                    Imgproc.Canny(gray, edges, threshold, threshold * 2.5)
-                    
-                    kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, morphSize)
-                    Imgproc.morphologyEx(edges, edges, Imgproc.MORPH_CLOSE, kernel)
-
+                    thresh = preprocess(filtered, methodIdx)
                     hierarchy = Mat()
-                    Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
+                    Imgproc.findContours(thresh, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
+                    
+                    Log.d(TAG, "Method $methodIdx: Found ${contours.size} contours")
 
                     for (contour in contours) {
                         val area = Imgproc.contourArea(contour)
                         if (area < minArea || area > maxArea) continue
                         
-                        var contour2f: MatOfPoint2f? = null
-                        try {
-                            contour2f = MatOfPoint2f(*contour.toArray())
-                            val peri = Imgproc.arcLength(contour2f, true)
-                            
-                            for (epsFactor in listOf(0.015, 0.02, 0.03, 0.04)) {
-                                val approx = MatOfPoint2f()
-                                try {
-                                    Imgproc.approxPolyDP(contour2f, approx, epsFactor * peri, true)
-                                    if (approx.total() == 4L) {
-                                        val approxPointsResized = approx.toArray().map { Point(it.x, it.y) }
-                                        
-                                        if (isConvexPoints(approxPointsResized)) {
-                                            val maxAngleError = getMaxCosinePoints(approxPointsResized)
-                                            if (maxAngleError < 0.5) {
-                                                val normArea = area / imageArea
-                                                val quadArea = getQuadArea(approxPointsResized)
-                                                val areaRatio = if (quadArea > 0) Math.min(area, quadArea) / Math.max(area, quadArea) else 0.0
-                                                val aspect = getQuadAspectRatio(approxPointsResized)
-                                                val aspectPenalty = if (aspect > 2.2) (aspect - 2.2) * 0.3 else 0.0
-                                                
-                                                val score = normArea * 0.6 + areaRatio * 0.4 - maxAngleError - aspectPenalty
-                                                if (score > bestScore) {
-                                                    bestScore = score
-                                                    val approxPointsOriginal = approxPointsResized.map { Point(it.x / scaleFactor, it.y / scaleFactor) }
-                                                    bestPoints = orderPoints(approxPointsOriginal)
-                                                }
-                                            }
-                                        }
-                                    }
-                                } finally {
-                                    approx.release()
-                                }
+                        // 1. Try finding document contour with our 4-to-6 point quadrilateral extractor
+                        val quadCandidate = findDocumentContour(contour, imageArea)
+                        if (quadCandidate != null) {
+                            val score = scoreQuadrilateral(quadCandidate, imageArea)
+                            if (score > bestScore) {
+                                bestScore = score
+                                val originalPoints = quadCandidate.map { Point(it.x / scaleFactor, it.y / scaleFactor) }
+                                bestPoints = orderPoints(originalPoints)
+                                Log.d(TAG, "New best quad from contour with score: ${String.format("%.3f", score)} (Area Ratio: ${String.format("%.3f", area / imageArea)})")
                             }
+                        }
 
-                            // FALLBACK WITHIN CONTOUR
-                            val extremePointsResized = getExtremePoints(contour).map { Point(it.x, it.y) }
-                            if (extremePointsResized.size == 4 && isConvexPoints(extremePointsResized)) {
-                                val maxAngleError = getMaxCosinePoints(extremePointsResized)
-                                if (maxAngleError < 0.5) {
-                                    val quadArea = getQuadArea(extremePointsResized)
-                                    if (quadArea in minArea..maxArea) {
-                                        val normArea = quadArea / imageArea
-                                        val areaRatio = if (quadArea > 0) Math.min(area, quadArea) / Math.max(area, quadArea) else 0.0
-                                        val aspect = getQuadAspectRatio(extremePointsResized)
-                                        val aspectPenalty = if (aspect > 2.2) (aspect - 2.2) * 0.3 else 0.0
-                                        
-                                        val score = normArea * 0.6 + areaRatio * 0.4 - maxAngleError - aspectPenalty
-                                        if (score > bestScore) {
-                                            bestScore = score
-                                            val extremePointsOriginal = extremePointsResized.map { Point(it.x / scaleFactor, it.y / scaleFactor) }
-                                            bestPoints = orderPoints(extremePointsOriginal)
-                                        }
-                                    }
-                                }
+                        // 2. Fallback extreme points check with our relaxed validation
+                        val extremePointsResized = getExtremePoints(contour).map { Point(it.x, it.y) }
+                        if (isValidQuadrilateral(extremePointsResized, imageArea)) {
+                            val score = scoreQuadrilateral(extremePointsResized, imageArea)
+                            if (score > bestScore) {
+                                bestScore = score
+                                val originalPoints = extremePointsResized.map { Point(it.x / scaleFactor, it.y / scaleFactor) }
+                                bestPoints = orderPoints(originalPoints)
+                                Log.d(TAG, "New best quad from extreme points with score: ${String.format("%.3f", score)}")
                             }
-                        } finally {
-                            contour2f?.release()
                         }
                     }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing contours with method $methodIdx", e)
                 } finally {
-                    edges?.release()
-                    kernel?.release()
-                    contours.forEach { it.release() }
+                    thresh?.release()
                     hierarchy?.release()
+                    contours.forEach { it.release() }
                 }
             }
 
-            // Automatic identification logic for offline edge detection
+            // Automatic identification logic for document type
             if (bestPoints != null && bestPoints.size == 4) {
                 val tl = bestPoints[0]
                 val tr = bestPoints[1]
@@ -179,7 +145,6 @@ class EdgeDetectionEngine {
                     1.0
                 }
 
-                // If aspect ratio is close to standard Card (1.586, e.g., between 1.45 and 1.75)
                 val identifiedType = if (aspectRatio in 1.45..1.75) {
                     "CARD"
                 } else {
@@ -190,11 +155,190 @@ class EdgeDetectionEngine {
             }
 
             return bestPoints
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in detectEdges JNI pipeline", e)
+            return null
         } finally {
             src?.release()
             resized?.release()
             gray?.release()
+            claheMat?.release()
+            filtered?.release()
         }
+    }
+
+    /**
+     * Noise reduction and thresholding pipeline that combines adaptive thresholding and canny.
+     */
+    private fun preprocess(gray: Mat, methodIndex: Int): Mat {
+        val thresh = Mat()
+        when (methodIndex) {
+            0 -> {
+                // Adaptive Threshold (Gaussian) - handles shadows, glares, and bad lighting perfectly
+                Imgproc.adaptiveThreshold(
+                    gray,
+                    thresh,
+                    255.0,
+                    Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C,
+                    Imgproc.THRESH_BINARY_INV,
+                    11,
+                    2.0
+                )
+                val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
+                Imgproc.morphologyEx(thresh, thresh, Imgproc.MORPH_CLOSE, kernel)
+                kernel.release()
+            }
+            1 -> {
+                // Adaptive Threshold (Mean) - broader window size to capture softer boundaries
+                Imgproc.adaptiveThreshold(
+                    gray,
+                    thresh,
+                    255.0,
+                    Imgproc.ADAPTIVE_THRESH_MEAN_C,
+                    Imgproc.THRESH_BINARY_INV,
+                    15,
+                    3.0
+                )
+                val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
+                Imgproc.morphologyEx(thresh, thresh, Imgproc.MORPH_CLOSE, kernel)
+                kernel.release()
+            }
+            2 -> {
+                // Robust Canny for high contrast clean bounds
+                Imgproc.Canny(gray, thresh, 40.0, 100.0)
+                val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
+                Imgproc.morphologyEx(thresh, thresh, Imgproc.MORPH_CLOSE, kernel)
+                kernel.release()
+            }
+            else -> {
+                // Strong contrast Canny to reject fine textures
+                Imgproc.Canny(gray, thresh, 80.0, 200.0)
+                val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
+                Imgproc.morphologyEx(thresh, thresh, Imgproc.MORPH_CLOSE, kernel)
+                kernel.release()
+            }
+        }
+        return thresh
+    }
+
+    /**
+     * Approximates contours into polygons and returns the largest valid quadrilateral
+     * if the contour yields between 4 and 6 vertices.
+     */
+    private fun findDocumentContour(contour: MatOfPoint, imageArea: Double): List<Point>? {
+        var contour2f: MatOfPoint2f? = null
+        try {
+            contour2f = MatOfPoint2f(*contour.toArray())
+            val peri = Imgproc.arcLength(contour2f, true)
+            
+            var bestQuad: List<Point>? = null
+            var bestScore = -Double.MAX_VALUE
+
+            // Try different approximation tolerances to adapt to folds or curves
+            for (epsFactor in listOf(0.015, 0.02, 0.03, 0.04)) {
+                val approx = MatOfPoint2f()
+                try {
+                    Imgproc.approxPolyDP(contour2f, approx, epsFactor * peri, true)
+                    val totalPoints = approx.total()
+                    
+                    if (totalPoints in 4L..6L) {
+                        val approxPoints = approx.toArray().map { Point(it.x, it.y) }
+                        val quadCandidate = findLargestQuadrilateral(approxPoints)
+                        
+                        if (quadCandidate != null && isValidQuadrilateral(quadCandidate, imageArea)) {
+                            val score = scoreQuadrilateral(quadCandidate, imageArea)
+                            if (score > bestScore) {
+                                bestScore = score
+                                bestQuad = quadCandidate
+                            }
+                        }
+                    }
+                } finally {
+                    approx.release()
+                }
+            }
+            return bestQuad
+        } finally {
+            contour2f?.release()
+        }
+    }
+
+    /**
+     * Extracts the largest convex 4-point quadrilateral from a list of 4 to 6 vertices.
+     */
+    private fun findLargestQuadrilateral(points: List<Point>): List<Point>? {
+        if (points.size < 4) return null
+        if (points.size == 4) {
+            val ordered = orderPoints(points)
+            if (isConvexPoints(ordered)) {
+                return ordered
+            }
+            return null
+        }
+
+        var bestQuad: List<Point>? = null
+        var maxArea = -1.0
+        val n = points.size
+
+        // Generate combinations of choosing 4 vertices from 5 or 6 vertices (at most 15 combinations)
+        for (i in 0 until n) {
+            for (j in i + 1 until n) {
+                for (k in j + 1 until n) {
+                    for (l in k + 1 until n) {
+                        val candidate = listOf(points[i], points[j], points[k], points[l])
+                        val ordered = orderPoints(candidate)
+                        if (isConvexPoints(ordered)) {
+                            val area = getQuadArea(ordered)
+                            if (area > maxArea) {
+                                maxArea = area
+                                bestQuad = ordered
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return bestQuad
+    }
+
+    /**
+     * Validates candidate quadrilateral using relaxed Area and Aspect Ratio checks
+     */
+    private fun isValidQuadrilateral(points: List<Point>, imageArea: Double): Boolean {
+        if (points.size != 4) return false
+        val area = getQuadArea(points)
+        val normArea = area / imageArea
+        
+        // Relaxed Area constraints: must cover at least 8% of the viewport and at most 99%
+        if (normArea < 0.08 || normArea > 0.99) {
+            return false
+        }
+
+        // Relaxed Aspect Ratio constraints: aspect ratio should be reasonable for a standard sheet or card
+        val aspect = getQuadAspectRatio(points)
+        if (aspect < 0.35 || aspect > 2.5) {
+            return false
+        }
+
+        return true
+    }
+
+    /**
+     * Scores a valid quadrilateral. Balances size with orthogonal angles and shape aspect.
+     */
+    private fun scoreQuadrilateral(points: List<Point>, imageArea: Double): Double {
+        val area = getQuadArea(points)
+        val normArea = area / imageArea
+        
+        // Soft Aspect ratio penalty for extremely skewed frames
+        val aspect = getQuadAspectRatio(points)
+        val aspectPenalty = if (aspect > 2.2) (aspect - 2.2) * 0.3 else 0.0
+        
+        // Soft cosine penalty (closer to 90-degree corners is better, but not strictly required)
+        val maxCosine = getMaxCosinePoints(points) 
+        
+        // Returns dynamic score based on size, geometry stability, and rectangular nature
+        return (normArea * 1.0) - (maxCosine * 0.3) - aspectPenalty
     }
 
     private fun getExtremePoints(contour: MatOfPoint): List<Point> {
