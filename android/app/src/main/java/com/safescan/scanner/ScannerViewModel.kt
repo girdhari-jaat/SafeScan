@@ -279,7 +279,7 @@ class ScannerViewModel @Inject constructor(
         return resolved
     }
 
-    private fun getOrGenerateDocumentTitle(docId: String?): String {
+    fun getOrGenerateDocumentTitle(docId: String?): String {
         // 1. If we have an initialDocumentTitle stored, return it
         initialDocumentTitle?.let { return it }
 
@@ -811,7 +811,13 @@ class ScannerViewModel @Inject constructor(
         selectedSlotId.value = slotId
     }
 
-    fun captureToSlot(bitmap: Bitmap, slotId: String, isCapture: Boolean = false, corners: List<Point>? = null) {
+    fun captureToSlot(
+        bitmap: Bitmap,
+        slotId: String,
+        isCapture: Boolean = false,
+        corners: List<Point>? = null,
+        originalBitmap: Bitmap? = null
+    ) {
         DiagnosticsLogger.info("Processing captured image for slot $slotId...")
         if (openedDocumentId == null) {
             openedDocumentId = "doc_" + System.currentTimeMillis()
@@ -833,8 +839,9 @@ class ScannerViewModel @Inject constructor(
             // Save high-res original bitmap to disk if it is a new capture, or reuse existing
             var origPath = existing.originalBitmapPath
             if (isCapture || origPath == null) {
-                origPath = saveHighResToDisk(bitmap, slotId, "original")
-                highResCache.put("${slotId}_original", bitmap)
+                val origToSave = originalBitmap ?: bitmap
+                origPath = saveHighResToDisk(origToSave, slotId, "original")
+                highResCache.put("${slotId}_original", origToSave)
             }
 
             // Generate lightweight thumbnail
@@ -1668,7 +1675,7 @@ class ScannerViewModel @Inject constructor(
                     when (val result = scannerEngine.scanDocument(processedBitmap)) {
                         is com.safescan.core.AppResult.Success -> {
                             if (slotId != null) {
-                                captureToSlot(result.data.bitmap, slotId, isCapture = true, corners = result.data.corners)
+                                captureToSlot(result.data.bitmap, slotId, isCapture = true, corners = result.data.corners, originalBitmap = processedBitmap)
                                 selectedSlotId.value = null
                             }
                             

@@ -164,7 +164,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .background(Color.Black),
+                        .background(MaterialTheme.colorScheme.background),
                     contentAlignment = Alignment.Center
                 ) {
                     editingBitmap?.let { bmp ->
@@ -179,12 +179,12 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                             modifier = Modifier
                                 .align(Alignment.BottomStart)
                                 .padding(16.dp)
-                                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f), RoundedCornerShape(8.dp))
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Text(
                                 text = "${bmp.width} x ${bmp.height}",
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 style = MaterialTheme.typography.labelMedium
                             )
                         }

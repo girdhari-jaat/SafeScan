@@ -39,13 +39,14 @@ fun DocumentGridView(
     val context = androidx.compose.ui.platform.LocalContext.current
     
     val pagesCount = if (capturedJpgs.isNotEmpty()) capturedJpgs.size else slots.count { it.bitmap != null }
+    val documentTitle = viewModel.getOrGenerateDocumentTitle(viewModel.openedDocumentId)
     
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text("Document Grid", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text(documentTitle, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                         Text("$pagesCount Pages Captured", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     }
                 },

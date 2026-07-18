@@ -150,7 +150,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Text("TF", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text("AI", color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                 }
 
@@ -242,7 +242,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(Color.Black),
+                .background(MaterialTheme.colorScheme.background),
             contentAlignment = Alignment.Center
         ) {
             croppingBitmap?.let { bmp ->
@@ -515,14 +515,15 @@ fun CropScreen(viewModel: ScannerViewModel) {
                                 ) {
                                     Box(modifier = Modifier.size(magnifierSize)) {
                                         val zoom = 4f
+                                        val density = androidx.compose.ui.platform.LocalDensity.current.density
                                         Image(
                                             bitmap = bmp.asImageBitmap(),
                                             contentDescription = null,
                                             modifier = Modifier
-                                                .size(width = (imageSize.width.toFloat() / with(androidx.compose.ui.platform.LocalDensity.current) { 1.dp.toPx() }).dp * zoom, height = (imageSize.height.toFloat() / with(androidx.compose.ui.platform.LocalDensity.current) { 1.dp.toPx() }).dp * zoom)
+                                                .size(width = (imageSize.width.toFloat() / density * zoom).dp, height = (imageSize.height.toFloat() / density * zoom).dp)
                                                 .offset(
-                                                    x = (-(dragOffset.x * zoom) + (magnifierSize.value / 2 * with(androidx.compose.ui.platform.LocalDensity.current) { density })).dp,
-                                                    y = (-(dragOffset.y * zoom) + (magnifierSize.value / 2 * with(androidx.compose.ui.platform.LocalDensity.current) { density })).dp
+                                                    x = (-(dragOffset.x / density * zoom) + (magnifierSize.value / 2)).dp,
+                                                    y = (-(dragOffset.y / density * zoom) + (magnifierSize.value / 2)).dp
                                                 ),
                                             contentScale = ContentScale.FillBounds
                                         )
