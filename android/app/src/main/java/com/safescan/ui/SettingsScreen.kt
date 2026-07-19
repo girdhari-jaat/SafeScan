@@ -219,8 +219,9 @@ fun SettingsScreen(
                             SettingsSliderItem(
                                 icon = Icons.Default.HighQuality,
                                 title = "Resolution (DPI)",
-                                value = dpi,
-                                valueRange = 72f..600f,
+                                value = dpi.coerceIn(150f, 300f),
+                                valueRange = 150f..300f,
+                                steps = 2,
                                 onValueChange = { viewModel.setDpi(it) }
                             )
 
@@ -228,8 +229,9 @@ fun SettingsScreen(
                             SettingsSliderItem(
                                 icon = Icons.Default.PhotoLibrary,
                                 title = "JPEG Quality",
-                                value = jpegQuality,
-                                valueRange = 10f..100f,
+                                value = jpegQuality.coerceIn(60f, 100f),
+                                valueRange = 60f..100f,
+                                steps = 3,
                                 onValueChange = { viewModel.setJpegQuality(it) }
                             )
 
@@ -530,6 +532,7 @@ fun SettingsSliderItem(
     title: String,
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int = 0,
     onValueChange: (Float) -> Unit
 ) {
     Column(
@@ -556,6 +559,7 @@ fun SettingsSliderItem(
             value = value,
             onValueChange = onValueChange,
             valueRange = valueRange,
+            steps = steps,
             modifier = Modifier.padding(top = 8.dp)
         )
     }

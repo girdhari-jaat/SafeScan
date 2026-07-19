@@ -565,7 +565,6 @@ fun EditorScreen(viewModel: ScannerViewModel) {
     if (showSettingsDialog) {
         AlertDialog(
             onDismissRequest = { showSettingsDialog = false },
-            title = { Text("PDF export settings", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Select PDF configuration preferences:")
@@ -654,9 +653,9 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                         }
                     }
 
-                    // 4. JPEG Quality Slider (10% to 100% continuous, matching Settings)
+                    // 4. JPEG Quality Slider (60% to 100% discrete, matching Settings)
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        val qualityPercent = jpegQuality.toInt()
+                        val qualityPercent = jpegQuality.coerceIn(60f, 100f).toInt()
                         Text(
                             text = "JPEG/Image Quality: $qualityPercent%",
                             style = MaterialTheme.typography.bodyMedium,
@@ -664,34 +663,11 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Slider(
-                            value = jpegQuality,
+                            value = jpegQuality.coerceIn(60f, 100f),
                             onValueChange = { viewModel.setJpegQuality(it) },
-                            valueRange = 10f..100f,
+                            valueRange = 60f..100f,
+                            steps = 3,
                             modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
-                    // 5. Auto-PDF Compilation Switch
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Auto-PDF Compilation",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                text = "Compile PDF immediately upon saving",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = autoPdf,
-                            onCheckedChange = { viewModel.toggleAutoPdf(it) }
                         )
                     }
                 }

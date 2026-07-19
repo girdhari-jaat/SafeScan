@@ -60,3 +60,54 @@ object ExportHelper {
     }
 }
 
+class NativePdfWriter(private val out: java.io.OutputStream) {
+    private var bytesWritten = 0L
+    private val objectOffsets = mutableListOf<Long>()
+
+    fun write(str: String) {
+        val bytes = str.toByteArray(Charsets.US_ASCII)
+        out.write(bytes)
+        bytesWritten += bytes.size
+    }
+
+    fun write(bytes: ByteArray) {
+        out.write(bytes)
+        bytesWritten += bytes.size
+    }
+
+    fun startObject(): Int {
+        val objId = objectOffsets.size + 1
+        objectOffsets.add(bytesWritten)
+        write("$objId 0 obj\n")
+        return objId
+    }
+
+    fun endObject() {
+        write("endobj\n")
+    }
+
+    fun startDocument() {
+        write("%PDF-1.4\n")
+        write("%\u00E2\u00E3\u00CF\u00D3\n")
+    }
+
+    fun endDocument(catalogId: Int) {
+        val xrefOffset = bytesWritten
+        write("xref\n")
+        write("0 ${objectOffsets.size + 1}\n")
+        write("0000000000 65535 f\r\n")
+        for (offset in objectOffsets) {
+            write(String.format(java.util.Locale.US, "%010d 00000 n\r\n", offset))
+        }
+        write("trailer\n")
+        write("<<\n")
+        write("  /Size ${objectOffsets.size + 1}\n")
+        write("  /Root $catalogId 0 R\n")
+        write(">>\n")
+        write("startxref\n")
+        write("$xrefOffset\n")
+        write("%%EOF\n")
+    }
+}
+
+

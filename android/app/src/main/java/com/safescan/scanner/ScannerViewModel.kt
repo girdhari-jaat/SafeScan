@@ -161,6 +161,7 @@ class ScannerViewModel @Inject constructor(
     val capturedJpgFiles = androidx.compose.runtime.mutableStateListOf<java.io.File>()
     var openedDocumentId: String? = null
     private var initialDocumentTitle: String? = null
+    private var editingJob: kotlinx.coroutines.Job? = null
     val originalJpgBitmaps = mutableMapOf<Int, Bitmap>()
     val jpgCorners = mutableMapOf<Int, List<com.safescan.domain.model.Point>>()
 
@@ -1406,7 +1407,15 @@ class ScannerViewModel @Inject constructor(
                         }
                     }
                     DiagnosticsLogger.info("Exporting document to PDF at ${pageSize.value} layout off-thread...")
-                    val result = pdfExporter.exportCardsToPdf(slotsToExport, title, currentMode.value, pageSize.value, pdfOrientation.value)
+                    val result = pdfExporter.exportCardsToPdf(
+                        slotsToExport,
+                        title,
+                        currentMode.value,
+                        pageSize.value,
+                        pdfOrientation.value,
+                        dpi = dpi.value,
+                        jpegQuality = jpegQuality.value
+                    )
                     withContext(Dispatchers.Main) {
                         if (clearSession) {
                             capturedJpgFiles.clear()
@@ -1587,9 +1596,11 @@ class ScannerViewModel @Inject constructor(
     }
 
     private fun applyEdits() {
-        viewModelScope.launch(Dispatchers.IO) {
+        editingJob?.cancel()
+        editingJob = viewModelScope.launch(Dispatchers.IO) {
             val original = editingBitmapOriginal.value ?: return@launch
             val state = editorState.value
+            kotlinx.coroutines.delay(16) // ~1 frame delay to allow cancellation if slider is moving rapidly
             val processed = com.safescan.domain.ImageProcessor.apply(original, state)
             editingBitmapPreview.value = processed
         }
@@ -1810,6 +1821,83 @@ class ScannerViewModel @Inject constructor(
             slots.value = currentSlots
 
             openedDocumentId?.let { saveDocumentStateOffline(it) }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        editingJob?.cancel()
+
+        // Clear and recycle all bitmaps in the highResCache to prevent native OOM
+        try {
+            val snapshot = highResCache.snapshot()
+            for (bitmap in snapshot.values) {
+                if (bitmap != null && !bitmap.isRecycled) {
+                    bitmap.recycle()
+                }
+            }
+            highResCache.evictAll()
+        } catch (e: Exception) {
+            Log.e("ScannerViewModel", "Failed to clear highResCache in onCleared", e)
+        }
+
+        // Recycle originalJpgBitmaps
+        try {
+            for (bitmap in originalJpgBitmaps.values) {
+                if (bitmap != null && !bitmap.isRecycled) {
+                    bitmap.recycle()
+                }
+            }
+            originalJpgBitmaps.clear()
+        } catch (e: Exception) {
+            Log.e("ScannerViewModel", "Failed to clear originalJpgBitmaps in onCleared", e)
+        }
+
+        // Recycle croppingBitmap
+        try {
+            croppingBitmap.value?.let {
+                if (!it.isRecycled) {
+                    it.recycle()
+                }
+            }
+            croppingBitmap.value = null
+        } catch (e: Exception) {
+            Log.e("ScannerViewModel", "Failed to clear croppingBitmap in onCleared", e)
+        }
+
+        // Recycle editingBitmapOriginal and editingBitmapPreview
+        try {
+            editingBitmapOriginal.value?.let {
+                if (!it.isRecycled) {
+                    it.recycle()
+                }
+            }
+            editingBitmapOriginal.value = null
+        } catch (e: Exception) {
+            Log.e("ScannerViewModel", "Failed to clear editingBitmapOriginal in onCleared", e)
+        }
+
+        try {
+            editingBitmapPreview.value?.let {
+                if (!it.isRecycled) {
+                    it.recycle()
+                }
+            }
+            editingBitmapPreview.value = null
+        } catch (e: Exception) {
+            Log.e("ScannerViewModel", "Failed to clear editingBitmapPreview in onCleared", e)
+        }
+
+        // Recycle scannedBitmap
+        try {
+            _uiState.value.scannedBitmap?.let {
+                if (!it.isRecycled) {
+                    it.recycle()
+                }
+            }
+            _uiState.update { it.copy(scannedBitmap = null) }
+        } catch (e: Exception) {
+            Log.e("ScannerViewModel", "Failed to clear scannedBitmap in onCleared", e)
         }
     }
 }

@@ -17,16 +17,42 @@ object ImageFilterEngine {
                 Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
             }
             FilterType.BLACK_WHITE -> {
+                var hsv: Mat? = null
+                var mask: Mat? = null
+                var whiteBg: Mat? = null
+                var suppressedSrc: Mat? = null
                 var gray: Mat? = null
                 var cleanGray: Mat? = null
+                var smoothed: Mat? = null
                 var blurred: Mat? = null
                 try {
+                    // 1. Suppress Green-Cyan background (Pakistani CNIC specific optimization)
+                    hsv = Mat()
+                    Imgproc.cvtColor(src, hsv, Imgproc.COLOR_BGR2HSV)
+                    
+                    mask = Mat()
+                    Core.inRange(hsv, org.opencv.core.Scalar(35.0, 15.0, 25.0), org.opencv.core.Scalar(135.0, 255.0, 255.0), mask)
+                    
+                    whiteBg = Mat(src.size(), src.type())
+                    whiteBg.setTo(org.opencv.core.Scalar(245.0, 245.0, 245.0))
+                    
+                    suppressedSrc = Mat()
+                    src.copyTo(suppressedSrc)
+                    whiteBg.copyTo(suppressedSrc, mask)
+                    
+                    // 2. Convert to Grayscale
                     gray = Mat()
-                    Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY)
+                    Imgproc.cvtColor(suppressedSrc, gray, Imgproc.COLOR_BGR2GRAY)
+                    
+                    // 3. Remove Shadows
                     cleanGray = removeShadowsGray(gray)
                     
-                    // Compute block size dynamically based on image size to be resolution-independent
-                    val maxDim = Math.max(cleanGray.cols(), cleanGray.rows())
+                    // 4. Smooth background patterns/shining lines with bilateral filter
+                    smoothed = Mat()
+                    Imgproc.bilateralFilter(cleanGray, smoothed, 7, 45.0, 45.0)
+                    
+                    // 5. Adaptive Thresholding
+                    val maxDim = Math.max(smoothed.cols(), smoothed.rows())
                     var blockSize = maxDim / 40
                     if (blockSize % 2 == 0) {
                         blockSize += 1
@@ -35,68 +61,74 @@ object ImageFilterEngine {
                         blockSize = 15
                     }
                     
-                    // Use Gaussian adaptive thresholding to retain shapes, lines, and text details perfectly
                     Imgproc.adaptiveThreshold(
-                        cleanGray,
+                        smoothed,
                         outMat,
                         255.0,
                         Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C,
                         Imgproc.THRESH_BINARY,
                         blockSize,
-                        10.0
+                        11.0
                     )
                     
-                    // Apply slight sharpening to the black and white result to make fonts crisp
+                    // 6. Post-processing font crisping
                     blurred = Mat()
                     Imgproc.GaussianBlur(outMat, blurred, Size(0.0, 0.0), 1.0)
-                    Core.addWeighted(outMat, 1.5, blurred, -0.5, 0.0, outMat)
+                    Core.addWeighted(outMat, 1.4, blurred, -0.4, 0.0, outMat)
                     
                     Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
                 } finally {
+                    hsv?.release()
+                    mask?.release()
+                    whiteBg?.release()
+                    suppressedSrc?.release()
                     gray?.release()
                     cleanGray?.release()
+                    smoothed?.release()
                     blurred?.release()
                 }
             }
             FilterType.CARD -> {
-                val hsv = Mat()
-                val mask = Mat()
-                val whiteLayer = Mat()
-                val greenSuppressed = Mat()
-                val denoised = Mat()
-                val lab = Mat()
-                val mergedLab = Mat()
-                val enhancedBgr = Mat()
-                val sharpened = Mat()
-                val kernel = Mat(3, 3, CvType.CV_32F)
+                var shadowRemoved: Mat? = null
+                var denoised: Mat? = null
+                var lab: Mat? = null
+                var mergedLab: Mat? = null
+                var enhancedBgr: Mat? = null
+                var sharpened: Mat? = null
+                var kernel: Mat? = null
                 val channels = ArrayList<Mat>()
                 var clahe: org.opencv.imgproc.CLAHE? = null
 
                 try {
-                    // STEP 1: Green Suppression for CNIC/Card background cleanup
-                    Imgproc.cvtColor(src, hsv, Imgproc.COLOR_BGR2HSV)
-                    Core.inRange(hsv, org.opencv.core.Scalar(35.0, 30.0, 40.0), org.opencv.core.Scalar(95.0, 255.0, 255.0), mask)
+                    // STEP 1: Continuous lighting normalization & shadow removal (natural background cleanup)
+                    shadowRemoved = removeShadowsColor(src)
 
-                    whiteLayer.create(src.size(), src.type())
-                    whiteLayer.setTo(org.opencv.core.Scalar(240.0, 240.0, 240.0))
-                    src.copyTo(greenSuppressed)
-                    whiteLayer.copyTo(greenSuppressed, mask)
+                    // STEP 2: Denoise via edge-preserving Bilateral Filter to smooth background textures
+                    denoised = Mat()
+                    Imgproc.bilateralFilter(shadowRemoved, denoised, 5, 40.0, 40.0)
 
-                    // STEP 2: Denoise via edge-preserving Bilateral Filter
-                    Imgproc.bilateralFilter(greenSuppressed, denoised, 5, 50.0, 50.0)
-
-                    // STEP 3: CLAHE on L (Lightness) channel only to preserve text and equalize lighting safely
+                    // STEP 3: CLAHE on L (Lightness) channel to make text stand out without affecting colors
+                    lab = Mat()
                     Imgproc.cvtColor(denoised, lab, Imgproc.COLOR_BGR2Lab)
                     Core.split(lab, channels) // channels[0]=L, [1]=A, [2]=B
 
-                    clahe = Imgproc.createCLAHE(1.5, Size(8.0, 8.0)) // 1.5 for text safety
-                    clahe.apply(channels[0], channels[0]) // L channel enhance
+                    clahe = Imgproc.createCLAHE(1.8, Size(8.0, 8.0))
+                    clahe.apply(channels[0], channels[0])
 
+                    mergedLab = Mat()
                     Core.merge(channels, mergedLab)
+                    
+                    enhancedBgr = Mat()
                     Imgproc.cvtColor(mergedLab, enhancedBgr, Imgproc.COLOR_Lab2BGR)
 
-                    // STEP 4: Sharpening filter to make fonts crisp
-                    kernel.put(0, 0, floatArrayOf(0f, -0.5f, 0f, -0.5f, 3f, -0.5f, 0f, -0.5f, 0f))
+                    // STEP 4: Soft professional sharpening filter to make fonts crisp
+                    kernel = Mat(3, 3, CvType.CV_32F)
+                    kernel.put(0, 0, floatArrayOf(
+                        0f, -0.4f, 0f,
+                        -0.4f, 2.6f, -0.4f,
+                        0f, -0.4f, 0f
+                    ))
+                    sharpened = Mat()
                     Imgproc.filter2D(enhancedBgr, sharpened, -1, kernel)
 
                     // Convert to final RGBA output
@@ -106,16 +138,13 @@ object ImageFilterEngine {
                     e.printStackTrace()
                     Imgproc.cvtColor(src, outMat, Imgproc.COLOR_BGR2RGBA)
                 } finally {
-                    hsv.release()
-                    mask.release()
-                    whiteLayer.release()
-                    greenSuppressed.release()
-                    denoised.release()
-                    lab.release()
-                    mergedLab.release()
-                    enhancedBgr.release()
-                    sharpened.release()
-                    kernel.release()
+                    shadowRemoved?.release()
+                    denoised?.release()
+                    lab?.release()
+                    mergedLab?.release()
+                    enhancedBgr?.release()
+                    sharpened?.release()
+                    kernel?.release()
                     channels.forEach { it.release() }
                 }
             }
