@@ -17,48 +17,32 @@ object ImageFilterEngine {
                 Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
             }
             FilterType.BLACK_WHITE -> {
-                var hsv: Mat? = null
-                var mask: Mat? = null
-                var whiteBg: Mat? = null
-                var suppressedSrc: Mat? = null
                 var gray: Mat? = null
                 var cleanGray: Mat? = null
                 var smoothed: Mat? = null
-                var blurred: Mat? = null
                 try {
-                    // 1. Suppress Green-Cyan background (Pakistani CNIC specific optimization)
-                    hsv = Mat()
-                    Imgproc.cvtColor(src, hsv, Imgproc.COLOR_BGR2HSV)
-                    
-                    mask = Mat()
-                    Core.inRange(hsv, org.opencv.core.Scalar(35.0, 15.0, 25.0), org.opencv.core.Scalar(135.0, 255.0, 255.0), mask)
-                    
-                    whiteBg = Mat(src.size(), src.type())
-                    whiteBg.setTo(org.opencv.core.Scalar(245.0, 245.0, 245.0))
-                    
-                    suppressedSrc = Mat()
-                    src.copyTo(suppressedSrc)
-                    whiteBg.copyTo(suppressedSrc, mask)
-                    
-                    // 2. Convert to Grayscale
+                    // 1. Direct Conversion to Grayscale (No destructive color masks)
                     gray = Mat()
-                    Imgproc.cvtColor(suppressedSrc, gray, Imgproc.COLOR_BGR2GRAY)
+                    Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY)
                     
-                    // 3. Remove Shadows
+                    // 2. High-Performance Shadow Removal via downscaled background division
                     cleanGray = removeShadowsGray(gray)
                     
-                    // 4. Smooth background patterns/shining lines with bilateral filter
+                    // 3. Smooth out background textures and grain while preserving text edges
                     smoothed = Mat()
-                    Imgproc.bilateralFilter(cleanGray, smoothed, 7, 45.0, 45.0)
+                    Imgproc.bilateralFilter(cleanGray, smoothed, 7, 35.0, 35.0)
                     
-                    // 5. Adaptive Thresholding
+                    // Also apply a very gentle Gaussian blur to smooth high-frequency noise/lines
+                    Imgproc.GaussianBlur(smoothed, smoothed, Size(3.0, 3.0), 0.0)
+                    
+                    // 4. Balanced Adaptive Thresholding
                     val maxDim = Math.max(smoothed.cols(), smoothed.rows())
-                    var blockSize = maxDim / 40
+                    var blockSize = maxDim / 35
                     if (blockSize % 2 == 0) {
                         blockSize += 1
                     }
-                    if (blockSize < 15) {
-                        blockSize = 15
+                    if (blockSize < 25) {
+                        blockSize = 25
                     }
                     
                     Imgproc.adaptiveThreshold(
@@ -68,24 +52,15 @@ object ImageFilterEngine {
                         Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C,
                         Imgproc.THRESH_BINARY,
                         blockSize,
-                        11.0
+                        7.5 // Balanced C constant for bold, clean text without specks
                     )
                     
-                    // 6. Post-processing font crisping
-                    blurred = Mat()
-                    Imgproc.GaussianBlur(outMat, blurred, Size(0.0, 0.0), 1.0)
-                    Core.addWeighted(outMat, 1.4, blurred, -0.4, 0.0, outMat)
-                    
+                    // Convert to final RGBA output cleanly
                     Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
                 } finally {
-                    hsv?.release()
-                    mask?.release()
-                    whiteBg?.release()
-                    suppressedSrc?.release()
                     gray?.release()
                     cleanGray?.release()
                     smoothed?.release()
-                    blurred?.release()
                 }
             }
             FilterType.CARD -> {
@@ -277,42 +252,52 @@ object ImageFilterEngine {
     }
 
     private fun removeShadowsGray(gray: Mat): Mat {
-        var dilated: Mat? = null
+        var smallV: Mat? = null
+        var bgSmall: Mat? = null
         var kernel: Mat? = null
-        var bgIllum: Mat? = null
+        var bg: Mat? = null
         var grayFloat: Mat? = null
         var bgFloat: Mat? = null
         var div: Mat? = null
         val result = Mat()
         try {
-            dilated = Mat()
-            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(7.0, 7.0))
-            Imgproc.dilate(gray, dilated, kernel)
-            
-            bgIllum = Mat()
-            Imgproc.GaussianBlur(dilated, bgIllum, Size(21.0, 21.0), 0.0)
-            
+            smallV = Mat()
+            val scale = 0.2
+            Imgproc.resize(gray, smallV, Size(), scale, scale, Imgproc.INTER_LINEAR)
+
+            bgSmall = Mat()
+            // Using a larger morphological closing/dilation at downscaled size to eliminate text
+            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(15.0, 15.0))
+            Imgproc.dilate(smallV, bgSmall, kernel)
+            Imgproc.GaussianBlur(bgSmall, bgSmall, Size(25.0, 25.0), 0.0)
+
+            bg = Mat()
+            Imgproc.resize(bgSmall, bg, gray.size(), 0.0, 0.0, Imgproc.INTER_LINEAR)
+
             grayFloat = Mat()
             bgFloat = Mat()
             gray.convertTo(grayFloat, CvType.CV_32F)
-            bgIllum.convertTo(bgFloat, CvType.CV_32F)
-            
+            bg.convertTo(bgFloat, CvType.CV_32F)
+
             Core.add(bgFloat, org.opencv.core.Scalar(1.0), bgFloat)
-            
+
             div = Mat()
             Core.divide(grayFloat, bgFloat, div)
             Core.multiply(div, org.opencv.core.Scalar(255.0), div)
-            
-            Core.normalize(div, div, 0.0, 255.0, Core.NORM_MINMAX)
-            
+
             div.convertTo(result, CvType.CV_8U)
+
+            // Clamp light pixels to white to eliminate background noise and compression artifacts
+            Imgproc.threshold(result, result, 225.0, 255.0, Imgproc.THRESH_TRUNC)
+            Core.normalize(result, result, 0.0, 255.0, Core.NORM_MINMAX)
         } catch (e: Exception) {
             result.release()
             throw e
         } finally {
-            dilated?.release()
+            smallV?.release()
+            bgSmall?.release()
             kernel?.release()
-            bgIllum?.release()
+            bg?.release()
             grayFloat?.release()
             bgFloat?.release()
             div?.release()
