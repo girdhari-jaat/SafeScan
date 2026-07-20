@@ -114,10 +114,10 @@ android {
 
 dependencies {
     // AndroidX
-    implementation("androidx.core:core-ktx:1.12.0")
-    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
-    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    implementation("androidx.constraintlayout:constraintlayout:2.2.0")
 
     // CameraX
     val camerax_version = "1.4.2"
@@ -136,13 +136,13 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-gpu:2.16.1")
 
     // Lifecycle/ViewModel/Coroutines
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.3")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
 
     // Navigation Component
-    val nav_version = "2.7.7"
+    val nav_version = "2.8.5"
     implementation("androidx.navigation:navigation-fragment-ktx:$nav_version")
     implementation("androidx.navigation:navigation-ui-ktx:$nav_version")
 
@@ -163,7 +163,7 @@ dependencies {
     kapt("com.google.dagger:hilt-android-compiler:2.52")
 
     // Coil for asynchronous image loading
-    implementation("io.coil-kt:coil-compose:2.6.0")
+    implementation("io.coil-kt:coil-compose:2.7.0")
 
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.1.2")
