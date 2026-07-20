@@ -680,20 +680,6 @@ fun ScannerSettingsPopover(
     }
 }
 
-        val isGridViewVisible by viewModel.isGridViewVisible.collectAsState()
-        if (isGridViewVisible) {
-            DocumentGridView(
-                viewModel = viewModel,
-                onDismiss = { viewModel.isGridViewVisible.value = false },
-                onScanPage = {
-                    viewModel.isGridViewVisible.value = false
-                    viewModel.selectedSlotId.value = null
-                }
-            )
-        }
-    }
-}
-
 @Composable
 private fun PopoverToggleRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
