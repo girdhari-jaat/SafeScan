@@ -56,33 +56,9 @@ fun SlotsScreen(
     onSlotLongClick: (String) -> Unit,
     onWizardClick: () -> Unit
 ) {
-    val currentMode by viewModel.currentMode.collectAsState()
-    val slots by viewModel.slots.collectAsState()
-    val autoCrop by viewModel.autoCrop.collectAsState()
-    val flashMode by viewModel.flashMode.collectAsState()
-    val doubleFocus by viewModel.doubleFocusEnabled.collectAsState()
-    val uiState by viewModel.uiState.collectAsState()
-    val autoCapture by viewModel.autoCapture.collectAsState()
-    val context = androidx.compose.ui.platform.LocalContext.current
-
-    val showGrid by viewModel.showGrid.collectAsState()
-    val clickSound by viewModel.clickSound.collectAsState()
-    val liveDetect by viewModel.liveDetect.collectAsState()
-    val shadowRemove by viewModel.shadowRemove.collectAsState()
-    val batterySaver by viewModel.batterySaver.collectAsState()
-    val batchScan by viewModel.batchScan.collectAsState()
-    val autoRotation by viewModel.autoRotation.collectAsState()
-    val usePhoneCamera by viewModel.usePhoneCamera.collectAsState()
-    val useNativeScanner by viewModel.useNativeScanner.collectAsState()
-    val hdMode by viewModel.hdMode.collectAsState()
-    val isDocumentDetected by viewModel.isDocumentDetected.collectAsState()
-
     var isSettingsPopoverOpen by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
-        // LAYER 1: Viewfinder Overlay Guides based on Selected Mood
-        // ViewfinderOverlay(mode = currentMode, showGrid = showGrid, modifier = Modifier.fillMaxSize())
-
         // LAYER 2: Control Panel and Overlays
         Column(
             modifier = Modifier
@@ -92,532 +68,617 @@ fun SlotsScreen(
                 .padding(start = 16.dp, end = 16.dp, bottom = 16.dp, top = 8.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // A. TOP BAR CONTAINER
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp, bottom = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // First Row: Close Button, Centered Flash, Right Settings Button
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Left: Close Button
-                    IconButton(
-                        onClick = onClose,
-                        modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                    ) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Close Scanner", tint = Color.White)
-                    }
+            // A. TOP BAR CONTAINER (Isolated Recomposition Scope)
+            ScannerTopBar(
+                viewModel = viewModel,
+                onClose = onClose,
+                onFlashToggle = onFlashToggle,
+                onSettingsClick = { isSettingsPopoverOpen = !isSettingsPopoverOpen }
+            )
 
-                    // Center: Flash Toggle (separated on its own)
-                    IconButton(
-                        onClick = onFlashToggle,
-                        modifier = Modifier.background(
-                            if (flashMode != com.safescan.data.FlashMode.OFF) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.5f),
-                            CircleShape
-                        )
-                    ) {
-                        Icon(
-                            imageVector = when(flashMode) { com.safescan.data.FlashMode.AUTO -> Icons.Default.FlashAuto; com.safescan.data.FlashMode.ON -> Icons.Default.FlashOn; com.safescan.data.FlashMode.TORCH -> Icons.Default.FlashOn; else -> Icons.Default.FlashOff },
-                            contentDescription = "Toggle Flash",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    // Right: Settings Menu Button
-                    IconButton(
-                        onClick = { isSettingsPopoverOpen = !isSettingsPopoverOpen },
-                        modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                    ) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Settings", tint = Color.White)
-                    }
-                }
-
-                // Second Row: Scanning Mood Tabs with solid dark background
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(Color(0xFF121212)) // Solid dark background
-                            .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
-                            .padding(2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        listOf(
-                            ScannerMode.DOCUMENT to "Paper",
-                            ScannerMode.CARD to "Card",
-                            ScannerMode.GRID to "Grid"
-                        ).forEach { (mode, label) ->
-                            val isSelected = currentMode == mode
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(18.dp))
-                                    .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
-                                    .clickable { viewModel.switchMode(mode) }
-                                    .padding(horizontal = 14.dp, vertical = 6.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = label,
-                                    color = if (isSelected) Color.Black else Color.White,
-                                    fontSize = 16.sp, // Large and clear size
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // B. CENTER INSTRUCTIONS OVERLAY
-            val guideText = if (isDocumentDetected) {
-                if (autoCapture) "HOLD STILL... AUTO-CAPTURING" else "READY TO CAPTURE"
-            } else {
-                when (currentMode) {
-                    ScannerMode.CARD -> "Align Card Inside Cutout"
-                    ScannerMode.DOCUMENT -> "Align Document Inside Frame"
-                    ScannerMode.GRID -> "Utilize Grid for Centered Alignment"
-                }
-            }
-            val guideColor = if (isDocumentDetected) Color(0xFF10B981) else Color.Yellow
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .background(Color.Black.copy(alpha = 0.75f), shape = RoundedCornerShape(8.dp))
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    if (isDocumentDetected) {
-                        val pulseTransition = rememberInfiniteTransition(label = "dot_pulse")
-                        val dotAlpha by pulseTransition.animateFloat(
-                            initialValue = 0.3f,
-                            targetValue = 1.0f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(800, easing = LinearEasing),
-                                repeatMode = RepeatMode.Reverse
-                            ),
-                            label = "dot_alpha"
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF10B981).copy(alpha = dotAlpha))
-                        )
-                    }
-                    Text(
-                        text = guideText,
-                        color = guideColor,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                    )
-                }
-            }
+            // B. CENTER INSTRUCTIONS OVERLAY (Isolated Recomposition Scope for High-Frequency isDocumentDetected State)
+            ScannerCenterInstructions(viewModel = viewModel)
 
             // C. BOTTOM AREA: Floating Carousel & Premium Control Hub
             Column(
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // I. Horizontal Slots Carousel Card List
-                if (currentMode != ScannerMode.DOCUMENT) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(115.dp)
-                            .padding(8.dp)
-                    ) {
-                        if (slots.isEmpty()) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(text = "No Slots Available", color = Color.Gray)
-                            }
-                        } else {
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                items(slots) { slot ->
-                                    Box(modifier = Modifier.width(85.dp)) {
-                                        SlotItem(
-                                            slot = slot,
-                                            onClick = { onSlotClick(slot.id) },
-                                            onLongClick = { onSlotLongClick(slot.id) },
-                                            onClear = { viewModel.clearSlot(slot.id) }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(2.dp))
-                }
+                // I. Horizontal Slots Carousel Card List (Isolated Recomposition Scope)
+                ScannerBottomCarousel(
+                    viewModel = viewModel,
+                    onSlotClick = onSlotClick,
+                    onSlotLongClick = onSlotLongClick
+                )
 
-
-
-                // III. Premium Camera Action Trigger buttons row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 8.dp, end = 8.dp, top = 2.dp, bottom = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Left Action: Fallback Import Gallery Picker
-                    IconButton(
-                        onClick = onGalleryClick,
-                        modifier = Modifier
-                            .size(52.dp)
-                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                            .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape)
-                    ) {
-                        Icon(Icons.Default.Image, contentDescription = "Import from Gallery", tint = Color.White)
-                    }
-
-                    // Center Action: Large Circular Shutter button
-                    Box(
-                        modifier = Modifier
-                            .size(76.dp)
-                            .border(4.dp, Color.White, CircleShape)
-                            .background(Color.Transparent, CircleShape)
-                            .clickable { onCaptureClick() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .background(Color.White, CircleShape)
-                        )
-                    }
-
-                    // Right Action: Done Button (Saves and generates PDF)
-                    val isBatchActive by viewModel.batchScan.collectAsState()
-                    val scannedCount = if (viewModel.capturedJpgFiles.isNotEmpty()) viewModel.capturedJpgFiles.size else slots.count { it.bitmap != null }
-                    val hasScans = scannedCount > 0
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (hasScans) MaterialTheme.colorScheme.primary 
-                                else if (isBatchActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-                                else Color.Black.copy(alpha = 0.5f)
-                            )
-                            .clickable {
-                                if (hasScans) {
-                                    viewModel.isGridViewVisible.value = true
-                                } else {
-                                    viewModel.toggleBatchScan(!isBatchActive)
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (hasScans && uiState.lastCapturedThumbnail != null) {
-                            Image(
-                                bitmap = uiState.lastCapturedThumbnail!!.asImageBitmap(),
-                                contentDescription = "Last captured thumbnail",
-                                modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                contentScale = ContentScale.Crop
-                            )
-                            // Overlay count
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.3f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "$scannedCount",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 18.sp
-                                )
-                            }
-                        } else {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                if (hasScans) {
-                                    Text(text = "✓", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                    Text(text = "($scannedCount)", color = Color.White, style = MaterialTheme.typography.labelSmall)
-                                } else {
-                                    Text(
-                                        text = if (isBatchActive) "Batch\nON" else "Batch\nOFF",
-                                        color = Color.White,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        lineHeight = 12.sp,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+                // III. Premium Camera Action Trigger buttons row (Isolated Recomposition Scope)
+                ScannerBottomActions(
+                    viewModel = viewModel,
+                    onGalleryClick = onGalleryClick,
+                    onCaptureClick = onCaptureClick
+                )
             }
         }
 
         if (isSettingsPopoverOpen) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        isSettingsPopoverOpen = false
-                    }
+            ScannerSettingsPopover(
+                viewModel = viewModel,
+                onWizardClick = onWizardClick,
+                onDismiss = { isSettingsPopoverOpen = false }
             )
-            
-            val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-            val maxCardHeight = (configuration.screenHeightDp * 0.8).dp
+        }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = 80.dp),
-                contentAlignment = Alignment.TopCenter
+        val isGridViewVisible by viewModel.isGridViewVisible.collectAsState()
+        if (isGridViewVisible) {
+            DocumentGridView(
+                viewModel = viewModel,
+                onDismiss = { viewModel.isGridViewVisible.value = false },
+                onScanPage = {
+                    viewModel.isGridViewVisible.value = false
+                    viewModel.selectedSlotId.value = null
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun ScannerTopBar(
+    viewModel: ScannerViewModel,
+    onClose: () -> Unit,
+    onFlashToggle: () -> Unit,
+    onSettingsClick: () -> Unit
+) {
+    val currentMode by viewModel.currentMode.collectAsState()
+    val flashMode by viewModel.flashMode.collectAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // First Row: Close Button, Centered Flash, Right Settings Button
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Left: Close Button
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
             ) {
-                Card(
-                    modifier = Modifier
-                        .width(280.dp)
-                        .heightIn(max = maxCardHeight)
-                        .border(
-                            width = 1.dp,
-                            color = Color.White.copy(alpha = 0.15f),
-                            shape = RoundedCornerShape(24.dp)
-                        )
-                        .clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null
-                        ) { /* Consume click events to prevent dismiss */ },
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0xF21C1C1E)
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp)
+                Icon(Icons.Default.ArrowBack, contentDescription = "Close Scanner", tint = Color.White)
+            }
+
+            // Center: Flash Toggle (separated on its own)
+            IconButton(
+                onClick = onFlashToggle,
+                modifier = Modifier.background(
+                    if (flashMode != com.safescan.data.FlashMode.OFF) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.5f),
+                    CircleShape
+                )
+            ) {
+                Icon(
+                    imageVector = when(flashMode) { 
+                        com.safescan.data.FlashMode.AUTO -> Icons.Default.FlashAuto 
+                        com.safescan.data.FlashMode.ON -> Icons.Default.FlashOn 
+                        com.safescan.data.FlashMode.TORCH -> Icons.Default.FlashOn 
+                        else -> Icons.Default.FlashOff 
+                    },
+                    contentDescription = "Toggle Flash",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            // Right: Settings Menu Button
+            IconButton(
+                onClick = onSettingsClick,
+                modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
+            ) {
+                Icon(Icons.Default.MoreVert, contentDescription = "Settings", tint = Color.White)
+            }
+        }
+
+        // Second Row: Scanning Mood Tabs with solid dark background
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0xFF121212)) // Solid dark background
+                    .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
+                    .padding(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                listOf(
+                    ScannerMode.DOCUMENT to "Paper",
+                    ScannerMode.CARD to "Card",
+                    ScannerMode.GRID to "Grid"
+                ).forEach { (mode, label) ->
+                    val isSelected = currentMode == mode
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                            .clickable { viewModel.switchMode(mode) }
+                            .padding(horizontal = 14.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color.Black.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-                                .padding(4.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Tab 1: Settings
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        isSettingsPopoverOpen = false
-                                        viewModel.isSettingsOpen.value = true
-                                    }
-                                    .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = "Settings",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Text(
-                                        text = "Settings",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                }
-                            }
-
-                            // Divider
-                            Box(
-                                modifier = Modifier
-                                    .width(1.dp)
-                                    .height(20.dp)
-                                    .background(Color.White.copy(alpha = 0.2f))
-                            )
-
-                            // Tab 2: Wizard
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        isSettingsPopoverOpen = false
-                                        onWizardClick()
-                                    }
-                                    .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.AutoFixHigh,
-                                        contentDescription = "Wizard",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Text(
-                                        text = "Wizard",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-                        }
-                        
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp)
-                                .height(1.dp)
-                                .background(Color.White.copy(alpha = 0.1f))
+                        Text(
+                            text = label,
+                            color = if (isSelected) Color.Black else Color.White,
+                            fontSize = 16.sp, // Large and clear size
+                            fontWeight = FontWeight.Bold
                         )
+                    }
+                }
+            }
+        }
+    }
+}
 
-                        Column(
-                            modifier = Modifier
-                                .weight(1f, fill = false)
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(0.dp)
-                        ) {
-                            /* PopoverToggleRow(
-                                icon = Icons.Default.Grid4x4,
-                                label = "Grid Lines",
-                                checked = showGrid,
-                                onCheckedChange = { viewModel.toggleShowGrid(it) }
-                            )
-                            PopoverToggleRow(
-                                icon = Icons.Default.VolumeUp,
-                                label = "Shutter Sound",
-                                checked = clickSound,
-                                onCheckedChange = { viewModel.toggleClickSound(it) }
-                            )
-                            PopoverToggleRow(
-                                icon = Icons.Default.DocumentScanner,
-                                label = "Live Detect",
-                                checked = liveDetect,
-                                onCheckedChange = { viewModel.toggleLiveDetect(it) }
-                            ) */
-                            PopoverToggleRow(
-                                icon = Icons.Default.CameraAlt,
-                                label = "Auto Capture",
-                                checked = autoCapture,
-                                onCheckedChange = { viewModel.toggleAutoCapture() }
-                            )
-                            PopoverToggleRow(
-                                icon = Icons.Default.AutoFixHigh,
-                                label = "Auto Crop",
-                                checked = autoCrop,
-                                onCheckedChange = { viewModel.toggleAutoCrop(it) }
-                            )
-                            PopoverToggleRow(
-                                icon = Icons.Default.BrightnessMedium,
-                                label = "Shadow Remove",
-                                checked = shadowRemove,
-                                onCheckedChange = { viewModel.toggleShadowRemove(it) }
-                            )
-                            PopoverToggleRow(
-                                icon = Icons.Default.CenterFocusStrong,
-                                label = "Double Focus",
-                                checked = doubleFocus,
-                                onCheckedChange = { viewModel.toggleDoubleFocus(it) }
-                            )
-                            PopoverToggleRow(
-                                icon = Icons.Default.BatteryChargingFull,
-                                label = "Battery Saver",
-                                checked = batterySaver,
-                                onCheckedChange = { viewModel.toggleBatterySaver(it) }
-                            )
-                            PopoverToggleRow(
-                                icon = Icons.Default.Layers,
-                                label = "Batch Scan",
-                                checked = batchScan,
-                                onCheckedChange = { viewModel.toggleBatchScan(it) }
-                            )
-                            PopoverToggleRow(
-                                icon = Icons.Default.ScreenRotation,
-                                label = "Auto Rotation",
-                                checked = autoRotation,
-                                onCheckedChange = { viewModel.toggleAutoRotation(it) }
-                            )
-                            PopoverToggleRow(
-                                icon = Icons.Default.DocumentScanner,
-                                label = "Native Scanner",
-                                checked = useNativeScanner,
-                                onCheckedChange = { viewModel.toggleUseNativeScanner(it) }
-                            )
-                            PopoverToggleRow(
-                                icon = Icons.Default.CameraAlt,
-                                label = "Phone Camera",
-                                checked = usePhoneCamera,
-                                onCheckedChange = { viewModel.toggleUsePhoneCamera(it) }
-                            )
-                        }
+@Composable
+fun ScannerCenterInstructions(
+    viewModel: ScannerViewModel
+) {
+    val isDocumentDetected by viewModel.isDocumentDetected.collectAsState()
+    val autoCapture by viewModel.autoCapture.collectAsState()
+    val currentMode by viewModel.currentMode.collectAsState()
 
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp)
-                                .height(1.dp)
-                                .background(Color.White.copy(alpha = 0.1f))
-                        )
+    val guideText = if (isDocumentDetected) {
+        if (autoCapture) "HOLD STILL... AUTO-CAPTURING" else "READY TO CAPTURE"
+    } else {
+        when (currentMode) {
+            ScannerMode.CARD -> "Align Card Inside Cutout"
+            ScannerMode.DOCUMENT -> "Align Document Inside Frame"
+            ScannerMode.GRID -> "Utilize Grid for Centered Alignment"
+        }
+    }
+    val guideColor = if (isDocumentDetected) Color(0xFF10B981) else Color.Yellow
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
-                                .padding(2.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            listOf("Fast", "Standard", "High").forEach { mode ->
-                                val active = hdMode == mode
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(if (active) MaterialTheme.colorScheme.primary else Color.Transparent)
-                                        .clickable { viewModel.setHdMode(mode) }
-                                        .padding(vertical = 4.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = mode,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (active) Color.White else Color.Gray
-                                    )
-                                }
-                            }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .background(Color.Black.copy(alpha = 0.75f), shape = RoundedCornerShape(8.dp))
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            if (isDocumentDetected) {
+                val pulseTransition = rememberInfiniteTransition(label = "dot_pulse")
+                val dotAlpha by pulseTransition.animateFloat(
+                    initialValue = 0.3f,
+                    targetValue = 1.0f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(800, easing = LinearEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "dot_alpha"
+                )
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF10B981).copy(alpha = dotAlpha))
+                )
+            }
+            Text(
+                text = guideText,
+                color = guideColor,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+            )
+        }
+    }
+}
+
+@Composable
+fun ScannerBottomCarousel(
+    viewModel: ScannerViewModel,
+    onSlotClick: (String) -> Unit,
+    onSlotLongClick: (String) -> Unit
+) {
+    val currentMode by viewModel.currentMode.collectAsState()
+    val slots by viewModel.slots.collectAsState()
+
+    if (currentMode != ScannerMode.DOCUMENT) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(115.dp)
+                .padding(8.dp)
+        ) {
+            if (slots.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(text = "No Slots Available", color = Color.Gray)
+                }
+            } else {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(slots) { slot ->
+                        Box(modifier = Modifier.width(85.dp)) {
+                            SlotItem(
+                                slot = slot,
+                                onClick = { onSlotClick(slot.id) },
+                                onLongClick = { onSlotLongClick(slot.id) },
+                                onClear = { viewModel.clearSlot(slot.id) }
+                            )
                         }
                     }
                 }
             }
         }
+        Spacer(modifier = Modifier.height(2.dp))
+    }
+}
+
+@Composable
+fun ScannerBottomActions(
+    viewModel: ScannerViewModel,
+    onGalleryClick: () -> Unit,
+    onCaptureClick: () -> Unit
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val isBatchActive by viewModel.batchScan.collectAsState()
+    val slots by viewModel.slots.collectAsState()
+
+    val scannedCount = if (viewModel.capturedJpgFiles.isNotEmpty()) viewModel.capturedJpgFiles.size else slots.count { it.bitmap != null }
+    val hasScans = scannedCount > 0
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, end = 8.dp, top = 2.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Left Action: Fallback Import Gallery Picker
+        IconButton(
+            onClick = onGalleryClick,
+            modifier = Modifier
+                .size(52.dp)
+                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+        ) {
+            Icon(Icons.Default.Image, contentDescription = "Import from Gallery", tint = Color.White)
+        }
+
+        // Center Action: Large Circular Shutter button
+        Box(
+            modifier = Modifier
+                .size(76.dp)
+                .border(4.dp, Color.White, CircleShape)
+                .background(Color.Transparent, CircleShape)
+                .clickable { onCaptureClick() },
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .background(Color.White, CircleShape)
+            )
+        }
+
+        // Right Action: Done Button (Saves and generates PDF)
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .background(
+                    if (hasScans) MaterialTheme.colorScheme.primary 
+                    else if (isBatchActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                    else Color.Black.copy(alpha = 0.5f)
+                )
+                .clickable {
+                    if (hasScans) {
+                        viewModel.isGridViewVisible.value = true
+                    } else {
+                        viewModel.toggleBatchScan(!isBatchActive)
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            if (hasScans && uiState.lastCapturedThumbnail != null) {
+                Image(
+                    bitmap = uiState.lastCapturedThumbnail!!.asImageBitmap(),
+                    contentDescription = "Last captured thumbnail",
+                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+                // Overlay count
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.3f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "$scannedCount",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                }
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (hasScans) {
+                        Text(text = "✓", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(text = "($scannedCount)", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                    } else {
+                        Text(
+                            text = if (isBatchActive) "Batch\nON" else "Batch\nOFF",
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            lineHeight = 12.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ScannerSettingsPopover(
+    viewModel: ScannerViewModel,
+    onWizardClick: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val autoCrop by viewModel.autoCrop.collectAsState()
+    val doubleFocus by viewModel.doubleFocusEnabled.collectAsState()
+    val autoCapture by viewModel.autoCapture.collectAsState()
+    val shadowRemove by viewModel.shadowRemove.collectAsState()
+    val batterySaver by viewModel.batterySaver.collectAsState()
+    val batchScan by viewModel.batchScan.collectAsState()
+    val autoRotation by viewModel.autoRotation.collectAsState()
+    val usePhoneCamera by viewModel.usePhoneCamera.collectAsState()
+    val useNativeScanner by viewModel.useNativeScanner.collectAsState()
+    val hdMode by viewModel.hdMode.collectAsState()
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null
+            ) {
+                onDismiss()
+            }
+    )
+    
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val maxCardHeight = (configuration.screenHeightDp * 0.8).dp
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 80.dp),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Card(
+            modifier = Modifier
+                .width(280.dp)
+                .heightIn(max = maxCardHeight)
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(24.dp)
+                )
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null
+                ) { /* Consume click events to prevent dismiss */ },
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xF21C1C1E)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Tab 1: Settings
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                onDismiss()
+                                viewModel.isSettingsOpen.value = true
+                            }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Settings",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                    }
+
+                    // Divider
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(20.dp)
+                            .background(Color.White.copy(alpha = 0.2f))
+                    )
+
+                    // Tab 2: Wizard
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                onDismiss()
+                                onWizardClick()
+                            }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoFixHigh,
+                                contentDescription = "Wizard",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Wizard",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+                
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp)
+                        .height(1.dp)
+                        .background(Color.White.copy(alpha = 0.1f))
+                )
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
+                ) {
+                    PopoverToggleRow(
+                        icon = Icons.Default.CameraAlt,
+                        label = "Auto Capture",
+                        checked = autoCapture,
+                        onCheckedChange = { viewModel.toggleAutoCapture() }
+                    )
+                    PopoverToggleRow(
+                        icon = Icons.Default.AutoFixHigh,
+                        label = "Auto Crop",
+                        checked = autoCrop,
+                        onCheckedChange = { viewModel.toggleAutoCrop(it) }
+                    )
+                    PopoverToggleRow(
+                        icon = Icons.Default.BrightnessMedium,
+                        label = "Shadow Remove",
+                        checked = shadowRemove,
+                        onCheckedChange = { viewModel.toggleShadowRemove(it) }
+                    )
+                    PopoverToggleRow(
+                        icon = Icons.Default.CenterFocusStrong,
+                        label = "Double Focus",
+                        checked = doubleFocus,
+                        onCheckedChange = { viewModel.toggleDoubleFocus(it) }
+                    )
+                    PopoverToggleRow(
+                        icon = Icons.Default.BatteryChargingFull,
+                        label = "Battery Saver",
+                        checked = batterySaver,
+                        onCheckedChange = { viewModel.toggleBatterySaver(it) }
+                    )
+                    PopoverToggleRow(
+                        icon = Icons.Default.Layers,
+                        label = "Batch Scan",
+                        checked = batchScan,
+                        onCheckedChange = { viewModel.toggleBatchScan(it) }
+                    )
+                    PopoverToggleRow(
+                        icon = Icons.Default.ScreenRotation,
+                        label = "Auto Rotation",
+                        checked = autoRotation,
+                        onCheckedChange = { viewModel.toggleAutoRotation(it) }
+                    )
+                    PopoverToggleRow(
+                        icon = Icons.Default.DocumentScanner,
+                        label = "Native Scanner",
+                        checked = useNativeScanner,
+                        onCheckedChange = { viewModel.toggleUseNativeScanner(it) }
+                    )
+                    PopoverToggleRow(
+                        icon = Icons.Default.CameraAlt,
+                        label = "Phone Camera",
+                        checked = usePhoneCamera,
+                        onCheckedChange = { viewModel.toggleUsePhoneCamera(it) }
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp)
+                        .height(1.dp)
+                        .background(Color.White.copy(alpha = 0.1f))
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                        .padding(2.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    listOf("Fast", "Standard", "High").forEach { mode ->
+                        val active = hdMode == mode
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (active) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                .clickable { viewModel.setHdMode(mode) }
+                                .padding(vertical = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = mode,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (active) Color.White else Color.Gray
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
         val isGridViewVisible by viewModel.isGridViewVisible.collectAsState()
         if (isGridViewVisible) {

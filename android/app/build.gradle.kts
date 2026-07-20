@@ -8,6 +8,7 @@ plugins {
     id("com.google.dagger.hilt.android")
     id("io.gitlab.arturbosch.detekt")
     id("org.jlleitschuh.gradle.ktlint")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -93,10 +94,6 @@ android {
         compose = true
     }
 
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14"
-    }
-
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -119,7 +116,7 @@ dependencies {
     // AndroidX
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("com.google.android.material:material:1.11.0")
+    implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
     // CameraX
@@ -150,13 +147,13 @@ dependencies {
     implementation("androidx.navigation:navigation-ui-ktx:$nav_version")
 
     // Compose BOM and Libraries
-    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
+    implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.activity:activity-compose:1.8.2")
+    implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.compose.runtime:runtime")
     implementation("androidx.compose.runtime:runtime-livedata")
 
@@ -169,7 +166,7 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.6.0")
 
     // DataStore
-    implementation("androidx.datastore:datastore-preferences:1.0.0")
+    implementation("androidx.datastore:datastore-preferences:1.1.2")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test:core:1.5.0")

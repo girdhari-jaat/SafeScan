@@ -383,6 +383,12 @@ class ScannerFragment : Fragment() {
     private fun updateViewMode(mode: FragmentViewMode) {
         currentViewMode = mode
         updateCameraState()
+        
+        // Disable touch forwarding listener when exiting scanner view to save battery and resources
+        if (mode != FragmentViewMode.SCANNER) {
+            binding.composeView.setOnTouchListener(null)
+        }
+
         if (mode == FragmentViewMode.LIBRARY) {
             // Hide camera-related XML views entirely
             binding.btnCapture.visibility = View.GONE
@@ -455,6 +461,22 @@ class ScannerFragment : Fragment() {
             // Bind Compose View to scanner/editor layout overlays
             binding.composeView.apply {
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+                
+                // PERFORMANCE & GESTURE OPTIMIZATION: Forward unconsumed viewfinder touch events
+                // (like pinch-to-zoom & tap-to-focus) to the underlying PreviewView while ignoring
+                // touches on the top/bottom bars to prevent focusing on buttons.
+                setOnTouchListener { v, event ->
+                    val viewHeight = v.height
+                    if (viewHeight > 0) {
+                        val yPercent = event.y / viewHeight
+                        // Viewfinder active area is between top bar (12%) and bottom dashboard (75%)
+                        if (yPercent in 0.12f..0.75f) {
+                            binding.previewView.dispatchTouchEvent(event)
+                        }
+                    }
+                    false // Let ComposeView handle touches for its own UI controls
+                }
+
                 setContent {
                     val isEditing by viewModel.isEditing.collectAsState()
                     val isCropping by viewModel.isCropping.collectAsState()
