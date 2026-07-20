@@ -103,7 +103,14 @@ class PdfExporter(private val context: Context) {
                         } else {
                             var i = 1
                             for (slot in slotsWithBitmaps) {
-                                val bmp = slot.bitmap!!
+                                val highResBmp = if (slot.bitmapPath != null) {
+                                    try {
+                                        android.graphics.BitmapFactory.decodeFile(slot.bitmapPath)
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                } else null
+                                val bmp = highResBmp ?: slot.bitmap!!
                                 val (currentWidth, currentHeight) = ExportHelper.getPageDimensions(pageSizeStr, bmp)
 
                                 val finalWidth = when (pdfOrientation) {
@@ -142,6 +149,9 @@ class PdfExporter(private val context: Context) {
                                 val jpegBytes = tempOs.toByteArray()
                                 if (scaledBmp != bmp) {
                                     scaledBmp.recycle()
+                                }
+                                if (highResBmp != null) {
+                                    highResBmp.recycle()
                                 }
 
                                 // 2. Write Page Object
@@ -252,15 +262,41 @@ class PdfExporter(private val context: Context) {
                             val (x, y) = positions[i]
 
                             if (frontItem?.bitmap != null) {
-                                val srcRect = Rect(0, 0, frontItem.bitmap.width, frontItem.bitmap.height)
+                                val frontHighRes = if (frontItem.bitmapPath != null) {
+                                    try {
+                                        android.graphics.BitmapFactory.decodeFile(frontItem.bitmapPath)
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                } else null
+                                val frontBmp = frontHighRes ?: frontItem.bitmap!!
+
+                                val srcRect = Rect(0, 0, frontBmp.width, frontBmp.height)
                                 val dstRect = android.graphics.RectF(x, y, x + cardW, y + cardH)
-                                canvas.drawBitmap(frontItem.bitmap, srcRect, dstRect, paint)
+                                canvas.drawBitmap(frontBmp, srcRect, dstRect, paint)
+
+                                if (frontHighRes != null) {
+                                    frontHighRes.recycle()
+                                }
                             }
 
                             if (backItem?.bitmap != null) {
-                                val srcRect = Rect(0, 0, backItem.bitmap.width, backItem.bitmap.height)
+                                val backHighRes = if (backItem.bitmapPath != null) {
+                                    try {
+                                        android.graphics.BitmapFactory.decodeFile(backItem.bitmapPath)
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                } else null
+                                val backBmp = backHighRes ?: backItem.bitmap!!
+
+                                val srcRect = Rect(0, 0, backBmp.width, backBmp.height)
                                 val dstRect = android.graphics.RectF(x + cardW + gutterX, y, x + cardW + gutterX + cardW, y + cardH)
-                                canvas.drawBitmap(backItem.bitmap, srcRect, dstRect, paint)
+                                canvas.drawBitmap(backBmp, srcRect, dstRect, paint)
+
+                                if (backHighRes != null) {
+                                    backHighRes.recycle()
+                                }
                             }
                         }
 

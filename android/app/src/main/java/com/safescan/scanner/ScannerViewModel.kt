@@ -929,10 +929,26 @@ class ScannerViewModel @Inject constructor(
         val currentSlots = slots.value.toMutableList()
         val index = currentSlots.indexOfFirst { it.id == slotId }
         if (index != -1) {
-            currentSlots[index] = currentSlots[index].copy(
+            val slot = currentSlots[index]
+            slot.bitmapPath?.let { path ->
+                try {
+                    java.io.File(path).delete()
+                } catch (e: Exception) {}
+            }
+            slot.originalBitmapPath?.let { path ->
+                try {
+                    java.io.File(path).delete()
+                } catch (e: Exception) {}
+            }
+            highResCache.remove("${slotId}_processed")
+            highResCache.remove("${slotId}_original")
+
+            currentSlots[index] = slot.copy(
                 bitmap = null,
                 originalBitmap = null,
-                corners = null
+                corners = null,
+                bitmapPath = null,
+                originalBitmapPath = null
             )
             slots.value = currentSlots
             
@@ -942,6 +958,37 @@ class ScannerViewModel @Inject constructor(
                     capturedJpgFiles[index].delete()
                 } catch (e: Exception) {}
                 capturedJpgFiles.removeAt(index)
+
+                // Re-index originalJpgBitmaps map
+                val newBitmaps = mutableMapOf<Int, Bitmap>()
+                for ((k, v) in originalJpgBitmaps) {
+                    if (k < index) {
+                        newBitmaps[k] = v
+                    } else if (k > index) {
+                        newBitmaps[k - 1] = v
+                    }
+                }
+                originalJpgBitmaps.clear()
+                originalJpgBitmaps.putAll(newBitmaps)
+
+                // Re-index jpgCorners map
+                val newCorners = mutableMapOf<Int, List<Point>>()
+                for ((k, v) in jpgCorners) {
+                    if (k < index) {
+                        newCorners[k] = v
+                    } else if (k > index) {
+                        newCorners[k - 1] = v
+                    }
+                }
+                jpgCorners.clear()
+                jpgCorners.putAll(newCorners)
+            }
+
+            // Sync CropScreen state if currently cropping this slot
+            if (croppingSlotId.value == slotId) {
+                croppingSlotId.value = null
+                croppingBitmap.value = null
+                isCropping.value = false
             }
 
             openedDocumentId?.let { saveDocumentStateOffline(it) }
@@ -959,18 +1006,64 @@ class ScannerViewModel @Inject constructor(
             } catch (e: Exception) {}
             capturedJpgFiles.removeAt(index)
             
-            originalJpgBitmaps.remove(index)
-            jpgCorners.remove(index)
+            // Re-index originalJpgBitmaps map
+            val newBitmaps = mutableMapOf<Int, Bitmap>()
+            for ((k, v) in originalJpgBitmaps) {
+                if (k < index) {
+                    newBitmaps[k] = v
+                } else if (k > index) {
+                    newBitmaps[k - 1] = v
+                }
+            }
+            originalJpgBitmaps.clear()
+            originalJpgBitmaps.putAll(newBitmaps)
+
+            // Re-index jpgCorners map
+            val newCorners = mutableMapOf<Int, List<Point>>()
+            for ((k, v) in jpgCorners) {
+                if (k < index) {
+                    newCorners[k] = v
+                } else if (k > index) {
+                    newCorners[k - 1] = v
+                }
+            }
+            jpgCorners.clear()
+            jpgCorners.putAll(newCorners)
             
             // Also sync back to slots if it corresponds to a slot
             if (index < slots.value.size) {
                 val currentSlots = slots.value.toMutableList()
-                currentSlots[index] = currentSlots[index].copy(
+                val slot = currentSlots[index]
+                slot.bitmapPath?.let { path ->
+                    try {
+                        java.io.File(path).delete()
+                    } catch (e: Exception) {}
+                }
+                slot.originalBitmapPath?.let { path ->
+                    try {
+                        java.io.File(path).delete()
+                    } catch (e: Exception) {}
+                }
+                highResCache.remove("${slot.id}_processed")
+                highResCache.remove("${slot.id}_original")
+
+                currentSlots[index] = slot.copy(
                     bitmap = null,
                     originalBitmap = null,
-                    corners = null
+                    corners = null,
+                    bitmapPath = null,
+                    originalBitmapPath = null
                 )
                 slots.value = currentSlots
+            }
+
+            // Sync CropScreen state if currently cropping this index
+            if (croppingJpgIndex.value == index) {
+                croppingJpgIndex.value = null
+                croppingBitmap.value = null
+                isCropping.value = false
+            } else if (croppingJpgIndex.value != null && croppingJpgIndex.value!! > index) {
+                croppingJpgIndex.value = croppingJpgIndex.value!! - 1
             }
 
             openedDocumentId?.let { saveDocumentStateOffline(it) }
