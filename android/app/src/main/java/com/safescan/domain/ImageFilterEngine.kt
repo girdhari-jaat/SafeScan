@@ -20,6 +20,7 @@ object ImageFilterEngine {
                 var gray: Mat? = null
                 var cleanGray: Mat? = null
                 var smoothed: Mat? = null
+                var thresholded: Mat? = null
                 try {
                     // 1. Direct Conversion to Grayscale (No destructive color masks)
                     gray = Mat()
@@ -45,15 +46,20 @@ object ImageFilterEngine {
                         blockSize = 25
                     }
                     
+                    thresholded = Mat()
                     Imgproc.adaptiveThreshold(
                         smoothed,
-                        outMat,
+                        thresholded,
                         255.0,
                         Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C,
                         Imgproc.THRESH_BINARY,
                         blockSize,
-                        7.5 // Balanced C constant for bold, clean text without specks
+                        9.5 // Increased from 7.5 to make text thinner, cleaner and less aggressive
                     )
+                    
+                    // 5. Soft-blend binary thresholded with smoothed grayscale to anti-alias font edges
+                    // and make the filter look extremely professional, soft, and premium instead of harsh.
+                    Core.addWeighted(thresholded, 0.85, smoothed, 0.15, 0.0, outMat)
                     
                     // Convert to final RGBA output cleanly
                     Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
@@ -61,6 +67,7 @@ object ImageFilterEngine {
                     gray?.release()
                     cleanGray?.release()
                     smoothed?.release()
+                    thresholded?.release()
                 }
             }
             FilterType.CARD -> {

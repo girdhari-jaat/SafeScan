@@ -17,12 +17,12 @@ class EdgeDetectionEngine {
     }
 
     @Synchronized
-    fun detectEdgesSafe(bitmap: Bitmap, mode: com.safescan.data.ScannerMode? = null): List<Point> {
-        return detectEdges(bitmap, mode) ?: getFallbackQuad(bitmap.width.toDouble(), bitmap.height.toDouble())
+    fun detectEdgesSafe(bitmap: Bitmap, mode: com.safescan.data.ScannerMode? = null, isManualCrop: Boolean = false): List<Point> {
+        return detectEdges(bitmap, mode, isManualCrop) ?: getFallbackQuad(bitmap.width.toDouble(), bitmap.height.toDouble())
     }
 
     @Synchronized
-    fun detectEdges(bitmap: Bitmap, mode: com.safescan.data.ScannerMode? = null): List<Point>? {
+    fun detectEdges(bitmap: Bitmap, mode: com.safescan.data.ScannerMode? = null, isManualCrop: Boolean = false): List<Point>? {
         if (bitmap.isRecycled) return null
 
         Log.d(TAG, "Starting Offline modern RANSAC + Outside-In edge detection")
@@ -141,7 +141,7 @@ class EdgeDetectionEngine {
             }
 
             // 6. Scanning strategies
-            val isManualCrop = mode?.name?.startsWith("MANUAL") == true
+            val isManualCropActive = isManualCrop || mode?.name?.startsWith("MANUAL") == true
             val isCardMode = mode == com.safescan.data.ScannerMode.CARD || mode == com.safescan.data.ScannerMode.GRID
 
             val borderY = Math.round(sh * 0.02f)
@@ -158,7 +158,7 @@ class EdgeDetectionEngine {
                     closedData,
                     magnitudesX, magnitudesY,
                     thresholdX, thresholdY,
-                    isManualCrop, isCardMode
+                    isManualCropActive, isCardMode
                 )
 
                 if (finalPts == null) {
@@ -175,7 +175,7 @@ class EdgeDetectionEngine {
                         closedData,
                         magnitudesX, magnitudesY,
                         thresholdX, thresholdY,
-                        isManualCrop, isCardMode
+                        isManualCropActive, isCardMode
                     )
                 }
             }
@@ -196,7 +196,7 @@ class EdgeDetectionEngine {
                             closedData,
                             magnitudesX, magnitudesY,
                             thresholdX, thresholdY,
-                            isManualCrop, isCardMode
+                            isManualCropActive, isCardMode
                         )
                         if (finalPts != null) break
                     }
@@ -214,14 +214,14 @@ class EdgeDetectionEngine {
                             closedData,
                             magnitudesX, magnitudesY,
                             thresholdX, thresholdY,
-                            isManualCrop, isCardMode
+                            isManualCropActive, isCardMode
                         )
                         if (finalPts != null) break
                     }
                 }
             }
 
-            if (finalPts == null && isManualCrop) {
+            if (finalPts == null && isManualCropActive) {
                 finalPts = RansacHelper.findRobustForegroundBoundingBox(closedData, sw, sh)
             }
 

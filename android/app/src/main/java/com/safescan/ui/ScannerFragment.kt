@@ -576,7 +576,7 @@ class ScannerFragment : Fragment() {
 
     private fun setupListeners() {
         binding.btnCapture.setOnClickListener {
-            takePhoto()
+            focusAndTakePhoto(isAutoCapture = false)
         }
 
         binding.btnFlash.setOnClickListener {
@@ -623,11 +623,18 @@ class ScannerFragment : Fragment() {
                         val centerPoint = factory.createPoint(binding.previewView.width / 2f, binding.previewView.height / 2f)
                         FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
                             .addPoint(centerPoint, FocusMeteringAction.FLAG_AF)
-                            .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS)
+                            .setAutoCancelDuration(4, java.util.concurrent.TimeUnit.SECONDS)
                             .build()
                     }
                     "Single" -> {
                         FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF)
+                            .setAutoCancelDuration(4, java.util.concurrent.TimeUnit.SECONDS)
+                            .build()
+                    }
+                    "Continuous" -> {
+                        // In continuous focus mode, tap-to-focus triggers a temporary spot focus and exposure metering,
+                        // auto-cancelling after 3 seconds to return to default Continuous Auto-Focus (CAF).
+                        FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
                             .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS)
                             .build()
                     }
@@ -636,13 +643,6 @@ class ScannerFragment : Fragment() {
                 
                 if (action != null) {
                     cameraControl?.startFocusAndMetering(action)
-                    if (focusMode == "Double") {
-                        Toast.makeText(requireContext(), "Dual-Point Focus Lock Active", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(requireContext(), "Single-Point Focus Lock Active", Toast.LENGTH_SHORT).show()
-                    }
-                } else {
-                    Toast.makeText(requireContext(), "Continuous Auto-Focus Active", Toast.LENGTH_SHORT).show()
                 }
                 return@setOnTouchListener true
             }
@@ -779,8 +779,12 @@ class ScannerFragment : Fragment() {
             com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> !isLandscape // CARD/GRID should be landscape
         }
         return if (needsRotation) {
-            com.safescan.core.ScannerDebugLogger.logAutoRotation(90f)
-            val matrix = android.graphics.Matrix().apply { postRotate(90f) }
+            val angle = when (mode) {
+                com.safescan.data.ScannerMode.DOCUMENT -> 90f
+                com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> -90f
+            }
+            com.safescan.core.ScannerDebugLogger.logAutoRotation(angle)
+            val matrix = android.graphics.Matrix().apply { postRotate(angle) }
             val rotated = android.graphics.Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
             bitmap.recycle()
             rotated
@@ -1093,17 +1097,15 @@ class ScannerFragment : Fragment() {
                 val result = future.get()
                 if (result.isFocusSuccessful) {
                     Log.d("ScannerFragment", "Focus locked and successful. Triggering photo capture.")
-                    takePhoto()
                 } else {
-                    Log.d("ScannerFragment", "Focus lock failed. Resetting isFocusing.")
+                    Log.d("ScannerFragment", "Focus lock failed or timed out. Proceeding to take photo as fallback.")
                     cameraControl?.cancelFocusAndMetering()
-                    viewModel.isFocusing = false
                 }
             } catch (e: Exception) {
                 Log.e("ScannerFragment", "Focus metering listener exception", e)
                 cameraControl?.cancelFocusAndMetering()
-                viewModel.isFocusing = false
             }
+            takePhoto()
         }, androidx.core.content.ContextCompat.getMainExecutor(requireContext()))
     }
 
@@ -1252,7 +1254,14 @@ class ScannerFragment : Fragment() {
                         }
 
                         viewModel.onCapture(finalBitmap)
-                        viewModel.isFocusing = false
+                        if (viewModel.autoCapture.value) {
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                kotlinx.coroutines.delay(2500)
+                                viewModel.isFocusing = false
+                            }
+                        } else {
+                            viewModel.isFocusing = false
+                        }
                     } finally {
                         imageProxy.close()
                     }

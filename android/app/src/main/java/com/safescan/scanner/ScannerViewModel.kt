@@ -458,7 +458,7 @@ class ScannerViewModel @Inject constructor(
             var points: List<Point>? = null
             try {
                 if (!bitmap.isRecycled) {
-                    points = edgeDetectionEngine.detectEdges(bitmap, currentMode.value)
+                    points = edgeDetectionEngine.detectEdges(bitmap, currentMode.value, isManualCrop = !autoCrop.value)
                     Log.d("ScannerViewModel", "detectEdges: Successfully detected corners using OpenCV")
                 }
             } catch (e: Throwable) {

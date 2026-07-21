@@ -2,6 +2,10 @@ package com.safescan.scanner
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Matrix
+import android.graphics.Paint
 import android.util.Log
 import com.safescan.domain.model.Point
 import com.safescan.domain.model.Quadrilateral
@@ -98,15 +102,31 @@ class TFLiteEngine(private val context: Context) {
         var hierarchy: Mat? = null
 
         try {
-            // Resize bitmap to 256x256
-            val resizedBitmap = Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true)
+            // Letterbox bitmap to 256x256 to preserve aspect ratio
+            val letterboxedBitmap = Bitmap.createBitmap(inputSize, inputSize, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(letterboxedBitmap)
+            canvas.drawColor(Color.BLACK)
+
+            val scale = Math.min(inputSize.toFloat() / bitmap.width, inputSize.toFloat() / bitmap.height)
+            val dx = (inputSize - bitmap.width * scale) / 2f
+            val dy = (inputSize - bitmap.height * scale) / 2f
+
+            val matrix = Matrix()
+            matrix.postScale(scale, scale)
+            matrix.postTranslate(dx, dy)
+
+            val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+            canvas.drawBitmap(bitmap, matrix, paint)
             
             // Prepare input buffer [1, 256, 256, 3] float32
             val inputBuffer = ByteBuffer.allocateDirect(4 * inputSize * inputSize * 3)
             inputBuffer.order(ByteOrder.nativeOrder())
             
             val intValues = IntArray(inputSize * inputSize)
-            resizedBitmap.getPixels(intValues, 0, resizedBitmap.width, 0, 0, resizedBitmap.width, resizedBitmap.height)
+            letterboxedBitmap.getPixels(intValues, 0, letterboxedBitmap.width, 0, 0, letterboxedBitmap.width, letterboxedBitmap.height)
+            
+            // Recycle letterboxedBitmap immediately after getPixels to free up memory
+            letterboxedBitmap.recycle()
             
             for (pixelValue in intValues) {
                 inputBuffer.putFloat(((pixelValue shr 16 and 0xFF) / 255.0f))
@@ -227,10 +247,16 @@ class TFLiteEngine(private val context: Context) {
             var result: Quadrilateral? = null
             
             if (bestQuadPoints != null) {
-                // Scale corners back to original bitmap dimensions
-                val scaleX = bitmap.width.toDouble() / inputSize.toDouble()
-                val scaleY = bitmap.height.toDouble() / inputSize.toDouble()
-                val scaledPoints = bestQuadPoints.map { Point(it.x * scaleX, it.y * scaleY) }
+                // Scale corners back to original bitmap dimensions reversing the letterbox translation and scale
+                val scaleD = Math.min(inputSize.toDouble() / bitmap.width.toDouble(), inputSize.toDouble() / bitmap.height.toDouble())
+                val dxD = (inputSize.toDouble() - bitmap.width.toDouble() * scaleD) / 2.0
+                val dyD = (inputSize.toDouble() - bitmap.height.toDouble() * scaleD) / 2.0
+
+                val scaledPoints = bestQuadPoints.map {
+                    val originalX = ((it.x - dxD) / scaleD).coerceIn(0.0, bitmap.width.toDouble())
+                    val originalY = ((it.y - dyD) / scaleD).coerceIn(0.0, bitmap.height.toDouble())
+                    Point(originalX, originalY)
+                }
                 val ordered = orderPoints(scaledPoints)
                 
                 result = if (isLive) {
