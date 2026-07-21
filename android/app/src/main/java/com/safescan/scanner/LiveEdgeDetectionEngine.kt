@@ -85,30 +85,28 @@ class LiveEdgeDetectionEngine {
         initMatsIfNeeded()
         var bitmap: android.graphics.Bitmap? = null
         val contours = ArrayList<MatOfPoint>()
+        var actualGray: Mat? = null
         try {
-            bitmap = imageProxy.toBitmap()
-            if (bitmap == null) {
-                ScannerDebugLogger.logExit("LiveEdgeDetectionEngine.process")
-                return@synchronized
-            }
-            
             var foundCorners: List<Point>? = null
             var sharpness = 0.0
 
-            // Common processing for both ML and OpenCV (needed for sharpness)
-            Utils.bitmapToMat(bitmap, src!!)
-            val resizeRatio = 400.0 / Math.max(src!!.width(), src!!.height())
-            if (resizeRatio < 1.0) {
-                Imgproc.resize(src!!, resized!!, Size(src!!.width() * resizeRatio, src!!.height() * resizeRatio))
-            } else {
-                src!!.copyTo(resized!!)
-            }
-            Imgproc.cvtColor(resized!!, gray!!, Imgproc.COLOR_RGBA2GRAY)
-            
-            sharpness = calculateSharpness(gray!!)
-            
             if (engineType == ScannerEngineType.LOCAL_ML) {
-                // 1. Try TFLite ML first
+                bitmap = imageProxy.toBitmap()
+                if (bitmap == null) {
+                    ScannerDebugLogger.logExit("LiveEdgeDetectionEngine.process")
+                    return@synchronized
+                }
+                Utils.bitmapToMat(bitmap, src!!)
+                val resizeRatio = 400.0 / Math.max(src!!.width(), src!!.height())
+                if (resizeRatio < 1.0) {
+                    Imgproc.resize(src!!, resized!!, Size(src!!.width() * resizeRatio, src!!.height() * resizeRatio))
+                } else {
+                    src!!.copyTo(resized!!)
+                }
+                Imgproc.cvtColor(resized!!, gray!!, Imgproc.COLOR_RGBA2GRAY)
+                
+                sharpness = calculateSharpness(gray!!)
+                
                 if (documentScanner != null) {
                     try {
                         val quad = documentScanner.detectDocument(bitmap, true)
@@ -121,32 +119,57 @@ class LiveEdgeDetectionEngine {
                     }
                 }
             } else {
-                // 2. Use OpenCV directly
+                // Extremely fast path: bypass Bitmap conversion completely for OpenCV Engine
+                val yPlane = imageProxy.planes[0]
+                val yBuffer = yPlane.buffer
+                val yRowStride = yPlane.rowStride
+                val width = imageProxy.width
+                val height = imageProxy.height
+
+                if (src == null || src!!.rows() != height || src!!.cols() != yRowStride || src!!.type() != CvType.CV_8UC1) {
+                    src?.release()
+                    src = Mat(height, yRowStride, CvType.CV_8UC1)
+                }
+
+                val yData = ByteArray(yBuffer.remaining())
+                yBuffer.get(yData)
+                src!!.put(0, 0, yData)
+
+                // Submat to crop out padding bytes if rowStride > width
+                actualGray = if (yRowStride > width) {
+                    src!!.colRange(0, width)
+                } else {
+                    src!!
+                }
+
+                val resizeRatio = 400.0 / Math.max(actualGray.width(), actualGray.height())
+                if (resizeRatio < 1.0) {
+                    Imgproc.resize(actualGray, resized!!, Size(actualGray.width() * resizeRatio, actualGray.height() * resizeRatio))
+                } else {
+                    actualGray.copyTo(resized!!)
+                }
+
+                sharpness = calculateSharpness(resized!!)
+
                 // Gaussian blur is faster for live preview and provides good edge smoothing
                 val blurSize = when (mode) {
                     com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> Size(5.0, 5.0)
-                    com.safescan.data.ScannerMode.DOCUMENT -> Size(5.0, 5.0)
-                    null -> Size(5.0, 5.0)
+                    else -> Size(5.0, 5.0)
                 }
-                Imgproc.GaussianBlur(gray!!, blurred!!, blurSize, 0.0)
+                Imgproc.GaussianBlur(resized!!, blurred!!, blurSize, 0.0)
                 
                 val (lowThresh, highThresh) = when (mode) {
                     com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> Pair(50.0, 125.0)
-                    com.safescan.data.ScannerMode.DOCUMENT -> Pair(40.0, 100.0)
-                    null -> Pair(40.0, 100.0)
+                    else -> Pair(40.0, 100.0)
                 }
                 
-                // Enhance contrast slightly using equalization could be heavy, so we rely on adaptive threshold or Canny
                 Imgproc.Canny(blurred!!, edges!!, lowThresh, highThresh) 
                 
                 val morphSize = when (mode) {
                     com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> Size(7.0, 7.0)
-                    com.safescan.data.ScannerMode.DOCUMENT -> Size(5.0, 5.0)
-                    null -> Size(5.0, 5.0)
+                    else -> Size(5.0, 5.0)
                 }
                 val morphKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, morphSize)
-                
-                // Morphological closing to connect fragmented edges
                 Imgproc.morphologyEx(edges!!, edges!!, Imgproc.MORPH_CLOSE, morphKernel)
                 morphKernel.release()
                 
@@ -159,8 +182,7 @@ class LiveEdgeDetectionEngine {
                 val maxArea = resized!!.width() * resized!!.height()
                 val minArea = when (mode) {
                     com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> maxArea * 0.06 // Card/Grid must occupy at least 6% of the frame
-                    com.safescan.data.ScannerMode.DOCUMENT -> maxArea * 0.12 // Document must occupy at least 12% of the frame
-                    null -> maxArea * 0.12
+                    else -> maxArea * 0.12 // Document must occupy at least 12% of the frame
                 }
                 
                 for (contour in contours) {
@@ -256,6 +278,10 @@ class LiveEdgeDetectionEngine {
             ScannerDebugLogger.logError("LiveEdge", "Live edge detection processing error", e)
         } finally {
             bitmap?.recycle()
+            // Cleanup dynamically allocated actualGray if it was a submat
+            if (actualGray != null && actualGray != src) {
+                actualGray.release()
+            }
             for (contour in contours) {
                 try {
                     contour.release()
@@ -318,27 +344,61 @@ class LiveEdgeDetectionEngine {
     private fun orderPoints(pts: List<Point>): List<Point> {
         if (pts.size != 4) return pts
 
-        val cx = pts.map { it.x }.average()
-        val cy = pts.map { it.y }.average()
+        // 1. Calculate centroid (center of mass) of the four vertices to establish a central polar pivot
+        val cx = (pts[0].x + pts[1].x + pts[2].x + pts[3].x) / 4.0
+        val cy = (pts[0].y + pts[1].y + pts[2].y + pts[3].y) / 4.0
 
-        val sorted = pts.sortedBy { Math.atan2(it.y - cy, it.x - cx) }
+        // 2. Compute polar angle of each vertex relative to the centroid
+        val p0 = pts[0]
+        val p1 = pts[1]
+        val p2 = pts[2]
+        val p3 = pts[3]
 
-        var minIdx = 0
+        val a0 = Math.atan2(p0.y - cy, p0.x - cx)
+        val a1 = Math.atan2(p1.y - cy, p1.x - cx)
+        val a2 = Math.atan2(p2.y - cy, p2.x - cx)
+        val a3 = Math.atan2(p3.y - cy, p3.x - cx)
+
+        // 3. Set up pre-allocated array and angle structures to prevent GC thrashing
+        val sorted = arrayOf(p0, p1, p2, p3)
+        val angles = doubleArrayOf(a0, a1, a2, a3)
+
+        // 4. Sort points in continuous circular order (increasing polar angle)
+        for (i in 1..3) {
+            val keyAngle = angles[i]
+            val keyPoint = sorted[i]
+            var j = i - 1
+            while (j >= 0 && angles[j] > keyAngle) {
+                angles[j + 1] = angles[j]
+                sorted[j + 1] = sorted[j]
+                j--
+            }
+            sorted[j + 1] = keyPoint
+        }
+
+        // 5. Identify the Top-Left vertex. Top-Left minimizes (x + y).
+        var minSumIndex = 0
         var minSum = Double.MAX_VALUE
-        for (i in 0 until 4) {
+        for (i in 0..3) {
             val sum = sorted[i].x + sorted[i].y
             if (sum < minSum) {
                 minSum = sum
-                minIdx = i
+                minSumIndex = i
             }
         }
 
-        return listOf(
-            sorted[minIdx],
-            sorted[(minIdx + 1) % 4],
-            sorted[(minIdx + 2) % 4],
-            sorted[(minIdx + 3) % 4]
-        )
+        // 6. Map points to standard scanning corners: index 0 (TL), index 1 (TR), index 2 (BR), index 3 (BL)
+        val tl = sorted[minSumIndex]
+        val tr = sorted[(minSumIndex + 1) % 4]
+        val br = sorted[(minSumIndex + 2) % 4]
+        val bl = sorted[(minSumIndex + 3) % 4]
+
+        // 7. Prevent winding inversion: if horizontal projection is inverted, swap right and left bounds
+        if (tr.x < bl.x) {
+            return listOf(tl, bl, br, tr)
+        }
+
+        return listOf(tl, tr, br, bl)
     }
 
     private fun angle(pt1: org.opencv.core.Point, pt2: org.opencv.core.Point, pt0: org.opencv.core.Point): Double {
