@@ -368,7 +368,7 @@ class ScannerFragment : Fragment() {
         // Check if we should start with camera or default to Library on startup
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                val startWithCam = viewModel.startWithCamera.first()
+                val startWithCam = viewModel.settingsRepository.startWithCameraFlow.first()
                 if (startWithCam) {
                     checkPermissionAndStartScanner()
                 } else {
@@ -812,19 +812,30 @@ class ScannerFragment : Fragment() {
             startCamera()
         } else {
             binding.previewView.visibility = View.GONE
-            try {
-                val cameraProviderFuture = ProcessCameraProvider.getInstance(currentContext)
-                cameraProviderFuture.addListener({
-                    try {
-                        this@ScannerFragment.cameraProvider = cameraProviderFuture.get()
-                        this@ScannerFragment.cameraProvider?.unbindAll()
-                        liveEdgeDetectionEngine.release()
-                    } catch (e: Exception) {
-                        Log.e("ScannerFragment", "Failed to unbind camera in updateCameraState", e)
-                    }
-                }, ContextCompat.getMainExecutor(currentContext))
-            } catch (e: Exception) {
-                Log.e("ScannerFragment", "Error getting camera provider in updateCameraState", e)
+            val provider = this@ScannerFragment.cameraProvider
+            if (provider != null) {
+                try {
+                    provider.unbindAll()
+                    liveEdgeDetectionEngine.release()
+                } catch (e: Exception) {
+                    Log.e("ScannerFragment", "Failed to unbind camera instantly", e)
+                }
+            } else {
+                try {
+                    val cameraProviderFuture = ProcessCameraProvider.getInstance(currentContext)
+                    cameraProviderFuture.addListener({
+                        try {
+                            val p = cameraProviderFuture.get()
+                            this@ScannerFragment.cameraProvider = p
+                            p.unbindAll()
+                            liveEdgeDetectionEngine.release()
+                        } catch (e: Exception) {
+                            Log.e("ScannerFragment", "Failed to unbind camera in updateCameraState listener", e)
+                        }
+                    }, ContextCompat.getMainExecutor(currentContext))
+                } catch (e: Exception) {
+                    Log.e("ScannerFragment", "Error getting camera provider in updateCameraState listener", e)
+                }
             }
         }
     }

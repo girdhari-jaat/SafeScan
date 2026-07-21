@@ -361,7 +361,7 @@ class ScannerViewModel @Inject constructor(
     private var stableFrameCount = 0
     private var lastQuadPoints: List<com.safescan.domain.model.Point>? = null
     private val STABLE_FRAME_THRESHOLD = 3
-    private val STABILITY_TOLERANCE = 30.0
+    private val STABILITY_TOLERANCE = 120.0
     var isFocusing = false
 
     fun onDocumentDetected(points: List<com.safescan.domain.model.Point>?, sharpness: Double = 0.0) {
@@ -393,11 +393,16 @@ class ScannerViewModel @Inject constructor(
             )
         }
 
-        // Stability Check
-        // Set stable threshold to 3 for better stability and less frame flicker
+        // Stability Check with a graceful decay and high tolerance for hand tremor
         val threshold = STABLE_FRAME_THRESHOLD
-        if (lastQuadPoints != null && isStable(lastQuadPoints!!, processedPoints)) {
-            stableFrameCount++
+        if (lastQuadPoints != null) {
+            if (isStable(lastQuadPoints!!, processedPoints)) {
+                stableFrameCount++
+            } else {
+                // If there's a slight tremor or minor lighting shift, don't hard-reset to 1.
+                // Gracefully decrement or hold the stableFrameCount to prevent user frustration.
+                stableFrameCount = (stableFrameCount - 1).coerceAtLeast(1)
+            }
         } else {
             stableFrameCount = 1
         }
@@ -458,7 +463,7 @@ class ScannerViewModel @Inject constructor(
             var points: List<Point>? = null
             try {
                 if (!bitmap.isRecycled) {
-                    points = edgeDetectionEngine.detectEdges(bitmap, currentMode.value, isManualCrop = !autoCrop.value)
+                    points = edgeDetectionEngine.detectEdges(bitmap, currentMode.value, isManualCrop = true)
                     Log.d("ScannerViewModel", "detectEdges: Successfully detected corners using OpenCV")
                 }
             } catch (e: Throwable) {
@@ -943,13 +948,21 @@ class ScannerViewModel @Inject constructor(
             highResCache.remove("${slotId}_processed")
             highResCache.remove("${slotId}_original")
 
-            currentSlots[index] = slot.copy(
-                bitmap = null,
-                originalBitmap = null,
-                corners = null,
-                bitmapPath = null,
-                originalBitmapPath = null
-            )
+            if (currentMode.value == ScannerMode.DOCUMENT) {
+                currentSlots.removeAt(index)
+                // Re-label slots sequentially for consistency
+                for (i in currentSlots.indices) {
+                    currentSlots[i] = currentSlots[i].copy(label = "Page ${i + 1}")
+                }
+            } else {
+                currentSlots[index] = slot.copy(
+                    bitmap = null,
+                    originalBitmap = null,
+                    corners = null,
+                    bitmapPath = null,
+                    originalBitmapPath = null
+                )
+            }
             slots.value = currentSlots
             
             // Sync with capturedJpgFiles if it exists
@@ -1047,13 +1060,21 @@ class ScannerViewModel @Inject constructor(
                 highResCache.remove("${slot.id}_processed")
                 highResCache.remove("${slot.id}_original")
 
-                currentSlots[index] = slot.copy(
-                    bitmap = null,
-                    originalBitmap = null,
-                    corners = null,
-                    bitmapPath = null,
-                    originalBitmapPath = null
-                )
+                if (currentMode.value == ScannerMode.DOCUMENT) {
+                    currentSlots.removeAt(index)
+                    // Re-label slots sequentially for consistency
+                    for (i in currentSlots.indices) {
+                        currentSlots[i] = currentSlots[i].copy(label = "Page ${i + 1}")
+                    }
+                } else {
+                    currentSlots[index] = slot.copy(
+                        bitmap = null,
+                        originalBitmap = null,
+                        corners = null,
+                        bitmapPath = null,
+                        originalBitmapPath = null
+                    )
+                }
                 slots.value = currentSlots
             }
 
@@ -1241,7 +1262,10 @@ class ScannerViewModel @Inject constructor(
                     if (currentSlotId != null) {
                         val currentSlots = slots.value
                         val currentIndex = currentSlots.indexOfFirst { it.id == currentSlotId }
-                        val nextIndex = currentIndex + 1
+                        var nextIndex = currentIndex + 1
+                        while (nextIndex >= 0 && nextIndex < currentSlots.size && currentSlots[nextIndex].bitmap == null) {
+                            nextIndex++
+                        }
                         if (nextIndex >= 0 && nextIndex < currentSlots.size) {
                             val nextSlot = currentSlots[nextIndex]
                             openCrop(nextSlot.id)
@@ -1715,34 +1739,35 @@ class ScannerViewModel @Inject constructor(
         
         viewModelScope.launch(Dispatchers.IO) {
             ScannerDebugLogger.logEnter("ScannerViewModel.onCapture")
-            // Dynamically scale the image based on our negotiated CameraHardwareConfig constraints (supporting Fast, Standard, High, and high-megapixel modes)
-            val currentModeVal = currentMode.value
-            val hdModeStr = hdMode.value
-            val captureSettings = com.safescan.scanner.CameraHardwareConfig.getCaptureSettings(null, currentModeVal, hdModeStr)
-            val maxResolution = kotlin.math.max(captureSettings.targetSize.width.toFloat(), captureSettings.targetSize.height.toFloat())
             
-            val ratio = kotlin.math.min(maxResolution / bitmap.width, maxResolution / bitmap.height)
-            val resizedBitmap = if (ratio < 1) {
-                android.graphics.Bitmap.createScaledBitmap(
-                    bitmap, 
-                    (bitmap.width * ratio).toInt(), 
-                    (bitmap.height * ratio).toInt(), 
-                    true
-                )
-            } else bitmap
+            captureMutex.withLock {
+                // Dynamically scale the image based on our negotiated CameraHardwareConfig constraints (supporting Fast, Standard, High, and high-megapixel modes)
+                val currentModeVal = currentMode.value
+                val hdModeStr = hdMode.value
+                val captureSettings = com.safescan.scanner.CameraHardwareConfig.getCaptureSettings(null, currentModeVal, hdModeStr)
+                val maxResolution = kotlin.math.max(captureSettings.targetSize.width.toFloat(), captureSettings.targetSize.height.toFloat())
+                
+                val ratio = kotlin.math.min(maxResolution / bitmap.width, maxResolution / bitmap.height)
+                val resizedBitmap = if (ratio < 1) {
+                    android.graphics.Bitmap.createScaledBitmap(
+                        bitmap, 
+                        (bitmap.width * ratio).toInt(), 
+                        (bitmap.height * ratio).toInt(), 
+                        true
+                    )
+                } else bitmap
 
-            var processedBitmap = if (shadowRemove.value) {
-                try {
-                    com.safescan.domain.ImageProcessor.autoEnhance(resizedBitmap)
-                } catch (e: Exception) {
+                val processedBitmap = if (shadowRemove.value) {
+                    try {
+                        com.safescan.domain.ImageProcessor.autoEnhance(resizedBitmap)
+                    } catch (e: Exception) {
+                        resizedBitmap
+                    }
+                } else {
                     resizedBitmap
                 }
-            } else {
-                resizedBitmap
-            }
 
-            val isAutoCropOff = !autoCrop.value
-            captureMutex.withLock {
+                val isAutoCropOff = !autoCrop.value
                 var slotId = selectedSlotId.value ?: slots.value.firstOrNull { it.bitmap == null }?.id
                 if (slotId == null && currentMode.value == ScannerMode.DOCUMENT) {
                     val newId = "p${slots.value.size + 1}"

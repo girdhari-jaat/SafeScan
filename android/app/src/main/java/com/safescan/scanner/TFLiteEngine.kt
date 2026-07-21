@@ -134,8 +134,8 @@ class TFLiteEngine(private val context: Context) {
                 lastBitmapHeight = bitmap.height
             }
 
-            // Adaptive tolerance: 3% of the smaller dimension of the input bitmap, with a safe 10.0px minimum floor
-            val adaptiveTolerance = (Math.min(bitmap.width.toDouble(), bitmap.height.toDouble()) * 0.03).coerceAtLeast(10.0)
+            // Adaptive tolerance: 8% of the smaller dimension of the input bitmap, with a safe 30.0px minimum floor for hand tremor robustness
+            val adaptiveTolerance = (Math.min(bitmap.width.toDouble(), bitmap.height.toDouble()) * 0.08).coerceAtLeast(30.0)
 
             try {
                 // Lazily initialize and reuse letterbox bitmap and canvas
@@ -335,22 +335,22 @@ class TFLiteEngine(private val context: Context) {
                     }
                     val ordered = orderPoints(scaledPoints)
                     
-                    result = if (isLive) {
-                        if (lastStableCorners != null && isSimilar(ordered, lastStableCorners!!, adaptiveTolerance)) {
-                            stableFrameCount++
+                    if (isLive) {
+                        if (lastStableCorners != null) {
+                            if (isSimilar(ordered, lastStableCorners!!, adaptiveTolerance)) {
+                                stableFrameCount++
+                            } else {
+                                // Graceful decay: decrement instead of resetting to 1 immediately to allow minor hand tremors
+                                stableFrameCount = (stableFrameCount - 1).coerceAtLeast(1)
+                                // Gradually update the baseline to filter out high-frequency noise
+                                lastStableCorners = ordered
+                            }
                         } else {
                             lastStableCorners = ordered
                             stableFrameCount = 1
                         }
-                        
-                        if (stableFrameCount >= STABLE_THRESHOLD) {
-                            Quadrilateral(ordered[0], ordered[1], ordered[2], ordered[3])
-                        } else {
-                            null
-                        }
-                    } else {
-                        Quadrilateral(ordered[0], ordered[1], ordered[2], ordered[3])
                     }
+                    result = Quadrilateral(ordered[0], ordered[1], ordered[2], ordered[3])
                 } else {
                     if (isLive) {
                         lastStableCorners = null

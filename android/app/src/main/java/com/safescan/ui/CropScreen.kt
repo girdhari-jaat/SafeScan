@@ -30,6 +30,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
+import com.safescan.data.ScannerMode
 import com.safescan.scanner.ScannerViewModel
 import com.safescan.domain.model.Point
 import com.safescan.domain.model.Quadrilateral
@@ -42,6 +43,27 @@ fun CropScreen(viewModel: ScannerViewModel) {
     val croppingBitmap by viewModel.croppingBitmap.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
     var imageSize by remember { mutableStateOf(IntSize.Zero) }
+
+    val currentSlotId by viewModel.croppingSlotId.collectAsState()
+    val currentJpgIndex by viewModel.croppingJpgIndex.collectAsState()
+    val slotsList by viewModel.slots.collectAsState()
+    val currentMode by viewModel.currentMode.collectAsState()
+
+    val hasNext = remember(currentSlotId, currentJpgIndex, slotsList, currentMode, viewModel.capturedJpgFiles.size) {
+        if (currentSlotId != null) {
+            val currentIndex = slotsList.indexOfFirst { it.id == currentSlotId }
+            var nextIndex = currentIndex + 1
+            while (nextIndex >= 0 && nextIndex < slotsList.size && slotsList[nextIndex].bitmap == null) {
+                nextIndex++
+            }
+            nextIndex in slotsList.indices
+        } else if (currentJpgIndex != null) {
+            val nextIndex = currentJpgIndex + 1
+            nextIndex < viewModel.capturedJpgFiles.size
+        } else {
+            false
+        }
+    }
     
     // IMPROVEMENT: Added SnackbarHostState and CoroutineScope to handle edge-detection errors gracefully
     val snackbarHostState = remember { SnackbarHostState() }
@@ -213,26 +235,30 @@ fun CropScreen(viewModel: ScannerViewModel) {
                 }
 
                 // 5. Next
-                TextButton(
-                    modifier = Modifier.weight(1f),
-                    enabled = !uiState.isAutoRunning,
-                    onClick = {
-                        if (imageSize.width > 0 && imageSize.height > 0 && croppingBitmap != null) {
-                            val bmp = croppingBitmap!!
-                            val scaleX = bmp.width.toFloat() / imageSize.width
-                            val scaleY = bmp.height.toFloat() / imageSize.height
-                            
-                            val quad = Quadrilateral(
-                                Point((tl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
-                                Point((tr.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tr.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
-                                Point((br.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (br.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
-                                Point((bl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (bl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0))
-                            )
-                            viewModel.applyCrop(quad, andNext = true)
+                if (hasNext) {
+                    TextButton(
+                        modifier = Modifier.weight(1f),
+                        enabled = !uiState.isAutoRunning,
+                        onClick = {
+                            if (imageSize.width > 0 && imageSize.height > 0 && croppingBitmap != null) {
+                                val bmp = croppingBitmap!!
+                                val scaleX = bmp.width.toFloat() / imageSize.width
+                                val scaleY = bmp.height.toFloat() / imageSize.height
+                                
+                                val quad = Quadrilateral(
+                                    Point((tl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                                    Point((tr.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tr.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                                    Point((br.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (br.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                                    Point((bl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (bl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0))
+                                )
+                                viewModel.applyCrop(quad, andNext = true)
+                            }
                         }
+                    ) {
+                        Text(stringResource(id = R.string.next), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
                     }
-                ) {
-                    Text(stringResource(id = R.string.next), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
+                } else {
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
