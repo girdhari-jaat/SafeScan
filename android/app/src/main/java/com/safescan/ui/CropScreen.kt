@@ -50,15 +50,17 @@ fun CropScreen(viewModel: ScannerViewModel) {
     val currentMode by viewModel.currentMode.collectAsState()
 
     val hasNext = remember(currentSlotId, currentJpgIndex, slotsList, currentMode, viewModel.capturedJpgFiles.size) {
-        if (currentSlotId != null) {
-            val currentIndex = slotsList.indexOfFirst { it.id == currentSlotId }
+        val slotId = currentSlotId
+        val jpgIdx = currentJpgIndex
+        if (slotId != null) {
+            val currentIndex = slotsList.indexOfFirst { it.id == slotId }
             var nextIndex = currentIndex + 1
             while (nextIndex >= 0 && nextIndex < slotsList.size && slotsList[nextIndex].bitmap == null) {
                 nextIndex++
             }
             nextIndex in slotsList.indices
-        } else if (currentJpgIndex != null) {
-            val nextIndex = currentJpgIndex + 1
+        } else if (jpgIdx != null) {
+            val nextIndex = jpgIdx + 1
             nextIndex < viewModel.capturedJpgFiles.size
         } else {
             false
