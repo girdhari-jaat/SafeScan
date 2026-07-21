@@ -394,8 +394,8 @@ class ScannerViewModel @Inject constructor(
         }
 
         // Stability Check
-        // Relaxed settings for Auto Capture
-        val threshold = if (autoCapture.value) 2 else 3
+        // Set stable threshold to 3 for better stability and less frame flicker
+        val threshold = STABLE_FRAME_THRESHOLD
         if (lastQuadPoints != null && isStable(lastQuadPoints!!, processedPoints)) {
             stableFrameCount++
         } else {
