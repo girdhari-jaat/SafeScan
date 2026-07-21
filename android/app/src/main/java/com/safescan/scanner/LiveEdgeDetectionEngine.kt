@@ -16,6 +16,8 @@ import com.safescan.core.ScannerDebugLogger
 
 class LiveEdgeDetectionEngine {
     
+    private val lock = Any()
+
     // Pre-allocated Mats for performance to avoid GC overhead during live preview (initialized lazily)
     private var src: Mat? = null
     private var resized: Mat? = null
@@ -46,31 +48,33 @@ class LiveEdgeDetectionEngine {
         }
     }
 
-    fun release() = synchronized(this) {
-        try {
-            src?.release()
-            src = null
-            resized?.release()
-            resized = null
-            gray?.release()
-            gray = null
-            blurred?.release()
-            blurred = null
-            edges?.release()
-            edges = null
-            hierarchy?.release()
-            hierarchy = null
-            kernel?.release()
-            kernel = null
-            laplacian?.release()
-            laplacian = null
-            meanStdDevMean?.release()
-            meanStdDevMean = null
-            meanStdDevStdDev?.release()
-            meanStdDevStdDev = null
-            Log.d("LiveEdgeDetectionEngine", "Mats released successfully")
-        } catch (e: Throwable) {
-            Log.e("LiveEdgeDetectionEngine", "Failed to release Mats", e)
+    fun release() {
+        synchronized(lock) {
+            try {
+                src?.release()
+                src = null
+                resized?.release()
+                resized = null
+                gray?.release()
+                gray = null
+                blurred?.release()
+                blurred = null
+                edges?.release()
+                edges = null
+                hierarchy?.release()
+                hierarchy = null
+                kernel?.release()
+                kernel = null
+                laplacian?.release()
+                laplacian = null
+                meanStdDevMean?.release()
+                meanStdDevMean = null
+                meanStdDevStdDev?.release()
+                meanStdDevStdDev = null
+                Log.d("LiveEdgeDetectionEngine", "Mats released successfully")
+            } catch (e: Throwable) {
+                Log.e("LiveEdgeDetectionEngine", "Failed to release Mats", e)
+            }
         }
     }
 
@@ -80,222 +84,231 @@ class LiveEdgeDetectionEngine {
         engineType: ScannerEngineType, 
         mode: com.safescan.data.ScannerMode? = null,
         onResult: (List<Point>?, Double) -> Unit
-    ) = synchronized(this) {
-        ScannerDebugLogger.logEnter("LiveEdgeDetectionEngine.process")
-        initMatsIfNeeded()
-        var bitmap: android.graphics.Bitmap? = null
-        val contours = ArrayList<MatOfPoint>()
-        var actualGray: Mat? = null
-        try {
-            var foundCorners: List<Point>? = null
-            var sharpness = 0.0
-
-            if (engineType == ScannerEngineType.LOCAL_ML) {
-                bitmap = imageProxy.toBitmap()
-                if (bitmap == null) {
-                    ScannerDebugLogger.logExit("LiveEdgeDetectionEngine.process")
-                    return@synchronized
-                }
-                Utils.bitmapToMat(bitmap, src!!)
-                val resizeRatio = 400.0 / Math.max(src!!.width(), src!!.height())
-                if (resizeRatio < 1.0) {
-                    Imgproc.resize(src!!, resized!!, Size(src!!.width() * resizeRatio, src!!.height() * resizeRatio))
-                } else {
-                    src!!.copyTo(resized!!)
-                }
-                Imgproc.cvtColor(resized!!, gray!!, Imgproc.COLOR_RGBA2GRAY)
-                
-                sharpness = calculateSharpness(gray!!)
-                
-                if (documentScanner != null) {
-                    try {
-                        val quad = documentScanner.detectDocument(bitmap, true)
-                        if (quad != null) {
-                            foundCorners = listOf(quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft)
-                            Log.d("LiveEdgeDetectionEngine", "Successfully detected document corners using TFLite ML on live feed")
-                        }
-                    } catch (e: Throwable) {
-                        Log.e("LiveEdgeDetectionEngine", "TFLite ML detection failed in live feed", e)
-                    }
-                }
-            } else {
-                // Extremely fast path: bypass Bitmap conversion completely for OpenCV Engine
-                val yPlane = imageProxy.planes[0]
-                val yBuffer = yPlane.buffer
-                val yRowStride = yPlane.rowStride
-                val width = imageProxy.width
-                val height = imageProxy.height
-
-                if (src == null || src!!.rows() != height || src!!.cols() != yRowStride || src!!.type() != CvType.CV_8UC1) {
-                    src?.release()
-                    src = Mat(height, yRowStride, CvType.CV_8UC1)
-                }
-
-                val yData = ByteArray(yBuffer.remaining())
-                yBuffer.get(yData)
-                src!!.put(0, 0, yData)
-
-                // Submat to crop out padding bytes if rowStride > width
-                actualGray = if (yRowStride > width) {
-                    src!!.colRange(0, width)
-                } else {
-                    src!!
-                }
-
-                val resizeRatio = 400.0 / Math.max(actualGray.width(), actualGray.height())
-                if (resizeRatio < 1.0) {
-                    Imgproc.resize(actualGray, resized!!, Size(actualGray.width() * resizeRatio, actualGray.height() * resizeRatio))
-                } else {
-                    actualGray.copyTo(resized!!)
-                }
-
-                sharpness = calculateSharpness(resized!!)
-
-                // Gaussian blur is faster for live preview and provides good edge smoothing
-                val blurSize = when (mode) {
-                    com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> Size(5.0, 5.0)
-                    else -> Size(5.0, 5.0)
-                }
-                Imgproc.GaussianBlur(resized!!, blurred!!, blurSize, 0.0)
-                
-                val (lowThresh, highThresh) = when (mode) {
-                    com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> Pair(50.0, 125.0)
-                    else -> Pair(40.0, 100.0)
-                }
-                
-                Imgproc.Canny(blurred!!, edges!!, lowThresh, highThresh) 
-                
-                val morphSize = when (mode) {
-                    com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> Size(7.0, 7.0)
-                    else -> Size(5.0, 5.0)
-                }
-                val morphKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, morphSize)
-                Imgproc.morphologyEx(edges!!, edges!!, Imgproc.MORPH_CLOSE, morphKernel)
-                morphKernel.release()
-                
-                // RETR_EXTERNAL is faster and we only care about the outermost document contour
-                Imgproc.findContours(edges!!, contours, hierarchy!!, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
-                
-                ScannerDebugLogger.logLiveEdge(contours.size)
-                contours.sortByDescending { Imgproc.contourArea(it) }
-                
-                val maxArea = resized!!.width() * resized!!.height()
-                val minArea = when (mode) {
-                    com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> maxArea * 0.06 // Card/Grid must occupy at least 6% of the frame
-                    else -> maxArea * 0.12 // Document must occupy at least 12% of the frame
-                }
-                
-                for (contour in contours) {
-                    val area = Imgproc.contourArea(contour)
-                    if (area < minArea) break // since they are sorted, we can stop early
-                    
-                    var contour2f: MatOfPoint2f? = null
-                    try {
-                        contour2f = MatOfPoint2f(*contour.toArray())
-                        val peri = Imgproc.arcLength(contour2f, true)
-                        
-                        var approxSuccess = false
-                        // Try different epsilon approximations to get a clean quadrilateral
-                        for (epsFactor in listOf(0.015, 0.02, 0.03, 0.04)) {
-                            val approx = MatOfPoint2f()
-                            try {
-                                Imgproc.approxPolyDP(contour2f, approx, epsFactor * peri, true)
-                                if (approx.total() == 4L) {
-                                    val approxPoints = approx.toArray().map { Point(it.x / resizeRatio, it.y / resizeRatio) }
-                                    if (isConvexPoints(approxPoints) && getMaxCosinePoints(approxPoints) < 0.4) {
-                                        foundCorners = orderPoints(approxPoints)
-                                        approxSuccess = true
-                                        break
-                                    }
-                                }
-                            } finally {
-                                approx.release()
-                            }
-                        }
-                        
-                        // FALLBACK: If approxPolyDP failed but it's a large contour, use extreme points
-                        if (!approxSuccess) {
-                            val extremePoints = getExtremePoints(contour).map { Point(it.x / resizeRatio, it.y / resizeRatio) }
-                            if (extremePoints.size == 4 && isConvexPoints(extremePoints) && getMaxCosinePoints(extremePoints) < 0.4) {
-                                foundCorners = orderPoints(extremePoints)
-                            }
-                        }
-                    } catch (e: Throwable) {
-                        Log.e("LiveEdgeDetectionEngine", "Contour loop processing error", e)
-                    } finally {
-                        contour2f?.release()
-                    }
-                    
-                    if (foundCorners != null) {
-                        ScannerDebugLogger.logLiveEdgeArea(area, (area.toDouble() / maxArea.toDouble()) * 100.0)
-                        break // Found our document
-                    }
-                }
-            }
-            
-            if (foundCorners != null) {
-                framesWithoutDetection = 0
-                if (previousCorners != null) {
-                    val maxDistance = foundCorners!!.mapIndexed { index, p ->
-                        Math.hypot(p.x - previousCorners!![index].x, p.y - previousCorners!![index].y)
-                    }.maxOrNull() ?: 0.0
-                    
-                    if (maxDistance > 200) { 
-                        // Large jump, reset smoothing
-                        previousCorners = foundCorners
-                    } else {
-                        // Exponential Moving Average for stabilization
-                        foundCorners = foundCorners!!.mapIndexed { index, p ->
-                            Point(
-                                previousCorners!![index].x + 0.35 * (p.x - previousCorners!![index].x),
-                                previousCorners!![index].y + 0.35 * (p.y - previousCorners!![index].y)
-                            )
-                        }
-                        previousCorners = foundCorners
-                    }
-                } else {
-                    previousCorners = foundCorners
-                }
-                
-                ScannerDebugLogger.logLiveEdgePoints(
-                    foundCorners!![0].toString(),
-                    foundCorners!![1].toString(),
-                    foundCorners!![2].toString(),
-                    foundCorners!![3].toString()
-                )
-            } else {
-                framesWithoutDetection++
-                if (framesWithoutDetection < 5 && previousCorners != null) {
-                    // Keep showing previous corners for a few frames to prevent flickering
-                    foundCorners = previousCorners
-                } else {
-                    previousCorners = null
-                }
-            }
-            
-            onResult(foundCorners, sharpness)
-        } catch (e: Throwable) {
-            ScannerDebugLogger.logError("LiveEdge", "Live edge detection processing error", e)
-        } finally {
-            bitmap?.recycle()
-            // Cleanup dynamically allocated actualGray if it was a submat
-            if (actualGray != null && actualGray != src) {
-                actualGray.release()
-            }
-            for (contour in contours) {
-                try {
-                    contour.release()
-                } catch (ce: Throwable) {
-                    Log.e("LiveEdgeDetectionEngine", "Failed to release individual contour", ce)
-                }
-            }
-            // FIX: FINAL LEAK
+    ) {
+        synchronized(lock) {
+            ScannerDebugLogger.logEnter("LiveEdgeDetectionEngine.process")
+            initMatsIfNeeded()
+            var bitmap: android.graphics.Bitmap? = null
+            val contours = ArrayList<MatOfPoint>()
+            var actualGray: Mat? = null
             try {
-                imageProxy.close()
-            } catch (ipe: Throwable) {
-                Log.e("LiveEdgeDetectionEngine", "Failed to close ImageProxy", ipe)
+                var foundCorners: List<Point>? = null
+                var sharpness = 0.0
+
+                if (engineType == ScannerEngineType.LOCAL_ML) {
+                    bitmap = imageProxy.toBitmap()
+                    if (bitmap == null) {
+                        ScannerDebugLogger.logExit("LiveEdgeDetectionEngine.process")
+                        return@synchronized
+                    }
+                    Utils.bitmapToMat(bitmap, src!!)
+                    val resizeRatio = 400.0 / Math.max(src!!.width(), src!!.height())
+                    if (resizeRatio < 1.0) {
+                        Imgproc.resize(src!!, resized!!, Size(src!!.width() * resizeRatio, src!!.height() * resizeRatio))
+                    } else {
+                        src!!.copyTo(resized!!)
+                    }
+                    Imgproc.cvtColor(resized!!, gray!!, Imgproc.COLOR_RGBA2GRAY)
+                    
+                    sharpness = calculateSharpness(gray!!)
+                    
+                    if (documentScanner != null) {
+                        try {
+                            val quad = documentScanner.detectDocument(bitmap, true)
+                            if (quad != null) {
+                                foundCorners = listOf(quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft)
+                                Log.d("LiveEdgeDetectionEngine", "Successfully detected document corners using TFLite ML on live feed")
+                            }
+                        } catch (e: Throwable) {
+                            Log.e("LiveEdgeDetectionEngine", "TFLite ML detection failed in live feed", e)
+                        }
+                    }
+                } else {
+                    // Extremely fast path: bypass Bitmap conversion completely for OpenCV Engine
+                    val yPlane = imageProxy.planes[0]
+                    val yBuffer = yPlane.buffer
+                    val yRowStride = yPlane.rowStride
+                    val width = imageProxy.width
+                    val height = imageProxy.height
+
+                    if (src == null || src!!.rows() != height || src!!.cols() != yRowStride || src!!.type() != CvType.CV_8UC1) {
+                        src?.release()
+                        src = Mat(height, yRowStride, CvType.CV_8UC1)
+                    }
+
+                    val yData = ByteArray(yBuffer.remaining())
+                    yBuffer.get(yData)
+                    src!!.put(0, 0, yData)
+
+                    // Submat to crop out padding bytes if rowStride > width
+                    actualGray = if (yRowStride > width) {
+                        val submat = src!!.colRange(0, width)
+                        if (!submat.isContinuous) {
+                            val clone = submat.clone()
+                            submat.release()
+                            clone
+                        } else {
+                            submat
+                        }
+                    } else {
+                        src!!
+                    }
+
+                    val resizeRatio = 400.0 / Math.max(actualGray.width(), actualGray.height())
+                    if (resizeRatio < 1.0) {
+                        Imgproc.resize(actualGray, resized!!, Size(actualGray.width() * resizeRatio, actualGray.height() * resizeRatio))
+                    } else {
+                        actualGray.copyTo(resized!!)
+                    }
+
+                    sharpness = calculateSharpness(resized!!)
+
+                    // Gaussian blur is faster for live preview and provides good edge smoothing
+                    val blurSize = when (mode) {
+                        com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> Size(5.0, 5.0)
+                        else -> Size(5.0, 5.0)
+                    }
+                    Imgproc.GaussianBlur(resized!!, blurred!!, blurSize, 0.0)
+                    
+                    val (lowThresh, highThresh) = when (mode) {
+                        com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> Pair(50.0, 125.0)
+                        else -> Pair(40.0, 100.0)
+                    }
+                    
+                    Imgproc.Canny(blurred!!, edges!!, lowThresh, highThresh) 
+                    
+                    val morphSize = when (mode) {
+                        com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> Size(7.0, 7.0)
+                        else -> Size(5.0, 5.0)
+                    }
+                    val morphKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, morphSize)
+                    Imgproc.morphologyEx(edges!!, edges!!, Imgproc.MORPH_CLOSE, morphKernel)
+                    morphKernel.release()
+                    
+                    // RETR_EXTERNAL is faster and we only care about the outermost document contour
+                    Imgproc.findContours(edges!!, contours, hierarchy!!, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+                    
+                    ScannerDebugLogger.logLiveEdge(contours.size)
+                    contours.sortByDescending { Imgproc.contourArea(it) }
+                    
+                    val maxArea = resized!!.width() * resized!!.height()
+                    val minArea = when (mode) {
+                        com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> maxArea * 0.06 // Card/Grid must occupy at least 6% of the frame
+                        else -> maxArea * 0.12 // Document must occupy at least 12% of the frame
+                    }
+                    
+                    for (contour in contours) {
+                        val area = Imgproc.contourArea(contour)
+                        if (area < minArea) break // since they are sorted, we can stop early
+                        
+                        var contour2f: MatOfPoint2f? = null
+                        try {
+                            contour2f = MatOfPoint2f(*contour.toArray())
+                            val peri = Imgproc.arcLength(contour2f, true)
+                            
+                            var approxSuccess = false
+                            // Try different epsilon approximations to get a clean quadrilateral
+                            for (epsFactor in listOf(0.015, 0.02, 0.03, 0.04)) {
+                                val approx = MatOfPoint2f()
+                                try {
+                                    Imgproc.approxPolyDP(contour2f, approx, epsFactor * peri, true)
+                                    if (approx.total() == 4L) {
+                                        val approxPoints = approx.toArray().map { Point(it.x / resizeRatio, it.y / resizeRatio) }
+                                        if (isConvexPoints(approxPoints) && getMaxCosinePoints(approxPoints) < 0.4) {
+                                            foundCorners = orderPoints(approxPoints)
+                                            approxSuccess = true
+                                            break
+                                        }
+                                    }
+                                } finally {
+                                    approx.release()
+                                }
+                            }
+                            
+                            // FALLBACK: If approxPolyDP failed but it's a large contour, use extreme points
+                            if (!approxSuccess) {
+                                val extremePoints = getExtremePoints(contour).map { Point(it.x / resizeRatio, it.y / resizeRatio) }
+                                if (extremePoints.size == 4 && isConvexPoints(extremePoints) && getMaxCosinePoints(extremePoints) < 0.4) {
+                                    foundCorners = orderPoints(extremePoints)
+                                }
+                            }
+                        } catch (e: Throwable) {
+                            Log.e("LiveEdgeDetectionEngine", "Contour loop processing error", e)
+                        } finally {
+                            contour2f?.release()
+                        }
+                        
+                        if (foundCorners != null) {
+                            ScannerDebugLogger.logLiveEdgeArea(area, (area.toDouble() / maxArea.toDouble()) * 100.0)
+                            break // Found our document
+                        }
+                    }
+                }
+                
+                if (foundCorners != null) {
+                    framesWithoutDetection = 0
+                    if (previousCorners != null) {
+                        val maxDistance = foundCorners!!.mapIndexed { index, p ->
+                            Math.hypot(p.x - previousCorners!![index].x, p.y - previousCorners!![index].y)
+                        }.maxOrNull() ?: 0.0
+                        
+                        if (maxDistance > 200) { 
+                            // Large jump, reset smoothing
+                            previousCorners = foundCorners
+                        } else {
+                            // Exponential Moving Average for stabilization
+                            foundCorners = foundCorners!!.mapIndexed { index, p ->
+                                Point(
+                                    previousCorners!![index].x + 0.35 * (p.x - previousCorners!![index].x),
+                                    previousCorners!![index].y + 0.35 * (p.y - previousCorners!![index].y)
+                                )
+                            }
+                            previousCorners = foundCorners
+                        }
+                    } else {
+                        previousCorners = foundCorners
+                    }
+                    
+                    ScannerDebugLogger.logLiveEdgePoints(
+                        foundCorners!![0].toString(),
+                        foundCorners!![1].toString(),
+                        foundCorners!![2].toString(),
+                        foundCorners!![3].toString()
+                    )
+                } else {
+                    framesWithoutDetection++
+                    if (framesWithoutDetection < 5 && previousCorners != null) {
+                        // Keep showing previous corners for a few frames to prevent flickering
+                        foundCorners = previousCorners
+                    } else {
+                        previousCorners = null
+                    }
+                }
+                
+                onResult(foundCorners, sharpness)
+            } catch (e: Throwable) {
+                ScannerDebugLogger.logError("LiveEdge", "Live edge detection processing error", e)
+            } finally {
+                bitmap?.recycle()
+                // Cleanup dynamically allocated actualGray if it was a submat
+                if (actualGray != null && actualGray != src) {
+                    actualGray.release()
+                }
+                for (contour in contours) {
+                    try {
+                        contour.release()
+                    } catch (ce: Throwable) {
+                        Log.e("LiveEdgeDetectionEngine", "Failed to release individual contour", ce)
+                    }
+                }
+                // FIX: FINAL LEAK
+                try {
+                    imageProxy.close()
+                } catch (ipe: Throwable) {
+                    Log.e("LiveEdgeDetectionEngine", "Failed to close ImageProxy", ipe)
+                }
+                ScannerDebugLogger.logExit("LiveEdgeDetectionEngine.process")
             }
-            ScannerDebugLogger.logExit("LiveEdgeDetectionEngine.process")
         }
     }
 
