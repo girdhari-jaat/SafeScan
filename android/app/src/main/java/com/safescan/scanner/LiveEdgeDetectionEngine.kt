@@ -25,7 +25,6 @@ class LiveEdgeDetectionEngine {
     private var blurred: Mat? = null
     private var edges: Mat? = null
     private var hierarchy: Mat? = null
-    private var kernel: Mat? = null
     private var laplacian: Mat? = null
     private var meanStdDevMean: MatOfDouble? = null
     private var meanStdDevStdDev: MatOfDouble? = null
@@ -33,25 +32,50 @@ class LiveEdgeDetectionEngine {
     private var tempApprox: MatOfPoint2f? = null
     private var tempMatOfPoint4: MatOfPoint? = null
     private val tempIntArray8 = IntArray(8)
+    private var yData: ByteArray? = null
     
     private var previousCorners: List<Point>? = null
     private var framesWithoutDetection = 0
+    private var lastWidth = 0
+    private var lastHeight = 0
+    
+    private var kernel5: Mat? = null
+    private var kernel7: Mat? = null
 
-    private fun initMatsIfNeeded() {
-        if (src == null) {
+    private fun initMatsIfNeeded(width: Int, height: Int) {
+        if (src == null || lastWidth != width || lastHeight != height) {
+            src?.release()
+            resized?.release()
+            gray?.release()
+            blurred?.release()
+            edges?.release()
+            hierarchy?.release()
+            kernel5?.release()
+            kernel7?.release()
+            laplacian?.release()
+            meanStdDevMean?.release()
+            meanStdDevStdDev?.release()
+            tempContour2f?.release()
+            tempApprox?.release()
+            tempMatOfPoint4?.release()
+
             src = Mat()
             resized = Mat()
             gray = Mat()
             blurred = Mat()
             edges = Mat()
             hierarchy = Mat()
-            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
+            kernel5 = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
+            kernel7 = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(7.0, 7.0))
             laplacian = Mat()
             meanStdDevMean = MatOfDouble()
             meanStdDevStdDev = MatOfDouble()
             tempContour2f = MatOfPoint2f()
             tempApprox = MatOfPoint2f()
             tempMatOfPoint4 = MatOfPoint(org.opencv.core.Point(), org.opencv.core.Point(), org.opencv.core.Point(), org.opencv.core.Point())
+            
+            lastWidth = width
+            lastHeight = height
         }
     }
 
@@ -70,8 +94,10 @@ class LiveEdgeDetectionEngine {
                 edges = null
                 hierarchy?.release()
                 hierarchy = null
-                kernel?.release()
-                kernel = null
+                kernel5?.release()
+                kernel5 = null
+                kernel7?.release()
+                kernel7 = null
                 laplacian?.release()
                 laplacian = null
                 meanStdDevMean?.release()
@@ -98,7 +124,7 @@ class LiveEdgeDetectionEngine {
     ) {
         synchronized(lock) {
             ScannerDebugLogger.logEnter("LiveEdgeDetectionEngine.process")
-            initMatsIfNeeded()
+            initMatsIfNeeded(imageProxy.width, imageProxy.height)
             var bitmap: android.graphics.Bitmap? = null
             val contours = ArrayList<MatOfPoint>()
             var actualGray: Mat? = null
@@ -147,9 +173,12 @@ class LiveEdgeDetectionEngine {
                         src = Mat(height, yRowStride, CvType.CV_8UC1)
                     }
 
-                    val yData = ByteArray(yBuffer.remaining())
-                    yBuffer.get(yData)
-                    src!!.put(0, 0, yData)
+                    val remaining = yBuffer.remaining()
+                    if (yData == null || yData!!.size != remaining) {
+                        yData = ByteArray(remaining)
+                    }
+                    yBuffer.get(yData!!)
+                    src!!.put(0, 0, yData!!)
 
                     // Submat to crop out padding bytes if rowStride > width
                     actualGray = if (yRowStride > width) {
@@ -188,13 +217,11 @@ class LiveEdgeDetectionEngine {
                     
                     Imgproc.Canny(blurred!!, edges!!, lowThresh, highThresh) 
                     
-                    val morphSize = when (mode) {
-                        com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> Size(7.0, 7.0)
-                        else -> Size(5.0, 5.0)
+                    val morphKernel = when (mode) {
+                        com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> kernel7!!
+                        else -> kernel5!!
                     }
-                    val morphKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, morphSize)
                     Imgproc.morphologyEx(edges!!, edges!!, Imgproc.MORPH_CLOSE, morphKernel)
-                    morphKernel.release()
                     
                     // RETR_EXTERNAL is faster and we only care about the outermost document contour
                     Imgproc.findContours(edges!!, contours, hierarchy!!, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
@@ -213,20 +240,22 @@ class LiveEdgeDetectionEngine {
                         if (area < minArea) break // since they are sorted, we can stop early
                         
                         try {
-                            contour.convertTo(tempContour2f, CvType.CV_32F)
-                            val peri = Imgproc.arcLength(tempContour2f, true)
+                            tempContour2f?.let { contour.convertTo(it, CvType.CV_32F) }
+                            val peri = tempContour2f?.let { Imgproc.arcLength(it, true) } ?: 0.0
                             
                             var approxSuccess = false
                             // Try different epsilon approximations to get a clean quadrilateral
                             for (epsFactor in listOf(0.015, 0.02, 0.03, 0.04)) {
-                                Imgproc.approxPolyDP(tempContour2f, tempApprox, epsFactor * peri, true)
-                                if (tempApprox!!.total() == 4L) {
-                                    val approxArray = tempApprox!!.toArray()
-                                    if (isConvexPoints(approxArray) && getMaxCosinePoints(approxArray) < 0.4) {
-                                        val approxPoints = approxArray.map { Point(it.x / resizeRatio, it.y / resizeRatio) }
-                                        foundCorners = orderPoints(approxPoints)
-                                        approxSuccess = true
-                                        break
+                                if (tempContour2f != null && tempApprox != null) {
+                                    Imgproc.approxPolyDP(tempContour2f, tempApprox, epsFactor * peri, true)
+                                    if (tempApprox!!.total() == 4L) {
+                                        val approxArray = tempApprox!!.toArray()
+                                        if (isConvexPoints(approxArray) && getMaxCosinePoints(approxArray) < 0.4) {
+                                            val approxPoints = approxArray.map { Point(it.x / resizeRatio, it.y / resizeRatio) }
+                                            foundCorners = orderPoints(approxPoints)
+                                            approxSuccess = true
+                                            break
+                                        }
                                     }
                                 }
                             }
@@ -371,8 +400,11 @@ class LiveEdgeDetectionEngine {
 
     private fun getMaxCosinePoints(points: Array<org.opencv.core.Point>): Double {
         var maxCosine = 0.0
-        for (i in 2..4) {
-            val cosine = Math.abs(angle(points[i % 4], points[i - 2], points[i - 1]))
+        for (i in 2..5) {
+            val pt1 = points[i % 4]
+            val pt2 = points[(i - 2) % 4]
+            val pt0 = points[(i - 1) % 4]
+            val cosine = Math.abs(angle(pt1, pt2, pt0))
             maxCosine = Math.max(maxCosine, cosine)
         }
         return maxCosine
