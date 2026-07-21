@@ -99,6 +99,9 @@ class TFLiteEngine(private val context: Context) {
         }
     }
 
+    @Volatile
+    private var isClosed = false
+
     private var lastStableCorners: List<Point>? = null
     private var stableFrameCount = 0
     private val STABLE_THRESHOLD = 3 // Increased threshold to 3 for better stability and less frame flicker
@@ -118,6 +121,7 @@ class TFLiteEngine(private val context: Context) {
 
     @Synchronized
     fun detectCorners(bitmap: Bitmap, isLive: Boolean = false): Quadrilateral? {
+        if (isClosed) return null
         val tflite = interpreter ?: return null
         if (bitmap.isRecycled) return null
         
@@ -159,10 +163,11 @@ class TFLiteEngine(private val context: Context) {
             inputBuffer.rewind()
             currentBitmap.getPixels(intValues, 0, currentBitmap.width, 0, 0, currentBitmap.width, currentBitmap.height)
             
+            val scaleFactor = 1.0f / 255.0f
             for (pixelValue in intValues) {
-                inputBuffer.putFloat(((pixelValue shr 16 and 0xFF) / 255.0f))
-                inputBuffer.putFloat(((pixelValue shr 8 and 0xFF) / 255.0f))
-                inputBuffer.putFloat(((pixelValue and 0xFF) / 255.0f))
+                inputBuffer.putFloat(((pixelValue shr 16 and 0xFF) * scaleFactor))
+                inputBuffer.putFloat(((pixelValue shr 8 and 0xFF) * scaleFactor))
+                inputBuffer.putFloat(((pixelValue and 0xFF) * scaleFactor))
             }
             
             // Zero-copy: Rewind pre-allocated output buffer and run inference
@@ -465,9 +470,15 @@ class TFLiteEngine(private val context: Context) {
         return listOf(tl, tr, br, bl)
     }
     
+    @Synchronized
     fun close() {
+        if (isClosed) return
+        isClosed = true
+
         interpreter?.close()
+        interpreter = null
         gpuDelegate?.close()
+        gpuDelegate = null
         letterboxedBitmap?.let {
             if (!it.isRecycled) {
                 it.recycle()
