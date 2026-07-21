@@ -29,37 +29,55 @@ class TFLiteEngine(private val context: Context) {
     private var gpuDelegate: GpuDelegate? = null
     private val inputSize = 256 // Fairscan model input size
 
+    // Zero-copy, high-performance pre-allocated buffers to prevent Garbage Collection (GC) thrashing
+    private val inputBuffer: ByteBuffer = ByteBuffer.allocateDirect(4 * inputSize * inputSize * 3).apply {
+        order(ByteOrder.nativeOrder())
+    }
+    private val outputBuffer: ByteBuffer = ByteBuffer.allocateDirect(4 * inputSize * inputSize * 1).apply {
+        order(ByteOrder.nativeOrder())
+    }
+    private val intValues = IntArray(inputSize * inputSize)
+    private val maskData = FloatArray(inputSize * inputSize)
+
+    // Reusable letterbox Bitmap & Canvas to eliminate allocation in live loops
+    private var letterboxedBitmap: Bitmap? = null
+    private var canvas: Canvas? = null
+    private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+
     init {
         try {
-            val assetFileDescriptor = context.assets.openFd("fairscan-segmentation-model.tflite")
-            val fileInputStream = FileInputStream(assetFileDescriptor.fileDescriptor)
-            val fileChannel = fileInputStream.channel
-            val startOffset = assetFileDescriptor.startOffset
-            val declaredLength = assetFileDescriptor.declaredLength
-            val tfliteModel = fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
+            // Memory leak and File Descriptor leak fix: using use() blocks to guarantee that streams & file descriptors close safely after mapping
+            context.assets.openFd("fairscan-segmentation-model.tflite").use { assetFileDescriptor ->
+                FileInputStream(assetFileDescriptor.fileDescriptor).use { fileInputStream ->
+                    val fileChannel = fileInputStream.channel
+                    val startOffset = assetFileDescriptor.startOffset
+                    val declaredLength = assetFileDescriptor.declaredLength
+                    val tfliteModel = fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
 
-            try {
-                // Try initializing with GPU Delegate
-                val options = Interpreter.Options()
-                gpuDelegate = GpuDelegate()
-                options.addDelegate(gpuDelegate)
-                interpreter = Interpreter(tfliteModel, options)
-                Log.d("TFLiteEngine", "Native TFLite model loaded successfully with GPU acceleration")
-            } catch (gpuEx: Throwable) {
-                Log.w("TFLiteEngine", "GPU acceleration not supported or failed to initialize. Falling back to CPU safely.", gpuEx)
-                // Clean up GPU delegate if it was created
-                try {
-                    gpuDelegate?.close()
-                } catch (closeEx: Throwable) {
-                    Log.e("TFLiteEngine", "Failed to close gpuDelegate", closeEx)
+                    try {
+                        // Try initializing with GPU Delegate
+                        val options = Interpreter.Options()
+                        gpuDelegate = GpuDelegate()
+                        options.addDelegate(gpuDelegate)
+                        interpreter = Interpreter(tfliteModel, options)
+                        Log.d("TFLiteEngine", "Native TFLite model loaded successfully with GPU acceleration")
+                    } catch (gpuEx: Throwable) {
+                        Log.w("TFLiteEngine", "GPU acceleration not supported or failed to initialize. Falling back to CPU safely.", gpuEx)
+                        // Clean up GPU delegate if it was created
+                        try {
+                            gpuDelegate?.close()
+                        } catch (closeEx: Throwable) {
+                            Log.e("TFLiteEngine", "Failed to close gpuDelegate", closeEx)
+                        }
+                        gpuDelegate = null
+                        
+                        // Load interpreter with standard CPU options
+                        val options = Interpreter.Options()
+                        options.setNumThreads(4) // Use 4 CPU threads for high performance
+                        interpreter = Interpreter(tfliteModel, options)
+                        Log.d("TFLiteEngine", "Native TFLite model loaded successfully with CPU (4 threads)")
+                    }
                 }
-                gpuDelegate = null
-                
-                // Load interpreter with standard CPU options
-                val options = Interpreter.Options()
-                options.setNumThreads(4) // Use 4 CPU threads for high performance
-                interpreter = Interpreter(tfliteModel, options)
-                Log.d("TFLiteEngine", "Native TFLite model loaded successfully with CPU (4 threads)")
             }
         } catch (e: Throwable) {
             Log.e("TFLiteEngine", "Fatal error loading Native TFLite model", e)
@@ -102,10 +120,17 @@ class TFLiteEngine(private val context: Context) {
         var hierarchy: Mat? = null
 
         try {
-            // Letterbox bitmap to 256x256 to preserve aspect ratio
-            val letterboxedBitmap = Bitmap.createBitmap(inputSize, inputSize, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(letterboxedBitmap)
-            canvas.drawColor(Color.BLACK)
+            // Lazily initialize and reuse letterbox bitmap and canvas
+            if (letterboxedBitmap == null) {
+                letterboxedBitmap = Bitmap.createBitmap(inputSize, inputSize, Bitmap.Config.ARGB_8888)
+                canvas = Canvas(letterboxedBitmap!!)
+            }
+            
+            val currentBitmap = letterboxedBitmap!!
+            val currentCanvas = canvas!!
+            
+            // Clear with black background
+            currentCanvas.drawColor(Color.BLACK)
 
             val scale = Math.min(inputSize.toFloat() / bitmap.width, inputSize.toFloat() / bitmap.height)
             val dx = (inputSize - bitmap.width * scale) / 2f
@@ -115,18 +140,11 @@ class TFLiteEngine(private val context: Context) {
             matrix.postScale(scale, scale)
             matrix.postTranslate(dx, dy)
 
-            val paint = Paint(Paint.FILTER_BITMAP_FLAG)
-            canvas.drawBitmap(bitmap, matrix, paint)
+            currentCanvas.drawBitmap(bitmap, matrix, paint)
             
-            // Prepare input buffer [1, 256, 256, 3] float32
-            val inputBuffer = ByteBuffer.allocateDirect(4 * inputSize * inputSize * 3)
-            inputBuffer.order(ByteOrder.nativeOrder())
-            
-            val intValues = IntArray(inputSize * inputSize)
-            letterboxedBitmap.getPixels(intValues, 0, letterboxedBitmap.width, 0, 0, letterboxedBitmap.width, letterboxedBitmap.height)
-            
-            // Recycle letterboxedBitmap immediately after getPixels to free up memory
-            letterboxedBitmap.recycle()
+            // Zero-copy: Rewind pre-allocated input buffer and populate
+            inputBuffer.rewind()
+            currentBitmap.getPixels(intValues, 0, currentBitmap.width, 0, 0, currentBitmap.width, currentBitmap.height)
             
             for (pixelValue in intValues) {
                 inputBuffer.putFloat(((pixelValue shr 16 and 0xFF) / 255.0f))
@@ -134,18 +152,14 @@ class TFLiteEngine(private val context: Context) {
                 inputBuffer.putFloat(((pixelValue and 0xFF) / 255.0f))
             }
             
-            // Prepare output buffer [1, 256, 256, 1] float32
-            val outputBuffer = ByteBuffer.allocateDirect(4 * inputSize * inputSize * 1)
-            outputBuffer.order(ByteOrder.nativeOrder())
-            
-            // Run inference
+            // Zero-copy: Rewind pre-allocated output buffer and run inference
+            outputBuffer.rewind()
             tflite.run(inputBuffer, outputBuffer)
             
             outputBuffer.rewind()
             
             // Convert output buffer to an OpenCV Mat
             maskMat = Mat(inputSize, inputSize, CvType.CV_32FC1)
-            val maskData = FloatArray(inputSize * inputSize)
             outputBuffer.asFloatBuffer().get(maskData)
             maskMat.put(0, 0, maskData)
             
@@ -183,65 +197,73 @@ class TFLiteEngine(private val context: Context) {
             hierarchy = Mat()
             val minArea256 = inputSize * inputSize * 0.01 // At least 1% of the 256x256 canvas
             
-            for (thr in thresholds) {
-                val bin = Mat()
-                Imgproc.threshold(probmapSmooth, bin, thr * 255.0, 255.0, Imgproc.THRESH_BINARY)
-                
-                // Morphology close operation to fill any gaps/holes
-                val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, Size(5.0, 5.0))
-                Imgproc.morphologyEx(bin, bin, Imgproc.MORPH_CLOSE, kernel)
-                kernel.release()
-                
-                val contours = ArrayList<MatOfPoint>()
-                Imgproc.findContours(bin, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
-                
-                if (contours.isNotEmpty()) {
-                    val largestContour = contours.maxByOrNull { Imgproc.contourArea(it) }
-                    if (largestContour != null) {
-                        val area = Imgproc.contourArea(largestContour)
-                        if (area >= minArea256) {
-                            val contour2f = MatOfPoint2f(*largestContour.toArray())
-                            val peri = Imgproc.arcLength(contour2f, true)
-                            var approxPoints: List<Point>? = null
-                            
-                            // Try to simplify to exactly 4 vertices
-                            for (i in 1..15) {
-                                val epsilon = (i * 0.01) * peri
-                                val approx = MatOfPoint2f()
-                                Imgproc.approxPolyDP(contour2f, approx, epsilon, true)
-                                if (approx.total() == 4L) {
-                                    approxPoints = approx.toArray().map { Point(it.x, it.y) }
-                                    approx.release()
-                                    break
-                                }
-                                approx.release()
-                            }
-                            
-                            // Fallback: Get extreme projection points
-                            if (approxPoints == null && largestContour.toArray().size >= 4) {
-                                approxPoints = getExtremePoints(largestContour)
-                            }
-                            
-                            contour2f.release()
-                            
-                            // Validate and score the quadrilateral
-                            if (approxPoints != null && approxPoints.size == 4 && isConvexPoints(approxPoints)) {
-                                val maxCos = getMaxCosinePoints(approxPoints)
-                                if (maxCos < 0.5) { // Reject highly distorted shapes
-                                    val normArea = area / (inputSize.toDouble() * inputSize.toDouble())
-                                    val score = normArea - maxCos // Score favors larger, straighter shapes
-                                    if (score > bestScore) {
-                                        bestScore = score
-                                        bestQuadPoints = approxPoints
+            val bin = Mat()
+            val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, Size(5.0, 5.0))
+            
+            try {
+                for (thr in thresholds) {
+                    Imgproc.threshold(probmapSmooth, bin, thr * 255.0, 255.0, Imgproc.THRESH_BINARY)
+                    Imgproc.morphologyEx(bin, bin, Imgproc.MORPH_CLOSE, kernel)
+                    
+                    val contours = ArrayList<MatOfPoint>()
+                    try {
+                        Imgproc.findContours(bin, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+                        
+                        if (contours.isNotEmpty()) {
+                            val largestContour = contours.maxByOrNull { Imgproc.contourArea(it) }
+                            if (largestContour != null) {
+                                val area = Imgproc.contourArea(largestContour)
+                                if (area >= minArea256) {
+                                    val contour2f = MatOfPoint2f(*largestContour.toArray())
+                                    try {
+                                        val peri = Imgproc.arcLength(contour2f, true)
+                                        var approxPoints: List<Point>? = null
+                                        
+                                        // Try to simplify to exactly 4 vertices
+                                        for (i in 1..15) {
+                                            val epsilon = (i * 0.01) * peri
+                                            val approx = MatOfPoint2f()
+                                            try {
+                                                Imgproc.approxPolyDP(contour2f, approx, epsilon, true)
+                                                if (approx.total() == 4L) {
+                                                    approxPoints = approx.toArray().map { Point(it.x, it.y) }
+                                                    break
+                                                }
+                                            } finally {
+                                                approx.release()
+                                            }
+                                        }
+                                        
+                                        // Fallback: Get extreme projection points
+                                        if (approxPoints == null && largestContour.toArray().size >= 4) {
+                                            approxPoints = getExtremePoints(largestContour)
+                                        }
+                                        
+                                        // Validate and score the quadrilateral
+                                        if (approxPoints != null && approxPoints.size == 4 && isConvexPoints(approxPoints)) {
+                                            val maxCos = getMaxCosinePoints(approxPoints)
+                                            if (maxCos < 0.5) { // Reject highly distorted shapes
+                                                val normArea = area / (inputSize.toDouble() * inputSize.toDouble())
+                                                val score = normArea - maxCos // Score favors larger, straighter shapes
+                                                if (score > bestScore) {
+                                                    bestScore = score
+                                                    bestQuadPoints = approxPoints
+                                                }
+                                            }
+                                        }
+                                    } finally {
+                                        contour2f.release()
                                     }
                                 }
                             }
                         }
+                    } finally {
+                        contours.forEach { it.release() }
                     }
                 }
-                
+            } finally {
                 bin.release()
-                contours.forEach { it.release() }
+                kernel.release()
             }
             
             var result: Quadrilateral? = null
@@ -296,33 +318,54 @@ class TFLiteEngine(private val context: Context) {
 
     private fun getExtremePoints(contour: MatOfPoint): List<Point> {
         val pts = contour.toArray().map { Point(it.x, it.y) }
-        if (pts.isEmpty()) return emptyList()
+        if (pts.size < 4) return emptyList()
 
-        val sums = pts.map { it.x + it.y }
-        val diffs = pts.map { it.y - it.x }
+        // Extremely robust boundary-based corner detection preventing duplicates
+        val minX = pts.minOf { it.x }
+        val maxX = pts.maxOf { it.x }
+        val minY = pts.minOf { it.y }
+        val maxY = pts.maxOf { it.y }
 
-        val tl = pts[sums.indexOf(sums.minOrNull()!!)]
-        val br = pts[sums.indexOf(sums.maxOrNull()!!)]
-        val tr = pts[diffs.indexOf(diffs.minOrNull()!!)]
-        val bl = pts[diffs.indexOf(diffs.maxOrNull()!!)]
+        val idealCorners = listOf(
+            Point(minX, minY), // TL
+            Point(maxX, minY), // TR
+            Point(maxX, maxY), // BR
+            Point(minX, maxY)  // BL
+        )
 
-        return listOf(tl, tr, br, bl)
+        val remaining = pts.toMutableList()
+        val result = ArrayList<Point>(4)
+
+        for (ideal in idealCorners) {
+            if (remaining.isEmpty()) break
+            val closest = remaining.minByOrNull { p ->
+                val dx = p.x - ideal.x
+                val dy = p.y - ideal.y
+                dx * dx + dy * dy
+            }!!
+            result.add(closest)
+            remaining.remove(closest)
+        }
+
+        return result
     }
 
     private fun isConvexPoints(points: List<Point>): Boolean {
         if (points.size != 4) return false
-        val matOfPoint = MatOfPoint(*points.map { org.opencv.core.Point(it.x, it.y) }.toTypedArray())
-        val convex = Imgproc.isContourConvex(matOfPoint)
-        matOfPoint.release()
-        return convex
+        val cvPoints = Array(4) { i -> org.opencv.core.Point(points[i].x, points[i].y) }
+        val matOfPoint = MatOfPoint(*cvPoints)
+        try {
+            return Imgproc.isContourConvex(matOfPoint)
+        } finally {
+            matOfPoint.release()
+        }
     }
 
     private fun getMaxCosinePoints(points: List<Point>): Double {
         if (points.size != 4) return 1.0
         var maxCosine = 0.0
-        val cvPoints = points.map { org.opencv.core.Point(it.x, it.y) }
         for (i in 0..3) {
-            val cosine = Math.abs(angle(cvPoints[(i + 1) % 4], cvPoints[(i + 3) % 4], cvPoints[i]))
+            val cosine = Math.abs(angle(points[(i + 1) % 4], points[(i + 3) % 4], points[i]))
             if (cosine > maxCosine) {
                 maxCosine = cosine
             }
@@ -330,7 +373,7 @@ class TFLiteEngine(private val context: Context) {
         return maxCosine
     }
 
-    private fun angle(pt1: org.opencv.core.Point, pt2: org.opencv.core.Point, pt0: org.opencv.core.Point): Double {
+    private fun angle(pt1: Point, pt2: Point, pt0: Point): Double {
         val dx1 = pt1.x - pt0.x
         val dy1 = pt1.y - pt0.y
         val dx2 = pt2.x - pt0.x
@@ -341,31 +384,31 @@ class TFLiteEngine(private val context: Context) {
     private fun orderPoints(pts: List<Point>): List<Point> {
         if (pts.size != 4) return pts
 
-        val cx = pts.map { it.x }.average()
-        val cy = pts.map { it.y }.average()
+        // Robust, high-performance X/Y partition corner ordering algorithm
+        // 1. Partition into left-most and right-most points
+        val sortedByX = pts.sortedBy { it.x }
+        val leftMost = listOf(sortedByX[0], sortedByX[1])
+        val rightMost = listOf(sortedByX[2], sortedByX[3])
 
-        val sorted = pts.sortedBy { Math.atan2(it.y - cy, it.x - cx) }
+        // 2. Identify TL, BL from left-most, and TR, BR from right-most
+        val tl = leftMost.minByOrNull { it.y }!!
+        val bl = leftMost.maxByOrNull { it.y }!!
 
-        var minIdx = 0
-        var minSum = Double.MAX_VALUE
-        for (i in 0 until 4) {
-            val sum = sorted[i].x + sorted[i].y
-            if (sum < minSum) {
-                minSum = sum
-                minIdx = i
-            }
-        }
+        val tr = rightMost.minByOrNull { it.y }!!
+        val br = rightMost.maxByOrNull { it.y }!!
 
-        return listOf(
-            sorted[minIdx],
-            sorted[(minIdx + 1) % 4],
-            sorted[(minIdx + 2) % 4],
-            sorted[(minIdx + 3) % 4]
-        )
+        return listOf(tl, tr, br, bl)
     }
     
     fun close() {
         interpreter?.close()
         gpuDelegate?.close()
+        letterboxedBitmap?.let {
+            if (!it.isRecycled) {
+                it.recycle()
+            }
+        }
+        letterboxedBitmap = null
+        canvas = null
     }
 }
