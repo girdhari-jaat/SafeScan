@@ -2,7 +2,7 @@ package com.safescan
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.safescan.ocr.OcrEngine
+import com.safescan.scanner.OcrEngine
 import com.safescan.core.AppResult
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue

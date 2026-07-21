@@ -27,6 +27,7 @@ class TFLiteEngine(private val context: Context) {
 
     private var interpreter: Interpreter? = null
     private var gpuDelegate: GpuDelegate? = null
+    private val executionLock = java.util.concurrent.locks.ReentrantLock()
     private val inputSize = 256 // Fairscan model input size
 
     // Zero-copy, high-performance pre-allocated buffers to prevent Garbage Collection (GC) thrashing
@@ -119,210 +120,252 @@ class TFLiteEngine(private val context: Context) {
         return true
     }
 
-    @Synchronized
     fun detectCorners(bitmap: Bitmap, isLive: Boolean = false): Quadrilateral? {
-        if (isClosed) return null
-        val tflite = interpreter ?: return null
-        if (bitmap.isRecycled) return null
-        
-        if (bitmap.width != lastBitmapWidth || bitmap.height != lastBitmapHeight) {
-            lastStableCorners = null
-            stableFrameCount = 0
-            lastBitmapWidth = bitmap.width
-            lastBitmapHeight = bitmap.height
-        }
-
-        // Adaptive tolerance: 3% of the smaller dimension of the input bitmap, with a safe 10.0px minimum floor
-        val adaptiveTolerance = (Math.min(bitmap.width.toDouble(), bitmap.height.toDouble()) * 0.03).coerceAtLeast(10.0)
-
+        executionLock.lock()
         try {
-            // Lazily initialize and reuse letterbox bitmap and canvas
-            if (letterboxedBitmap == null) {
-                letterboxedBitmap = Bitmap.createBitmap(inputSize, inputSize, Bitmap.Config.ARGB_8888)
-                canvas = Canvas(letterboxedBitmap!!)
-            }
+            if (isClosed) return null
+            val tflite = interpreter ?: return null
+            if (bitmap.isRecycled) return null
             
-            val currentBitmap = letterboxedBitmap!!
-            val currentCanvas = canvas!!
-            
-            // Clear with black background
-            currentCanvas.drawColor(Color.BLACK)
-
-            val scale = Math.min(inputSize.toFloat() / bitmap.width, inputSize.toFloat() / bitmap.height)
-            val dx = (inputSize - bitmap.width * scale) / 2f
-            val dy = (inputSize - bitmap.height * scale) / 2f
-
-            // Safe reuse of shared Matrix to prevent memory reallocation and state leaks
-            matrix.reset()
-            matrix.postScale(scale, scale)
-            matrix.postTranslate(dx, dy)
-
-            currentCanvas.drawBitmap(bitmap, matrix, paint)
-            
-            // Zero-copy: Rewind pre-allocated input buffer and populate
-            inputBuffer.rewind()
-            currentBitmap.getPixels(intValues, 0, currentBitmap.width, 0, 0, currentBitmap.width, currentBitmap.height)
-            
-            val scaleFactor = 1.0f / 255.0f
-            for (pixelValue in intValues) {
-                inputBuffer.putFloat(((pixelValue shr 16 and 0xFF) * scaleFactor))
-                inputBuffer.putFloat(((pixelValue shr 8 and 0xFF) * scaleFactor))
-                inputBuffer.putFloat(((pixelValue and 0xFF) * scaleFactor))
-            }
-            
-            // Zero-copy: Rewind pre-allocated output buffer and run inference
-            outputBuffer.rewind()
-            tflite.run(inputBuffer, outputBuffer)
-            
-            outputBuffer.rewind()
-            
-            // Populate the pre-allocated float32 maskMat directly from output buffer
-            outputBuffer.asFloatBuffer().get(maskData)
-            maskMat.put(0, 0, maskData)
-            
-            // 1. Confidence & Mask Area Check (to avoid detecting false documents from a single noisy peak pixel)
-            var maxConfidence = 0.0f
-            var confidentPixelsCount = 0
-            for (v in maskData) {
-                if (v > maxConfidence) {
-                    maxConfidence = v
-                }
-                if (v > 0.50f) {
-                    confidentPixelsCount++
-                }
-            }
-            // Ensure minimum peak confidence is met AND the mask covers at least 3% of the 256x256 image (1966 pixels)
-            if (maxConfidence < 0.50f || confidentPixelsCount < 1966) {
+            if (bitmap.width != lastBitmapWidth || bitmap.height != lastBitmapHeight) {
                 lastStableCorners = null
                 stableFrameCount = 0
-                return null
+                lastBitmapWidth = bitmap.width
+                lastBitmapHeight = bitmap.height
             }
-            
-            // Convert float32 probability mask to 8-bit [0-255] mask using pre-allocated probmapU8
-            maskMat.convertTo(probmapU8, CvType.CV_8UC1, 255.0)
-            
-            // Smooth the mask using pre-allocated probmapSmooth to reduce noise
-            Imgproc.GaussianBlur(probmapU8, probmapSmooth, Size(3.0, 3.0), 0.0)
-            
-            // Access pre-allocated threshold arrays without object instantiation
-            val thresholds = if (isLive) liveThresholds else batchThresholds
-            
-            var bestQuadPoints: List<Point>? = null
-            var bestScore = -Double.MAX_VALUE
-            
-            val minArea256 = inputSize * inputSize * 0.05 // Upgraded minimum area to 5% of the 256x256 canvas to filter out small noisy blobs
-            
-            for (thr in thresholds) {
-                Imgproc.threshold(probmapSmooth, bin, thr * 255.0, 255.0, Imgproc.THRESH_BINARY)
-                Imgproc.morphologyEx(bin, bin, Imgproc.MORPH_CLOSE, kernel)
+
+            // Adaptive tolerance: 3% of the smaller dimension of the input bitmap, with a safe 10.0px minimum floor
+            val adaptiveTolerance = (Math.min(bitmap.width.toDouble(), bitmap.height.toDouble()) * 0.03).coerceAtLeast(10.0)
+
+            try {
+                // Lazily initialize and reuse letterbox bitmap and canvas
+                if (letterboxedBitmap == null) {
+                    letterboxedBitmap = Bitmap.createBitmap(inputSize, inputSize, Bitmap.Config.ARGB_8888)
+                    canvas = Canvas(letterboxedBitmap!!)
+                }
                 
-                val contours = ArrayList<MatOfPoint>()
-                try {
-                    Imgproc.findContours(bin, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+                val currentBitmap = letterboxedBitmap!!
+                val currentCanvas = canvas!!
+                
+                // Clear with black background
+                currentCanvas.drawColor(Color.BLACK)
+
+                val scale = Math.min(inputSize.toFloat() / bitmap.width, inputSize.toFloat() / bitmap.height)
+                val dx = (inputSize - bitmap.width * scale) / 2f
+                val dy = (inputSize - bitmap.height * scale) / 2f
+
+                // Safe reuse of shared Matrix to prevent memory reallocation and state leaks
+                matrix.reset()
+                matrix.postScale(scale, scale)
+                matrix.postTranslate(dx, dy)
+
+                currentCanvas.drawBitmap(bitmap, matrix, paint)
+                
+                // Zero-copy: Rewind pre-allocated input buffer and populate
+                inputBuffer.rewind()
+                currentBitmap.getPixels(intValues, 0, currentBitmap.width, 0, 0, currentBitmap.width, currentBitmap.height)
+                
+                val scaleFactor = 1.0f / 255.0f
+                for (pixelValue in intValues) {
+                    inputBuffer.putFloat(((pixelValue shr 16 and 0xFF) * scaleFactor))
+                    inputBuffer.putFloat(((pixelValue shr 8 and 0xFF) * scaleFactor))
+                    inputBuffer.putFloat(((pixelValue and 0xFF) * scaleFactor))
+                }
+                
+                // Zero-copy: Rewind pre-allocated output buffer and run inference
+                outputBuffer.rewind()
+                tflite.run(inputBuffer, outputBuffer)
+                
+                outputBuffer.rewind()
+                
+                // Populate the pre-allocated float32 maskMat directly from output buffer
+                outputBuffer.asFloatBuffer().get(maskData)
+                maskMat.put(0, 0, maskData)
+                
+                // 1. Confidence & Mask Area Check (to avoid detecting false documents from a single noisy peak pixel)
+                var maxConfidence = 0.0f
+                var confidentPixelsCount = 0
+                for (v in maskData) {
+                    if (v > maxConfidence) {
+                        maxConfidence = v
+                    }
+                    if (v > 0.50f) {
+                        confidentPixelsCount++
+                    }
+                }
+                // Ensure minimum peak confidence is met AND the mask covers at least 3% of the 256x256 image (1966 pixels)
+                if (maxConfidence < 0.50f || confidentPixelsCount < 1966) {
+                    lastStableCorners = null
+                    stableFrameCount = 0
+                    return null
+                }
+                
+                // Convert float32 probability mask to 8-bit [0-255] mask using pre-allocated probmapU8
+                maskMat.convertTo(probmapU8, CvType.CV_8UC1, 255.0)
+                
+                // Smooth the mask using pre-allocated probmapSmooth to reduce noise
+                Imgproc.GaussianBlur(probmapU8, probmapSmooth, Size(3.0, 3.0), 0.0)
+                
+                // Access pre-allocated threshold arrays without object instantiation
+                val thresholds = if (isLive) liveThresholds else batchThresholds
+                
+                var bestQuadPoints: List<Point>? = null
+                var bestScore = -Double.MAX_VALUE
+                
+                val minArea256 = inputSize * inputSize * 0.05 // Upgraded minimum area to 5% of the 256x256 canvas to filter out small noisy blobs
+                
+                for (thr in thresholds) {
+                    Imgproc.threshold(probmapSmooth, bin, thr * 255.0, 255.0, Imgproc.THRESH_BINARY)
+                    Imgproc.morphologyEx(bin, bin, Imgproc.MORPH_CLOSE, kernel)
                     
-                    if (contours.isNotEmpty()) {
-                        // Evaluate up to the top 3 largest contours. A shadow or background segment might be the absolute largest,
-                        // so checking top-N ensures we find the actual document candidate.
-                        val candidateContours = contours.sortedByDescending { Imgproc.contourArea(it) }.take(3)
-                        for (contour in candidateContours) {
-                            val area = Imgproc.contourArea(contour)
-                            if (area >= minArea256) {
-                                // Zero-Allocation native-to-native contour conversion to prevent heavy JVM allocations
-                                contour.convertTo(contour2f, CvType.CV_32F)
-                                
-                                val peri = Imgproc.arcLength(contour2f, true)
-                                var approxPoints: List<Point>? = null
-                                
-                                // Try to simplify to exactly 4 vertices
-                                for (i in 1..15) {
-                                    val epsilon = (i * 0.01) * peri
-                                    Imgproc.approxPolyDP(contour2f, approx, epsilon, true)
-                                    if (approx.total() == 4L) {
-                                        val approxArray = approx.toArray()
-                                        approxPoints = listOf(
-                                            Point(approxArray[0].x, approxArray[0].y),
-                                            Point(approxArray[1].x, approxArray[1].y),
-                                            Point(approxArray[2].x, approxArray[2].y),
-                                            Point(approxArray[3].x, approxArray[3].y)
-                                        )
-                                        break
+                    val contours = ArrayList<MatOfPoint>()
+                    try {
+                        Imgproc.findContours(bin, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+                        
+                        if (contours.isNotEmpty()) {
+                            // Evaluate up to the top 3 largest contours using a zero-allocation, in-place loop.
+                            var maxContour1: MatOfPoint? = null
+                            var maxContour2: MatOfPoint? = null
+                            var maxContour3: MatOfPoint? = null
+                            var maxArea1 = -1.0
+                            var maxArea2 = -1.0
+                            var maxArea3 = -1.0
+
+                            for (i in 0 until contours.size) {
+                                val contour = contours[i]
+                                val area = Imgproc.contourArea(contour)
+                                if (area > maxArea1) {
+                                    maxArea3 = maxArea2
+                                    maxContour3 = maxContour2
+                                    maxArea2 = maxArea1
+                                    maxContour2 = maxContour1
+                                    maxArea1 = area
+                                    maxContour1 = contour
+                                } else if (area > maxArea2) {
+                                    maxArea3 = maxArea2
+                                    maxContour3 = maxContour2
+                                    maxArea2 = area
+                                    maxContour2 = contour
+                                } else if (area > maxArea3) {
+                                    maxArea3 = area
+                                    maxContour3 = contour
+                                }
+                            }
+
+                            for (idx in 0 until 3) {
+                                val contour = when (idx) {
+                                    0 -> maxContour1
+                                    1 -> maxContour2
+                                    2 -> maxContour3
+                                    else -> null
+                                } ?: continue
+                                val area = when (idx) {
+                                    0 -> maxArea1
+                                    1 -> maxArea2
+                                    2 -> maxArea3
+                                    else -> 0.0
+                                }
+
+                                if (area >= minArea256) {
+                                    // Zero-Allocation native-to-native contour conversion to prevent heavy JVM allocations
+                                    contour.convertTo(contour2f, CvType.CV_32F)
+                                    
+                                    val peri = Imgproc.arcLength(contour2f, true)
+                                    var approxPoints: List<Point>? = null
+                                    
+                                    // Try to simplify to exactly 4 vertices
+                                    for (i in 1..15) {
+                                        val epsilon = (i * 0.01) * peri
+                                        Imgproc.approxPolyDP(contour2f, approx, epsilon, true)
+                                        if (approx.total() == 4L) {
+                                            val approxArray = approx.toArray()
+                                            approxPoints = listOf(
+                                                Point(approxArray[0].x, approxArray[0].y),
+                                                Point(approxArray[1].x, approxArray[1].y),
+                                                Point(approxArray[2].x, approxArray[2].y),
+                                                Point(approxArray[3].x, approxArray[3].y)
+                                            )
+                                            break
+                                        }
                                     }
-                                }
-                                
-                                // Fallback: Get extreme projection points
-                                if (approxPoints == null && contour.toArray().size >= 4) {
-                                    approxPoints = getExtremePoints(contour)
-                                }
-                                
-                                // Validate and score the quadrilateral
-                                if (approxPoints != null && approxPoints.size == 4 && isConvexPoints(approxPoints)) {
-                                    val maxCos = getMaxCosinePoints(approxPoints)
-                                    if (maxCos < 0.707) { // 0.707 threshold (45 degrees) allows skewed/perspective shots
-                                        val normArea = area / (inputSize.toDouble() * inputSize.toDouble())
-                                        val score = normArea - maxCos // Score favors larger, straighter shapes
-                                        if (score > bestScore) {
-                                            bestScore = score
-                                            bestQuadPoints = approxPoints
+                                    
+                                    // Fallback: Get extreme projection points
+                                    if (approxPoints == null && contour.toArray().size >= 4) {
+                                        approxPoints = getExtremePoints(contour)
+                                    }
+                                    
+                                    // Validate and score the quadrilateral
+                                    if (approxPoints != null && approxPoints.size == 4 && isConvexPoints(approxPoints)) {
+                                        val maxCos = getMaxCosinePoints(approxPoints)
+                                        if (maxCos < 0.707) { // 0.707 threshold (45 degrees) allows skewed/perspective shots
+                                            val normArea = area / (inputSize.toDouble() * inputSize.toDouble())
+                                            val score = normArea - maxCos // Score favors larger, straighter shapes
+                                            if (score > bestScore) {
+                                                bestScore = score
+                                                bestQuadPoints = approxPoints
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
+                    } finally {
+                        contours.forEach { it.release() }
                     }
-                } finally {
-                    contours.forEach { it.release() }
-                }
 
-                // High-performance early-exit: if we have found a highly valid, large, straight convex quadrilateral,
-                // stop evaluating lower-priority thresholds to save CPU cycles.
-                if (bestScore > 0.45) {
-                    break
+                    // High-performance early-exit: if we have found a highly valid, large, straight convex quadrilateral,
+                    // stop evaluating lower-priority thresholds to save CPU cycles.
+                    if (bestScore > 0.45) {
+                        break
+                    }
                 }
-            }
-            
-            var result: Quadrilateral? = null
-            
-            if (bestQuadPoints != null) {
-                // Scale corners back to original bitmap dimensions reversing the letterbox translation and scale
-                val scaleD = Math.min(inputSize.toDouble() / bitmap.width.toDouble(), inputSize.toDouble() / bitmap.height.toDouble())
-                val dxD = (inputSize.toDouble() - bitmap.width.toDouble() * scaleD) / 2.0
-                val dyD = (inputSize.toDouble() - bitmap.height.toDouble() * scaleD) / 2.0
-
-                val scaledPoints = bestQuadPoints.map {
-                    val originalX = ((it.x - dxD) / scaleD).coerceIn(0.0, bitmap.width.toDouble())
-                    val originalY = ((it.y - dyD) / scaleD).coerceIn(0.0, bitmap.height.toDouble())
-                    Point(originalX, originalY)
-                }
-                val ordered = orderPoints(scaledPoints)
                 
-                result = if (isLive) {
-                    if (lastStableCorners != null && isSimilar(ordered, lastStableCorners!!, adaptiveTolerance)) {
-                        stableFrameCount++
-                    } else {
-                        lastStableCorners = ordered
-                        stableFrameCount = 1
+                var result: Quadrilateral? = null
+                
+                if (bestQuadPoints != null) {
+                    // Scale corners back to original bitmap dimensions reversing the letterbox translation and scale
+                    val scaleD = Math.min(inputSize.toDouble() / bitmap.width.toDouble(), inputSize.toDouble() / bitmap.height.toDouble())
+                    val dxD = (inputSize.toDouble() - bitmap.width.toDouble() * scaleD) / 2.0
+                    val dyD = (inputSize.toDouble() - bitmap.height.toDouble() * scaleD) / 2.0
+
+                    val scaledPoints = bestQuadPoints.map {
+                        val originalX = ((it.x - dxD) / scaleD).coerceIn(0.0, bitmap.width.toDouble())
+                        val originalY = ((it.y - dyD) / scaleD).coerceIn(0.0, bitmap.height.toDouble())
+                        Point(originalX, originalY)
                     }
+                    val ordered = orderPoints(scaledPoints)
                     
-                    if (stableFrameCount >= STABLE_THRESHOLD) {
-                        Quadrilateral(ordered[0], ordered[1], ordered[2], ordered[3])
+                    result = if (isLive) {
+                        if (lastStableCorners != null && isSimilar(ordered, lastStableCorners!!, adaptiveTolerance)) {
+                            stableFrameCount++
+                        } else {
+                            lastStableCorners = ordered
+                            stableFrameCount = 1
+                        }
+                        
+                        if (stableFrameCount >= STABLE_THRESHOLD) {
+                            Quadrilateral(ordered[0], ordered[1], ordered[2], ordered[3])
+                        } else {
+                            null
+                        }
                     } else {
-                        null
+                        Quadrilateral(ordered[0], ordered[1], ordered[2], ordered[3])
                     }
                 } else {
-                    Quadrilateral(ordered[0], ordered[1], ordered[2], ordered[3])
+                    if (isLive) {
+                        lastStableCorners = null
+                        stableFrameCount = 0
+                    }
                 }
-            } else {
-                if (isLive) {
-                    lastStableCorners = null
-                    stableFrameCount = 0
-                }
+                
+                return result
+            } catch (e: Throwable) {
+                Log.e("TFLiteEngine", "Error running inference in adaptive multi-thresholding", e)
             }
-            
-            return result
-        } catch (e: Throwable) {
-            Log.e("TFLiteEngine", "Error running inference in adaptive multi-thresholding", e)
+            return null
+        } finally {
+            executionLock.unlock()
         }
-        return null
     }
 
     private fun getExtremePoints(contour: MatOfPoint): List<Point> {
@@ -470,31 +513,35 @@ class TFLiteEngine(private val context: Context) {
         return listOf(tl, tr, br, bl)
     }
     
-    @Synchronized
     fun close() {
-        if (isClosed) return
-        isClosed = true
+        executionLock.lock()
+        try {
+            if (isClosed) return
+            isClosed = true
 
-        interpreter?.close()
-        interpreter = null
-        gpuDelegate?.close()
-        gpuDelegate = null
-        letterboxedBitmap?.let {
-            if (!it.isRecycled) {
-                it.recycle()
+            interpreter?.close()
+            interpreter = null
+            gpuDelegate?.close()
+            gpuDelegate = null
+            letterboxedBitmap?.let {
+                if (!it.isRecycled) {
+                    it.recycle()
+                }
             }
-        }
-        letterboxedBitmap = null
-        canvas = null
+            letterboxedBitmap = null
+            canvas = null
 
-        // Explicitly release pre-allocated OpenCV Mat structures to prevent native memory leaks
-        maskMat.release()
-        probmapU8.release()
-        probmapSmooth.release()
-        bin.release()
-        hierarchy.release()
-        kernel.release()
-        contour2f.release()
-        approx.release()
+            // Explicitly release pre-allocated OpenCV Mat structures to prevent native memory leaks
+            maskMat.release()
+            probmapU8.release()
+            probmapSmooth.release()
+            bin.release()
+            hierarchy.release()
+            kernel.release()
+            contour2f.release()
+            approx.release()
+        } finally {
+            executionLock.unlock()
+        }
     }
 }

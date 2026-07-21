@@ -1,4 +1,3 @@
-├── .gitignore
 ├── GEMINI.md
 ├── README_TEST.md
 ├── RELEASE_CHECKLIST.md
@@ -29,7 +28,6 @@
 │           │           ├── MainActivity.kt
 │           │           ├── OverlayView.kt
 │           │           ├── SafeScanApplication.kt
-│           │           ├── ScannerForegroundService.kt
 │           │           ├── core
 │           │           │   ├── AppResult.kt
 │           │           │   ├── DiagnosticsLogger.kt
@@ -52,7 +50,6 @@
 │           │           │   ├── ImageFilterEngine.kt
 │           │           │   ├── ImageProcessor.kt
 │           │           │   ├── PdfExporter.kt
-│           │           │   ├── PdfUtils.kt
 │           │           │   └── model
 │           │           │       └── Quadrilateral.kt
 │           │           ├── scanner
@@ -62,11 +59,11 @@
 │           │           │   ├── EdgeDetectionEngine.kt
 │           │           │   ├── LiveEdgeDetectionEngine.kt
 │           │           │   ├── OcrEngine.kt
+│           │           │   ├── RansacHelper.kt
 │           │           │   ├── ScannerViewModel.kt
 │           │           │   ├── TFLiteEdgeDetectionEngine.kt
 │           │           │   └── TFLiteEngine.kt
 │           │           ├── ui
-│           │           │   ├── CardScanScreen.kt
 │           │           │   ├── CropScreen.kt
 │           │           │   ├── DeveloperStatsView.kt
 │           │           │   ├── DocumentGrid.kt
@@ -75,7 +72,6 @@
 │           │           │   ├── ScannerFragment.kt
 │           │           │   ├── SettingsScreen.kt
 │           │           │   ├── SlotsScreen.kt
-│           │           │   ├── TopBar.kt
 │           │           │   ├── WizardScreen.kt
 │           │           │   ├── ZoomableImage.kt
 │           │           │   └── theme
@@ -89,15 +85,12 @@
 │               │   └── ic_launcher_foreground.xml
 │               ├── layout
 │               │   ├── activity_main.xml
-│               │   ├── fragment_scanner.xml
-│               │   └── wizard_activity.xml
+│               │   └── fragment_scanner.xml
 │               ├── mipmap
 │               │   └── ic_launcher.xml
 │               ├── mipmap-anydpi-v26
 │               │   ├── ic_launcher.xml
 │               │   └── ic_launcher_round.xml
-│               ├── navigation
-│               │   └── nav_graph.xml
 │               ├── values
 │               │   └── strings.xml
 │               ├── values-hi

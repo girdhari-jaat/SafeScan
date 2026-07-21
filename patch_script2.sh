@@ -1,3 +1,0 @@
-sed -i 's/val isDocOpenFromLib = viewModel.isDocumentOpenedFromLibrary.value/val isDocOpenFromLib = viewModel.isDocumentOpenedFromLibrary.value\n        val isGridViewVisible = viewModel.isGridViewVisible.value/g' android/app/src/main/java/com/safescan/ui/ScannerFragment.kt
-sed -i 's/!isDocOpenFromLib &&/!isDocOpenFromLib \&\&\n                               !isGridViewVisible \&\&/g' android/app/src/main/java/com/safescan/ui/ScannerFragment.kt
-sed -i 's/viewModel.isDocumentOpenedFromLibrary,/viewModel.isDocumentOpenedFromLibrary,\n                    viewModel.isGridViewVisible,/g' android/app/src/main/java/com/safescan/ui/ScannerFragment.kt

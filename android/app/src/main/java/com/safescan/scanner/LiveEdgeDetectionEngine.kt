@@ -35,6 +35,7 @@ class LiveEdgeDetectionEngine {
     private val tempIntArray8 = IntArray(8)
     private var yData: ByteArray? = null
     
+    private val reusablePointsArray = Array<Point?>(4) { null }
     private var previousCorners: List<Point>? = null
     private var framesWithoutDetection = 0
     private var lastWidth = 0
@@ -145,7 +146,7 @@ class LiveEdgeDetectionEngine {
                     bitmap = imageProxy.toBitmap()
                     if (bitmap == null) {
                         ScannerDebugLogger.logExit("LiveEdgeDetectionEngine.process")
-                        return@synchronized
+                        return
                     }
                     Utils.bitmapToMat(bitmap, src!!)
                     val resizeRatio = 400.0 / Math.max(src!!.width(), src!!.height())
@@ -258,8 +259,11 @@ class LiveEdgeDetectionEngine {
                                     if (tempApprox!!.total() == 4L) {
                                         val approxArray = tempApprox!!.toArray()
                                         if (isConvexPoints(approxArray) && getMaxCosinePoints(approxArray) < 0.4) {
-                                            val approxPoints = approxArray.map { Point(it.x / resizeRatio, it.y / resizeRatio) }
-                                            currentCorners = orderPoints(approxPoints)
+                                            reusablePointsArray[0] = Point(approxArray[0].x / resizeRatio, approxArray[0].y / resizeRatio)
+                                            reusablePointsArray[1] = Point(approxArray[1].x / resizeRatio, approxArray[1].y / resizeRatio)
+                                            reusablePointsArray[2] = Point(approxArray[2].x / resizeRatio, approxArray[2].y / resizeRatio)
+                                            reusablePointsArray[3] = Point(approxArray[3].x / resizeRatio, approxArray[3].y / resizeRatio)
+                                            currentCorners = orderPoints(reusablePointsArray)
                                             approxSuccess = true
                                             break
                                         }
@@ -267,12 +271,72 @@ class LiveEdgeDetectionEngine {
                                 }
                             }
                             
-                            // FALLBACK
+                            // FALLBACK 1: Extreme Projection Points
                             if (!approxSuccess) {
                                 val extremePointsArray = getExtremePointsArray(contour)
                                 if (extremePointsArray != null && isConvexPoints(extremePointsArray) && getMaxCosinePoints(extremePointsArray) < 0.4) {
-                                    val extremePoints = extremePointsArray.map { Point(it.x / resizeRatio, it.y / resizeRatio) }
-                                    currentCorners = orderPoints(extremePoints)
+                                    reusablePointsArray[0] = Point(extremePointsArray[0].x / resizeRatio, extremePointsArray[0].y / resizeRatio)
+                                    reusablePointsArray[1] = Point(extremePointsArray[1].x / resizeRatio, extremePointsArray[1].y / resizeRatio)
+                                    reusablePointsArray[2] = Point(extremePointsArray[2].x / resizeRatio, extremePointsArray[2].y / resizeRatio)
+                                    reusablePointsArray[3] = Point(extremePointsArray[3].x / resizeRatio, extremePointsArray[3].y / resizeRatio)
+                                    currentCorners = orderPoints(reusablePointsArray)
+                                    approxSuccess = true
+                                }
+                            }
+
+                            // FALLBACK 2: Convex Hull & Bounding Box fallback to prevent frame drops in low contrast
+                            if (!approxSuccess && currentCorners == null) {
+                                val hullInts = org.opencv.core.MatOfInt()
+                                val hullPointsMat = MatOfPoint()
+                                try {
+                                    Imgproc.convexHull(contour, hullInts)
+                                    val pts = contour.toArray()
+                                    val indices = hullInts.toArray()
+                                    val hullList = ArrayList<org.opencv.core.Point>()
+                                    for (idx in indices) {
+                                        hullList.add(pts[idx])
+                                    }
+                                    hullPointsMat.fromList(hullList)
+                                    
+                                    val hull32f = MatOfPoint2f()
+                                    val approxHull32f = MatOfPoint2f()
+                                    try {
+                                        hullPointsMat.convertTo(hull32f, CvType.CV_32F)
+                                        val hullPeri = Imgproc.arcLength(hull32f, true)
+                                        for (epsFactor in doubleArrayOf(0.015, 0.02, 0.03, 0.04)) {
+                                            Imgproc.approxPolyDP(hull32f, approxHull32f, epsFactor * hullPeri, true)
+                                            if (approxHull32f.total() == 4L) {
+                                                val approxArray = approxHull32f.toArray()
+                                                reusablePointsArray[0] = Point(approxArray[0].x / resizeRatio, approxArray[0].y / resizeRatio)
+                                                reusablePointsArray[1] = Point(approxArray[1].x / resizeRatio, approxArray[1].y / resizeRatio)
+                                                reusablePointsArray[2] = Point(approxArray[2].x / resizeRatio, approxArray[2].y / resizeRatio)
+                                                reusablePointsArray[3] = Point(approxArray[3].x / resizeRatio, approxArray[3].y / resizeRatio)
+                                                currentCorners = orderPoints(reusablePointsArray)
+                                                approxSuccess = true
+                                                break
+                                            }
+                                        }
+                                    } finally {
+                                        hull32f.release()
+                                        approxHull32f.release()
+                                    }
+                                } catch (hullEx: Throwable) {
+                                    Log.e("LiveEdgeDetectionEngine", "Hull fallback computation failed", hullEx)
+                                } finally {
+                                    hullInts.release()
+                                    hullPointsMat.release()
+                                }
+
+                                // Final bounding box fallback if convex hull approximation fails to yield 4 corners
+                                if (currentCorners == null) {
+                                    val rect = Imgproc.boundingRect(contour)
+                                    if (rect.width > 0 && rect.height > 0) {
+                                        reusablePointsArray[0] = Point(rect.x / resizeRatio, rect.y / resizeRatio)
+                                        reusablePointsArray[1] = Point((rect.x + rect.width) / resizeRatio, rect.y / resizeRatio)
+                                        reusablePointsArray[2] = Point((rect.x + rect.width) / resizeRatio, (rect.y + rect.height) / resizeRatio)
+                                        reusablePointsArray[3] = Point(rect.x / resizeRatio, (rect.y + rect.height) / resizeRatio)
+                                        currentCorners = orderPoints(reusablePointsArray)
+                                    }
                                 }
                             }
 
@@ -408,7 +472,7 @@ class LiveEdgeDetectionEngine {
         tempIntArray8[5] = points[2].y.toInt()
         tempIntArray8[6] = points[3].x.toInt()
         tempIntArray8[7] = points[3].y.toInt()
-        tempMatOfPoint4!!.put(0, 0, *tempIntArray8)
+        tempMatOfPoint4!!.put(0, 0, tempIntArray8)
         return Imgproc.isContourConvex(tempMatOfPoint4!!)
     }
 
@@ -424,9 +488,7 @@ class LiveEdgeDetectionEngine {
         return maxCosine
     }
 
-    private fun orderPoints(pts: List<Point>): List<Point> {
-        if (pts.size != 4) return pts
-
+    private fun orderPoints(pts: Array<Point?>): List<Point>? {
         var minSum = Double.MAX_VALUE
         var maxSum = -Double.MAX_VALUE
         var minDiff = Double.MAX_VALUE
@@ -438,6 +500,7 @@ class LiveEdgeDetectionEngine {
         var bl: Point? = null
 
         for (pt in pts) {
+            if (pt == null) return null
             val sum = pt.x + pt.y
             val diff = pt.y - pt.x
 
@@ -447,7 +510,7 @@ class LiveEdgeDetectionEngine {
             if (diff > maxDiff) { maxDiff = diff; bl = pt }
         }
 
-        if (tl == null || tr == null || br == null || bl == null) return pts
+        if (tl == null || tr == null || br == null || bl == null) return null
 
         return listOf(tl, tr, br, bl)
     }

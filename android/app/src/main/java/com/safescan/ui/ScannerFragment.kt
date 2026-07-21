@@ -552,16 +552,6 @@ class ScannerFragment : Fragment() {
 
     private fun checkPermissionAndStartScanner() {
         val permissionsToRequest = mutableListOf(android.Manifest.permission.CAMERA)
-        if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.S_V2) {
-            permissionsToRequest.add(android.Manifest.permission.READ_EXTERNAL_STORAGE)
-            permissionsToRequest.add(android.Manifest.permission.READ_MEDIA_IMAGES)
-            if (android.os.Build.VERSION.SDK_INT >= 34) {
-                permissionsToRequest.add(android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
-            }
-        }
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            permissionsToRequest.add(android.Manifest.permission.POST_NOTIFICATIONS)
-        }
 
         val missingPermissions = permissionsToRequest.filter {
             ContextCompat.checkSelfPermission(requireContext(), it) != android.content.pm.PackageManager.PERMISSION_GRANTED
