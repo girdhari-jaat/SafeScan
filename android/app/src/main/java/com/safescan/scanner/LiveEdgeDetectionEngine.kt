@@ -29,6 +29,10 @@ class LiveEdgeDetectionEngine {
     private var laplacian: Mat? = null
     private var meanStdDevMean: MatOfDouble? = null
     private var meanStdDevStdDev: MatOfDouble? = null
+    private var tempContour2f: MatOfPoint2f? = null
+    private var tempApprox: MatOfPoint2f? = null
+    private var tempMatOfPoint4: MatOfPoint? = null
+    private val tempIntArray8 = IntArray(8)
     
     private var previousCorners: List<Point>? = null
     private var framesWithoutDetection = 0
@@ -45,6 +49,9 @@ class LiveEdgeDetectionEngine {
             laplacian = Mat()
             meanStdDevMean = MatOfDouble()
             meanStdDevStdDev = MatOfDouble()
+            tempContour2f = MatOfPoint2f()
+            tempApprox = MatOfPoint2f()
+            tempMatOfPoint4 = MatOfPoint(org.opencv.core.Point(), org.opencv.core.Point(), org.opencv.core.Point(), org.opencv.core.Point())
         }
     }
 
@@ -71,6 +78,10 @@ class LiveEdgeDetectionEngine {
                 meanStdDevMean = null
                 meanStdDevStdDev?.release()
                 meanStdDevStdDev = null
+                tempContour2f?.release()
+                tempContour2f = null
+                tempApprox?.release()
+                tempApprox = null
                 Log.d("LiveEdgeDetectionEngine", "Mats released successfully")
             } catch (e: Throwable) {
                 Log.e("LiveEdgeDetectionEngine", "Failed to release Mats", e)
@@ -201,41 +212,35 @@ class LiveEdgeDetectionEngine {
                         val area = Imgproc.contourArea(contour)
                         if (area < minArea) break // since they are sorted, we can stop early
                         
-                        var contour2f: MatOfPoint2f? = null
                         try {
-                            contour2f = MatOfPoint2f(*contour.toArray())
-                            val peri = Imgproc.arcLength(contour2f, true)
+                            contour.convertTo(tempContour2f, CvType.CV_32F)
+                            val peri = Imgproc.arcLength(tempContour2f, true)
                             
                             var approxSuccess = false
                             // Try different epsilon approximations to get a clean quadrilateral
                             for (epsFactor in listOf(0.015, 0.02, 0.03, 0.04)) {
-                                val approx = MatOfPoint2f()
-                                try {
-                                    Imgproc.approxPolyDP(contour2f, approx, epsFactor * peri, true)
-                                    if (approx.total() == 4L) {
-                                        val approxPoints = approx.toArray().map { Point(it.x / resizeRatio, it.y / resizeRatio) }
-                                        if (isConvexPoints(approxPoints) && getMaxCosinePoints(approxPoints) < 0.4) {
-                                            foundCorners = orderPoints(approxPoints)
-                                            approxSuccess = true
-                                            break
-                                        }
+                                Imgproc.approxPolyDP(tempContour2f, tempApprox, epsFactor * peri, true)
+                                if (tempApprox!!.total() == 4L) {
+                                    val approxArray = tempApprox!!.toArray()
+                                    if (isConvexPoints(approxArray) && getMaxCosinePoints(approxArray) < 0.4) {
+                                        val approxPoints = approxArray.map { Point(it.x / resizeRatio, it.y / resizeRatio) }
+                                        foundCorners = orderPoints(approxPoints)
+                                        approxSuccess = true
+                                        break
                                     }
-                                } finally {
-                                    approx.release()
                                 }
                             }
                             
                             // FALLBACK: If approxPolyDP failed but it's a large contour, use extreme points
                             if (!approxSuccess) {
-                                val extremePoints = getExtremePoints(contour).map { Point(it.x / resizeRatio, it.y / resizeRatio) }
-                                if (extremePoints.size == 4 && isConvexPoints(extremePoints) && getMaxCosinePoints(extremePoints) < 0.4) {
+                                val extremePointsArray = getExtremePointsArray(contour)
+                                if (extremePointsArray != null && isConvexPoints(extremePointsArray) && getMaxCosinePoints(extremePointsArray) < 0.4) {
+                                    val extremePoints = extremePointsArray.map { Point(it.x / resizeRatio, it.y / resizeRatio) }
                                     foundCorners = orderPoints(extremePoints)
                                 }
                             }
                         } catch (e: Throwable) {
                             Log.e("LiveEdgeDetectionEngine", "Contour loop processing error", e)
-                        } finally {
-                            contour2f?.release()
                         }
                         
                         if (foundCorners != null) {
@@ -321,43 +326,59 @@ class LiveEdgeDetectionEngine {
         return variance
     }
 
-    private fun getExtremePoints(contour: MatOfPoint): List<Point> {
-        val pts = contour.toArray().map { Point(it.x, it.y) }
-        if (pts.isEmpty()) return emptyList()
+    private fun getExtremePointsArray(contour: MatOfPoint): Array<org.opencv.core.Point>? {
+        val pts = contour.toArray()
+        if (pts.isEmpty()) return null
 
-        val sums = pts.map { it.x + it.y }
-        val diffs = pts.map { it.y - it.x }
+        var minSum = Double.MAX_VALUE
+        var maxSum = -Double.MAX_VALUE
+        var minDiff = Double.MAX_VALUE
+        var maxDiff = -Double.MAX_VALUE
 
-        val tl = pts[sums.indexOf(sums.minOrNull()!!)]
-        val br = pts[sums.indexOf(sums.maxOrNull()!!)]
-        val tr = pts[diffs.indexOf(diffs.minOrNull()!!)]
-        val bl = pts[diffs.indexOf(diffs.maxOrNull()!!)]
+        var tl: org.opencv.core.Point? = null
+        var br: org.opencv.core.Point? = null
+        var tr: org.opencv.core.Point? = null
+        var bl: org.opencv.core.Point? = null
 
-        return listOf(tl, tr, br, bl)
+        for (pt in pts) {
+            val sum = pt.x + pt.y
+            val diff = pt.y - pt.x
+
+            if (sum < minSum) { minSum = sum; tl = pt }
+            if (sum > maxSum) { maxSum = sum; br = pt }
+            if (diff < minDiff) { minDiff = diff; tr = pt }
+            if (diff > maxDiff) { maxDiff = diff; bl = pt }
+        }
+
+        if (tl == null || tr == null || br == null || bl == null) return null
+
+        return arrayOf(tl, tr, br, bl)
     }
 
-    private fun isConvexPoints(points: List<Point>): Boolean {
+    private fun isConvexPoints(points: Array<org.opencv.core.Point>): Boolean {
         if (points.size != 4) return false
-        val matOfPoint = MatOfPoint(*points.map { org.opencv.core.Point(it.x, it.y) }.toTypedArray())
-        val convex = Imgproc.isContourConvex(matOfPoint)
-        matOfPoint.release()
-        return convex
+        tempIntArray8[0] = points[0].x.toInt()
+        tempIntArray8[1] = points[0].y.toInt()
+        tempIntArray8[2] = points[1].x.toInt()
+        tempIntArray8[3] = points[1].y.toInt()
+        tempIntArray8[4] = points[2].x.toInt()
+        tempIntArray8[5] = points[2].y.toInt()
+        tempIntArray8[6] = points[3].x.toInt()
+        tempIntArray8[7] = points[3].y.toInt()
+        tempMatOfPoint4!!.put(0, 0, *tempIntArray8)
+        return Imgproc.isContourConvex(tempMatOfPoint4!!)
     }
 
-    private fun getMaxCosinePoints(points: List<Point>): Double {
+    private fun getMaxCosinePoints(points: Array<org.opencv.core.Point>): Double {
         var maxCosine = 0.0
-        val cvPoints = points.map { org.opencv.core.Point(it.x, it.y) }
         for (i in 2..4) {
-            val cosine = Math.abs(angle(cvPoints[i % 4], cvPoints[i - 2], cvPoints[i - 1]))
+            val cosine = Math.abs(angle(points[i % 4], points[i - 2], points[i - 1]))
             maxCosine = Math.max(maxCosine, cosine)
         }
         return maxCosine
     }
 
     private fun orderPoints(pts: List<Point>): List<Point> {
-        if (pts.size != 4) return pts
-
-        // 1. Calculate centroid (center of mass) of the four vertices to establish a central polar pivot
         val cx = (pts[0].x + pts[1].x + pts[2].x + pts[3].x) / 4.0
         val cy = (pts[0].y + pts[1].y + pts[2].y + pts[3].y) / 4.0
 
