@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.RotateRight
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -47,7 +50,7 @@ fun SettingsScreen(
                     },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -178,7 +181,7 @@ fun SettingsScreen(
 
                             val autoRotation by viewModel.autoRotation.collectAsState()
                             SettingsToggleItem(
-                                icon = Icons.Default.RotateRight,
+                                icon = Icons.AutoMirrored.Filled.RotateRight,
                                 title = "Auto Rotation",
                                 description = "Automatically rotate pages for correct orientation",
                                 checked = autoRotation,
@@ -321,7 +324,7 @@ fun SettingsScreen(
 
                             val clickSound by viewModel.clickSound.collectAsState()
                             SettingsToggleItem(
-                                icon = Icons.Default.VolumeUp,
+                                icon = Icons.AutoMirrored.Filled.VolumeUp,
                                 title = "Click Sound",
                                 description = "Play sound when capturing a document",
                                 checked = clickSound,

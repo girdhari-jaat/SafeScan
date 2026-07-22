@@ -14,6 +14,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.RotateLeft
+import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -80,7 +85,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                         modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(id = R.string.cancel),
                             tint = MaterialTheme.colorScheme.onSurface
                         )
@@ -143,7 +148,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                         modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ArrowForward,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = "Next",
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -325,13 +330,13 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                         )
                         // Rotate Left
                         BottomToolbarItem(
-                            icon = Icons.Default.RotateLeft,
+                            icon = Icons.AutoMirrored.Filled.RotateLeft,
                             label = "Rotate L",
                             onClick = { viewModel.rotateEditingBitmap(-90f) }
                         )
                         // Rotate Right
                         BottomToolbarItem(
-                            icon = Icons.Default.RotateRight,
+                            icon = Icons.AutoMirrored.Filled.RotateRight,
                             label = "Rotate R",
                             onClick = { viewModel.rotateEditingBitmap(90f) }
                         )
@@ -488,7 +493,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                             }
                         )
                         PopoverMenuItem(
-                            icon = Icons.Default.ExitToApp,
+                            icon = Icons.AutoMirrored.Filled.ExitToApp,
                             text = "Export",
                             onClick = {
                                 showExportPopover = false

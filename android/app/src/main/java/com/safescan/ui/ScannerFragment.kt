@@ -1166,7 +1166,12 @@ class ScannerFragment : Fragment() {
                 binding.root.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
                 
                 // Also use Vibrator for redundancy
-                val vibrator = currentContext.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                val vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    val vibratorManager = currentContext.getSystemService(android.os.VibratorManager::class.java)
+                    vibratorManager?.defaultVibrator
+                } else {
+                    currentContext.getSystemService(android.os.Vibrator::class.java)
+                }
                 if (vibrator != null && vibrator.hasVibrator()) {
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                         vibrator.vibrate(android.os.VibrationEffect.createPredefined(android.os.VibrationEffect.EFFECT_CLICK))

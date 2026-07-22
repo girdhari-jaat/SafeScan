@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -424,7 +425,7 @@ fun DeveloperStatsView(viewModel: ScannerViewModel) {
                         .padding(vertical = 4.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Chat,
+                        imageVector = Icons.AutoMirrored.Filled.Chat,
                         contentDescription = "WhatsApp",
                         tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(24.dp)

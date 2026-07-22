@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -148,7 +149,7 @@ fun ScannerTopBar(
                 onClick = onClose,
                 modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
             ) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Close Scanner", tint = Color.White)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close Scanner", tint = Color.White)
             }
 
             // Center: Flash Toggle (separated on its own)

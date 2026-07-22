@@ -30,13 +30,11 @@ android {
         ndk {
             abiFilters.add("arm64-v8a")
         }
-
-        // Keep only English, Urdu, and Hindi resources to significantly reduce app size
-        resourceConfigurations.addAll(listOf("en", "ur", "hi"))
     }
 
-    aaptOptions {
-        noCompress("tflite")
+    androidResources {
+        // Keep only English and Urdu resources to significantly reduce app size
+        localeFilters += listOf("en", "ur")
     }
 
     signingConfigs {
@@ -84,10 +82,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         viewBinding = true
         // Enable Jetpack Compose permanently
@@ -102,6 +96,7 @@ android {
             excludes.add("lib/x86_64/**")
         }
         resources {
+            noCompress.addAll(listOf("tflite", "pdf", "db"))
             excludes.add("META-INF/*.kotlin_module")
             excludes.add("META-INF/LICENSE*")
             excludes.add("META-INF/NOTICE*")
@@ -109,6 +104,12 @@ android {
             excludes.add("META-INF/LICENSE")
             excludes.add("META-INF/NOTICE")
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
@@ -125,6 +126,9 @@ dependencies {
     implementation("androidx.camera:camera-camera2:$camerax_version")
     implementation("androidx.camera:camera-lifecycle:$camerax_version")
     implementation("androidx.camera:camera-view:$camerax_version")
+
+    // System UI Controller
+    implementation("com.google.accompanist:accompanist-systemuicontroller:0.36.0")
 
 
 

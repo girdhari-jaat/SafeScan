@@ -9,8 +9,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -52,7 +52,7 @@ fun DocumentGridView(
                 },
                 navigationIcon = {
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -248,7 +248,7 @@ fun DocumentGridView(
                                             modifier = Modifier.size(24.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.ArrowBack,
+                                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                                 contentDescription = "Move Left",
                                                 tint = Color.White,
                                                 modifier = Modifier.size(16.dp)
@@ -263,7 +263,7 @@ fun DocumentGridView(
                                             modifier = Modifier.size(24.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.ArrowForward,
+                                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                                 contentDescription = "Move Right",
                                                 tint = Color.White,
                                                 modifier = Modifier.size(16.dp)
@@ -354,7 +354,7 @@ fun DocumentGridView(
                                             modifier = Modifier.size(24.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.ArrowBack,
+                                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                                 contentDescription = "Move Left",
                                                 tint = Color.White,
                                                 modifier = Modifier.size(16.dp)
@@ -374,7 +374,7 @@ fun DocumentGridView(
                                             modifier = Modifier.size(24.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.ArrowForward,
+                                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                                 contentDescription = "Move Right",
                                                 tint = Color.White,
                                                 modifier = Modifier.size(16.dp)

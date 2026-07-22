@@ -12,7 +12,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.platform.LocalView
 import android.view.HapticFeedbackConstants
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -124,7 +124,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
                         enabled = !uiState.isAutoRunning,
                         onClick = { viewModel.closeCrop(save = false) }
                     ) {
-                        Icon(Icons.Default.ArrowBack, stringResource(id = R.string.cancel))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(id = R.string.cancel))
                     }
 
                 // 2. Full
@@ -556,8 +556,8 @@ fun CropScreen(viewModel: ScannerViewModel) {
                                             contentScale = ContentScale.FillBounds
                                         )
                                         // Crosshair matching the Emerald brand color
-                                        Divider(modifier = Modifier.width(30.dp).align(Alignment.Center), color = Color(0xFF10B981), thickness = 1.dp)
-                                        Divider(modifier = Modifier.height(30.dp).width(1.dp).align(Alignment.Center), color = Color(0xFF10B981))
+                                        HorizontalDivider(modifier = Modifier.width(30.dp).align(Alignment.Center), color = Color(0xFF10B981), thickness = 1.dp)
+                                        VerticalDivider(modifier = Modifier.height(30.dp).width(1.dp).align(Alignment.Center), color = Color(0xFF10B981))
                                     }
                                 }
                             }
