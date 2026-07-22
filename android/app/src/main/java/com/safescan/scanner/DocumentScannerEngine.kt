@@ -7,6 +7,7 @@ import com.safescan.domain.model.Point
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.opencv.android.Utils
+import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.MatOfPoint
 import org.opencv.core.MatOfPoint2f
@@ -164,7 +165,8 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
                 var contour2f: MatOfPoint2f? = null
                 var approx: MatOfPoint2f? = null
                 try {
-                    contour2f = MatOfPoint2f(*contour.toArray())
+                    contour2f = MatOfPoint2f()
+                    contour.convertTo(contour2f, CvType.CV_32F)
                     approx = MatOfPoint2f()
                     val peri = Imgproc.arcLength(contour2f, true)
                     Imgproc.approxPolyDP(contour2f, approx, 0.02 * peri, true)
@@ -173,8 +175,15 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
                         val area = Imgproc.contourArea(approx)
                         if (area > (resized.width() * resized.height() * 0.1)) {
                             if (isConvex(approx) && getMaxCosine(approx) < 0.3) {
-                                val points = approx.toArray().toList()
-                                foundCorners = orderPoints(points.map { Point(it.x / resizeRatio, it.y / resizeRatio) })
+                                val floatBuff = FloatArray(8)
+                                approx.get(0, 0, floatBuff)
+                                val ptsList = listOf(
+                                    Point(floatBuff[0].toDouble() / resizeRatio, floatBuff[1].toDouble() / resizeRatio),
+                                    Point(floatBuff[2].toDouble() / resizeRatio, floatBuff[3].toDouble() / resizeRatio),
+                                    Point(floatBuff[4].toDouble() / resizeRatio, floatBuff[5].toDouble() / resizeRatio),
+                                    Point(floatBuff[6].toDouble() / resizeRatio, floatBuff[7].toDouble() / resizeRatio)
+                                )
+                                foundCorners = orderPoints(ptsList)
                                 break
                             }
                         }
@@ -225,9 +234,15 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
 
     private fun getMaxCosine(approx: MatOfPoint2f): Double {
         var maxCosine = 0.0
-        val points = approx.toArray()
+        val floatBuff = FloatArray(8)
+        approx.get(0, 0, floatBuff)
+        val p0 = org.opencv.core.Point(floatBuff[0].toDouble(), floatBuff[1].toDouble())
+        val p1 = org.opencv.core.Point(floatBuff[2].toDouble(), floatBuff[3].toDouble())
+        val p2 = org.opencv.core.Point(floatBuff[4].toDouble(), floatBuff[5].toDouble())
+        val p3 = org.opencv.core.Point(floatBuff[6].toDouble(), floatBuff[7].toDouble())
+        val pts = arrayOf(p0, p1, p2, p3)
         for (i in 2..4) {
-            val cosine = Math.abs(angle(points[i % 4], points[i - 2], points[i - 1]))
+            val cosine = Math.abs(angle(pts[i % 4], pts[i - 2], pts[i - 1]))
             maxCosine = Math.max(maxCosine, cosine)
         }
         return maxCosine
@@ -242,8 +257,9 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
     }
 
     private fun isConvex(approx: MatOfPoint2f): Boolean {
-        val mat = MatOfPoint(*approx.toArray())
+        val mat = MatOfPoint()
         try {
+            approx.convertTo(mat, CvType.CV_32S)
             return Imgproc.isContourConvex(mat)
         } finally {
             mat.release()

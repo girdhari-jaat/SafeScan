@@ -167,6 +167,9 @@ class ScannerFragment : Fragment() {
                     }
                     // It returns a hardware bitmap on P+. We might need to copy it to a software bitmap to process it.
                     var softwareBitmap = bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
+                    if (softwareBitmap != bitmap && !bitmap.isRecycled) {
+                        bitmap.recycle()
+                    }
                     
                     // Always apply EXIF orientation correction so images display upright
                     val exifRotation = getExifRotation(requireContext(), uri)
@@ -1030,7 +1033,13 @@ class ScannerFragment : Fragment() {
     }
 
     private fun focusAndTakePhoto(isAutoCapture: Boolean = false) {
-        if (viewModel.isFocusing || isCapturingPhoto) return
+        if (isCapturingPhoto) return
+        if (isAutoCapture) {
+            if (viewModel.isFocusing) return
+        } else {
+            // Manual capture takes precedence - clear any lock or auto-capture cooldown
+            viewModel.isFocusing = false
+        }
         viewModel.isFocusing = true
 
         val binding = _binding

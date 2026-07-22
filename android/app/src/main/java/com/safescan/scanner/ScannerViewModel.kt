@@ -410,7 +410,7 @@ class ScannerViewModel @Inject constructor(
 
         ScannerDebugLogger.logStability(stableFrameCount)
 
-        val isSharp = sharpness > 20.0
+        val isSharp = sharpness > 10.0 || sharpness == 0.0
         val trigger = stableFrameCount >= threshold && isSharp
         ScannerDebugLogger.logAutoCap(inBox = true, sharpness = sharpness, stable = stableFrameCount, trigger = trigger)
 
@@ -443,8 +443,7 @@ class ScannerViewModel @Inject constructor(
     }
 
     private fun triggerAutoCapture() {
-        // Trigger capture via event or directly if we have a callback
-        isFocusing = true
+        // Trigger capture via event
         _autoCaptureEvent.tryEmit(Unit)
     }
 

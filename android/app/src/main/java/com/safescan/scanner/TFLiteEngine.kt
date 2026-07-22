@@ -46,7 +46,7 @@ class TFLiteEngine(private val context: Context) {
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
     private val matrix = Matrix()
 
-    // Pre-allocated OpenCV Mat objects for Zero-Allocation loop execution
+    // Pre-allocated OpenCV Mat objects and buffers for Zero-Allocation loop execution
     private val maskMat = Mat(inputSize, inputSize, CvType.CV_32FC1)
     private val probmapU8 = Mat(inputSize, inputSize, CvType.CV_8UC1)
     private val probmapSmooth = Mat(inputSize, inputSize, CvType.CV_8UC1)
@@ -55,6 +55,9 @@ class TFLiteEngine(private val context: Context) {
     private val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, Size(5.0, 5.0))
     private val contour2f = MatOfPoint2f()
     private val approx = MatOfPoint2f()
+    private val contoursList = ArrayList<MatOfPoint>()
+    private val tempFloat8 = FloatArray(8)
+    private var contourIntBuffer = IntArray(1024)
 
     // Pre-allocated thresholds to prevent object allocations during frames
     private val liveThresholds = doubleArrayOf(0.5, 0.7, 0.85)
@@ -218,11 +221,11 @@ class TFLiteEngine(private val context: Context) {
                     Imgproc.threshold(probmapSmooth, bin, thr * 255.0, 255.0, Imgproc.THRESH_BINARY)
                     Imgproc.morphologyEx(bin, bin, Imgproc.MORPH_CLOSE, kernel)
                     
-                    val contours = ArrayList<MatOfPoint>()
+                    contoursList.clear()
                     try {
-                        Imgproc.findContours(bin, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+                        Imgproc.findContours(bin, contoursList, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
                         
-                        if (contours.isNotEmpty()) {
+                        if (contoursList.isNotEmpty()) {
                             // Evaluate up to the top 3 largest contours using a zero-allocation, in-place loop.
                             var maxContour1: MatOfPoint? = null
                             var maxContour2: MatOfPoint? = null
@@ -231,8 +234,8 @@ class TFLiteEngine(private val context: Context) {
                             var maxArea2 = -1.0
                             var maxArea3 = -1.0
 
-                            for (i in 0 until contours.size) {
-                                val contour = contours[i]
+                            for (i in 0 until contoursList.size) {
+                                val contour = contoursList[i]
                                 val area = Imgproc.contourArea(contour)
                                 if (area > maxArea1) {
                                     maxArea3 = maxArea2
@@ -278,19 +281,19 @@ class TFLiteEngine(private val context: Context) {
                                         val epsilon = (i * 0.01) * peri
                                         Imgproc.approxPolyDP(contour2f, approx, epsilon, true)
                                         if (approx.total() == 4L) {
-                                            val approxArray = approx.toArray()
+                                            approx.get(0, 0, tempFloat8)
                                             approxPoints = listOf(
-                                                Point(approxArray[0].x, approxArray[0].y),
-                                                Point(approxArray[1].x, approxArray[1].y),
-                                                Point(approxArray[2].x, approxArray[2].y),
-                                                Point(approxArray[3].x, approxArray[3].y)
+                                                Point(tempFloat8[0].toDouble(), tempFloat8[1].toDouble()),
+                                                Point(tempFloat8[2].toDouble(), tempFloat8[3].toDouble()),
+                                                Point(tempFloat8[4].toDouble(), tempFloat8[5].toDouble()),
+                                                Point(tempFloat8[6].toDouble(), tempFloat8[7].toDouble())
                                             )
                                             break
                                         }
                                     }
                                     
                                     // Fallback: Get extreme projection points
-                                    if (approxPoints == null && contour.toArray().size >= 4) {
+                                    if (approxPoints == null && contour.total() >= 4) {
                                         approxPoints = getExtremePoints(contour)
                                     }
                                     
@@ -310,7 +313,8 @@ class TFLiteEngine(private val context: Context) {
                             }
                         }
                     } finally {
-                        contours.forEach { it.release() }
+                        contoursList.forEach { it.release() }
+                        contoursList.clear()
                     }
 
                     // High-performance early-exit: if we have found a highly valid, large, straight convex quadrilateral,
@@ -369,51 +373,57 @@ class TFLiteEngine(private val context: Context) {
     }
 
     private fun getExtremePoints(contour: MatOfPoint): List<Point> {
-        val pts = contour.toArray()
-        if (pts.size < 4) return emptyList()
-
-        // Robust, non-greedy $x+y$ and $y-x$ projection method for finding accurate boundaries
-        var tl = pts[0]
-        var tr = pts[0]
-        var br = pts[0]
-        var bl = pts[0]
+        val total = contour.total().toInt()
+        if (total < 4) return emptyList()
+        val requiredSize = total * 2
+        if (contourIntBuffer.size < requiredSize) {
+            contourIntBuffer = IntArray(requiredSize)
+        }
+        contour.get(0, 0, contourIntBuffer)
 
         var minSum = Double.MAX_VALUE
         var maxSum = -Double.MAX_VALUE
         var minDiff = Double.MAX_VALUE
         var maxDiff = -Double.MAX_VALUE
 
-        for (p in pts) {
-            val sum = p.x + p.y
-            val diff = p.y - p.x
+        var tlX = 0.0; var tlY = 0.0
+        var trX = 0.0; var trY = 0.0
+        var brX = 0.0; var brY = 0.0
+        var blX = 0.0; var blY = 0.0
+
+        for (i in 0 until requiredSize step 2) {
+            val px = contourIntBuffer[i].toDouble()
+            val py = contourIntBuffer[i + 1].toDouble()
+            val sum = px + py
+            val diff = py - px
 
             // Top-Left (minimizes x + y)
             if (sum < minSum) {
                 minSum = sum
-                tl = p
+                tlX = px; tlY = py
             }
             // Bottom-Right (maximizes x + y)
             if (sum > maxSum) {
                 maxSum = sum
-                br = p
+                brX = px; brY = py
             }
             // Top-Right (minimizes y - x)
             if (diff < minDiff) {
                 minDiff = diff
-                tr = p
+                trX = px; trY = py
             }
             // Bottom-Left (maximizes y - x)
             if (diff > maxDiff) {
                 maxDiff = diff
-                bl = p
+                blX = px; blY = py
             }
         }
 
         return listOf(
-            Point(tl.x, tl.y),
-            Point(tr.x, tr.y),
-            Point(br.x, br.y),
-            Point(bl.x, bl.y)
+            Point(tlX, tlY),
+            Point(trX, trY),
+            Point(brX, brY),
+            Point(blX, blY)
         )
     }
 

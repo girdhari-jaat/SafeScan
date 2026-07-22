@@ -153,87 +153,12 @@ fun LibraryScreen(
             }
 
             // Search and Sort Controls Row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search by name...") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { searchQuery = "" }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Clear search")
-                            }
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Box {
-                    IconButton(
-                        onClick = { sortMenuExpanded = true },
-                        modifier = Modifier
-                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp))
-                            .size(56.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Sort,
-                            contentDescription = "Sort options",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = sortMenuExpanded,
-                        onDismissRequest = { sortMenuExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Newest First") },
-                            onClick = {
-                                sortOrder = "newest"
-                                sortMenuExpanded = false
-                            },
-                            leadingIcon = {
-                                if (sortOrder == "newest") {
-                                    Icon(Icons.Default.Check, contentDescription = null)
-                                }
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Oldest First") },
-                            onClick = {
-                                sortOrder = "oldest"
-                                sortMenuExpanded = false
-                            },
-                            leadingIcon = {
-                                if (sortOrder == "oldest") {
-                                    Icon(Icons.Default.Check, contentDescription = null)
-                                }
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Alphabetical") },
-                            onClick = {
-                                sortOrder = "alphabetical"
-                                sortMenuExpanded = false
-                            },
-                            leadingIcon = {
-                                if (sortOrder == "alphabetical") {
-                                    Icon(Icons.Default.Check, contentDescription = null)
-                                }
-                            }
-                        )
-                    }
-                }
-            }
+            LibrarySearchAndSortHeader(
+                searchQuery = searchQuery,
+                onSearchQueryChange = { searchQuery = it },
+                sortOrder = sortOrder,
+                onSortOrderChange = { sortOrder = it }
+            )
 
             Box(modifier = Modifier.fillMaxSize()) {
                 if (selectedTab == 0) {
@@ -338,102 +263,229 @@ fun LibraryScreen(
 
         // PDF Deletion Confirmation Dialog
         fileToDelete?.let { file ->
-            AlertDialog(
-                onDismissRequest = { fileToDelete = null },
-                title = { Text(text = "Delete PDF File?") },
-                text = { Text(text = "Are you sure you want to delete '${file.name}'? This action cannot be undone.") },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            try {
-                                if (file.delete()) {
-                                    Toast.makeText(context, "Deleted successfully", Toast.LENGTH_SHORT).show()
-                                    reloadFiles()
-                                } else {
-                                    Toast.makeText(context, "Failed to delete file", Toast.LENGTH_SHORT).show()
-                                }
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                            } finally {
-                                fileToDelete = null
-                            }
+            LibraryDeletePdfDialog(
+                file = file,
+                onConfirm = {
+                    try {
+                        if (file.delete()) {
+                            Toast.makeText(context, "Deleted successfully", Toast.LENGTH_SHORT).show()
+                            reloadFiles()
+                        } else {
+                            Toast.makeText(context, "Failed to delete file", Toast.LENGTH_SHORT).show()
                         }
-                    ) {
-                        Text(text = "Delete", color = Color.Red, fontWeight = FontWeight.Bold)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                    } finally {
+                        fileToDelete = null
                     }
                 },
-                dismissButton = {
-                    TextButton(onClick = { fileToDelete = null }) {
-                        Text(text = "Cancel")
-                    }
-                }
+                onDismiss = { fileToDelete = null }
             )
         }
 
         // Original Document Deletion Confirmation Dialog
         docToDelete?.let { doc ->
-            AlertDialog(
-                onDismissRequest = { docToDelete = null },
-                title = { Text(text = "Delete Original Document?") },
-                text = { Text(text = "Are you sure you want to delete '${doc.title}' along with all original page images? This action cannot be undone.") },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            viewModel.deleteDocument(doc.id)
-                            Toast.makeText(context, "Deleted original document", Toast.LENGTH_SHORT).show()
-                            docToDelete = null
-                        }
-                    ) {
-                        Text(text = "Delete", color = Color.Red, fontWeight = FontWeight.Bold)
-                    }
+            LibraryDeleteDocDialog(
+                doc = doc,
+                onConfirm = {
+                    viewModel.deleteDocument(doc.id)
+                    Toast.makeText(context, "Deleted original document", Toast.LENGTH_SHORT).show()
+                    docToDelete = null
                 },
-                dismissButton = {
-                    TextButton(onClick = { docToDelete = null }) {
-                        Text(text = "Cancel")
-                    }
-                }
+                onDismiss = { docToDelete = null }
             )
         }
 
         // Original Document Rename Dialog
         docToRename?.let { doc ->
-            AlertDialog(
-                onDismissRequest = { docToRename = null },
-                title = { Text(text = "Rename Document") },
-                text = {
-                    Column {
-                        OutlinedTextField(
-                            value = newTitleText,
-                            onValueChange = { newTitleText = it },
-                            label = { Text("Document Title") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+            LibraryRenameDocDialog(
+                titleText = newTitleText,
+                onTitleChange = { newTitleText = it },
+                onConfirm = {
+                    if (newTitleText.isNotBlank()) {
+                        viewModel.renameDocument(doc.id, newTitleText.trim())
+                        Toast.makeText(context, "Document renamed successfully", Toast.LENGTH_SHORT).show()
+                        docToRename = null
+                    } else {
+                        Toast.makeText(context, "Title cannot be empty", Toast.LENGTH_SHORT).show()
                     }
                 },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            if (newTitleText.isNotBlank()) {
-                                viewModel.renameDocument(doc.id, newTitleText.trim())
-                                Toast.makeText(context, "Document renamed successfully", Toast.LENGTH_SHORT).show()
-                                docToRename = null
-                            } else {
-                                Toast.makeText(context, "Title cannot be empty", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    ) {
-                        Text(text = "Rename", fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { docToRename = null }) {
-                        Text(text = "Cancel")
-                    }
-                }
+                onDismiss = { docToRename = null }
             )
         }
     }
+}
+
+@Composable
+fun LibrarySearchAndSortHeader(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    sortOrder: String,
+    onSortOrderChange: (String) -> Unit
+) {
+    var sortMenuExpanded by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onSearchQueryChange,
+            placeholder = { Text("Search by name...") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { onSearchQueryChange("") }) {
+                        Icon(Icons.Default.Clear, contentDescription = "Clear search")
+                    }
+                }
+            },
+            modifier = Modifier.weight(1f),
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp)
+        )
+
+        Box {
+            IconButton(
+                onClick = { sortMenuExpanded = true },
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp))
+                    .size(56.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Sort,
+                    contentDescription = "Sort options",
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+
+            DropdownMenu(
+                expanded = sortMenuExpanded,
+                onDismissRequest = { sortMenuExpanded = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Newest First") },
+                    onClick = {
+                        onSortOrderChange("newest")
+                        sortMenuExpanded = false
+                    },
+                    leadingIcon = {
+                        if (sortOrder == "newest") {
+                            Icon(Icons.Default.Check, contentDescription = null)
+                        }
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Oldest First") },
+                    onClick = {
+                        onSortOrderChange("oldest")
+                        sortMenuExpanded = false
+                    },
+                    leadingIcon = {
+                        if (sortOrder == "oldest") {
+                            Icon(Icons.Default.Check, contentDescription = null)
+                        }
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Alphabetical") },
+                    onClick = {
+                        onSortOrderChange("alphabetical")
+                        sortMenuExpanded = false
+                    },
+                    leadingIcon = {
+                        if (sortOrder == "alphabetical") {
+                            Icon(Icons.Default.Check, contentDescription = null)
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun LibraryDeletePdfDialog(
+    file: File,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = "Delete PDF File?") },
+        text = { Text(text = "Are you sure you want to delete '${file.name}'? This action cannot be undone.") },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(text = "Delete", color = Color.Red, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun LibraryDeleteDocDialog(
+    doc: DocumentMetadata,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = "Delete Original Document?") },
+        text = { Text(text = "Are you sure you want to delete '${doc.title}' along with all original page images? This action cannot be undone.") },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(text = "Delete", color = Color.Red, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun LibraryRenameDocDialog(
+    titleText: String,
+    onTitleChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = "Rename Document") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = titleText,
+                    onValueChange = onTitleChange,
+                    label = { Text("Document Title") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(text = "Rename", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "Cancel")
+            }
+        }
+    )
 }
 
 @Composable

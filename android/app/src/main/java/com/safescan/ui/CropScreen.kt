@@ -104,167 +104,89 @@ fun CropScreen(viewModel: ScannerViewModel) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 3.dp,
-                shadowElevation = 4.dp
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .height(56.dp)
-                        .padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // 1. Cancel
-                    IconButton(
-                        modifier = Modifier.weight(1f),
-                        enabled = !uiState.isAutoRunning,
-                        onClick = { viewModel.closeCrop(save = false) }
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(id = R.string.cancel))
+            CropTopBar(
+                isAutoRunning = uiState.isAutoRunning,
+                hasNext = hasNext,
+                onCancel = { viewModel.closeCrop(save = false) },
+                onFull = {
+                    if (imageSize.width > 0 && imageSize.height > 0) {
+                        tl = Offset(0f, 0f)
+                        tr = Offset(imageSize.width.toFloat(), 0f)
+                        br = Offset(imageSize.width.toFloat(), imageSize.height.toFloat())
+                        bl = Offset(0f, imageSize.height.toFloat())
                     }
-
-                // 2. Full
-                TextButton(
-                    modifier = Modifier.weight(1f),
-                    enabled = !uiState.isAutoRunning,
-                    onClick = {
-                        if (imageSize.width > 0 && imageSize.height > 0) {
-                            tl = Offset(0f, 0f)
-                            tr = Offset(imageSize.width.toFloat(), 0f)
-                            br = Offset(imageSize.width.toFloat(), imageSize.height.toFloat())
-                            bl = Offset(0f, imageSize.height.toFloat())
-                        }
-                    }
-                ) {
-                    Text(stringResource(id = R.string.full), color = MaterialTheme.colorScheme.onPrimaryContainer)
-                }
-
-                // 3a. TF Auto (TFLite Model based detection)
-                TextButton(
-                    modifier = Modifier.weight(1f),
-                    enabled = !uiState.isAutoRunning,
-                    onClick = {
-                        val currentBmp = croppingBitmap
-                        if (imageSize.width > 0 && imageSize.height > 0 && currentBmp != null) {
-                            viewModel.detectEdgesWithTFLite(currentBmp) { points ->
-                                if (points != null && points.size == 4) {
-                                    val scaleX = imageSize.width.toFloat() / currentBmp.width.toFloat()
-                                    val scaleY = imageSize.height.toFloat() / currentBmp.height.toFloat()
-                                    tl = Offset((points[0].x * scaleX).toFloat(), (points[0].y * scaleY).toFloat())
-                                    tr = Offset((points[1].x * scaleX).toFloat(), (points[1].y * scaleY).toFloat())
-                                    br = Offset((points[2].x * scaleX).toFloat(), (points[2].y * scaleY).toFloat())
-                                    bl = Offset((points[3].x * scaleX).toFloat(), (points[3].y * scaleY).toFloat())
-                                } else {
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar(docNotFoundMsg)
-                                    }
+                },
+                onAiDetect = {
+                    val currentBmp = croppingBitmap
+                    if (imageSize.width > 0 && imageSize.height > 0 && currentBmp != null) {
+                        viewModel.detectEdgesWithTFLite(currentBmp) { points ->
+                            if (points != null && points.size == 4) {
+                                val scaleX = imageSize.width.toFloat() / currentBmp.width.toFloat()
+                                val scaleY = imageSize.height.toFloat() / currentBmp.height.toFloat()
+                                tl = Offset((points[0].x * scaleX).toFloat(), (points[0].y * scaleY).toFloat())
+                                tr = Offset((points[1].x * scaleX).toFloat(), (points[1].y * scaleY).toFloat())
+                                br = Offset((points[2].x * scaleX).toFloat(), (points[2].y * scaleY).toFloat())
+                                bl = Offset((points[3].x * scaleX).toFloat(), (points[3].y * scaleY).toFloat())
+                            } else {
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar(docNotFoundMsg)
                                 }
                             }
                         }
                     }
-                ) {
-                    if (uiState.isAutoRunning) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text("AI", color = MaterialTheme.colorScheme.onPrimaryContainer)
-                    }
-                }
-
-                // 3. Auto
-                TextButton(
-                    modifier = Modifier.weight(1f),
-                    enabled = !uiState.isAutoRunning,
-                    onClick = {
-                        val currentBmp = croppingBitmap
-                        if (imageSize.width > 0 && imageSize.height > 0 && currentBmp != null) {
-                            viewModel.detectEdges(currentBmp) { points ->
-                                if (points != null && points.size == 4) {
-                                    val scaleX = imageSize.width.toFloat() / currentBmp.width.toFloat()
-                                    val scaleY = imageSize.height.toFloat() / currentBmp.height.toFloat()
-                                    tl = Offset((points[0].x * scaleX).toFloat(), (points[0].y * scaleY).toFloat())
-                                    tr = Offset((points[1].x * scaleX).toFloat(), (points[1].y * scaleY).toFloat())
-                                    br = Offset((points[2].x * scaleX).toFloat(), (points[2].y * scaleY).toFloat())
-                                    bl = Offset((points[3].x * scaleX).toFloat(), (points[3].y * scaleY).toFloat())
-                                } else {
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar(docNotFoundMsg)
-                                    }
+                },
+                onAutoDetect = {
+                    val currentBmp = croppingBitmap
+                    if (imageSize.width > 0 && imageSize.height > 0 && currentBmp != null) {
+                        viewModel.detectEdges(currentBmp) { points ->
+                            if (points != null && points.size == 4) {
+                                val scaleX = imageSize.width.toFloat() / currentBmp.width.toFloat()
+                                val scaleY = imageSize.height.toFloat() / currentBmp.height.toFloat()
+                                tl = Offset((points[0].x * scaleX).toFloat(), (points[0].y * scaleY).toFloat())
+                                tr = Offset((points[1].x * scaleX).toFloat(), (points[1].y * scaleY).toFloat())
+                                br = Offset((points[2].x * scaleX).toFloat(), (points[2].y * scaleY).toFloat())
+                                bl = Offset((points[3].x * scaleX).toFloat(), (points[3].y * scaleY).toFloat())
+                            } else {
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar(docNotFoundMsg)
                                 }
                             }
                         }
                     }
-                ) {
-                    if (uiState.isAutoRunning) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            strokeWidth = 2.dp
+                },
+                onSave = {
+                    if (imageSize.width > 0 && imageSize.height > 0 && croppingBitmap != null) {
+                        val bmp = croppingBitmap!!
+                        val scaleX = bmp.width.toFloat() / imageSize.width
+                        val scaleY = bmp.height.toFloat() / imageSize.height
+                        
+                        val quad = Quadrilateral(
+                            Point((tl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                            Point((tr.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tr.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                            Point((br.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (br.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                            Point((bl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (bl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0))
                         )
-                    } else {
-                        Text(stringResource(id = R.string.auto), color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        viewModel.applyCrop(quad)
+                    }
+                },
+                onNext = {
+                    if (imageSize.width > 0 && imageSize.height > 0 && croppingBitmap != null) {
+                        val bmp = croppingBitmap!!
+                        val scaleX = bmp.width.toFloat() / imageSize.width
+                        val scaleY = bmp.height.toFloat() / imageSize.height
+                        
+                        val quad = Quadrilateral(
+                            Point((tl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                            Point((tr.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tr.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                            Point((br.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (br.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
+                            Point((bl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (bl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0))
+                        )
+                        viewModel.applyCrop(quad, andNext = true)
                     }
                 }
-
-                // 4. Save
-                IconButton(
-                    modifier = Modifier.weight(1f),
-                    enabled = !uiState.isAutoRunning,
-                    onClick = { 
-                        if (imageSize.width > 0 && imageSize.height > 0 && croppingBitmap != null) {
-                            val bmp = croppingBitmap!!
-                            val scaleX = bmp.width.toFloat() / imageSize.width
-                            val scaleY = bmp.height.toFloat() / imageSize.height
-                            
-                            val quad = Quadrilateral(
-                                Point((tl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
-                                Point((tr.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tr.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
-                                Point((br.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (br.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
-                                Point((bl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (bl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0))
-                            )
-                            viewModel.applyCrop(quad)
-                        }
-                    }
-                ) {
-                    Icon(Icons.Default.Check, stringResource(id = R.string.save))
-                }
-
-                // 5. Next
-                if (hasNext) {
-                    TextButton(
-                        modifier = Modifier.weight(1f),
-                        enabled = !uiState.isAutoRunning,
-                        onClick = {
-                            if (imageSize.width > 0 && imageSize.height > 0 && croppingBitmap != null) {
-                                val bmp = croppingBitmap!!
-                                val scaleX = bmp.width.toFloat() / imageSize.width
-                                val scaleY = bmp.height.toFloat() / imageSize.height
-                                
-                                val quad = Quadrilateral(
-                                    Point((tl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
-                                    Point((tr.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (tr.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
-                                    Point((br.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (br.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0)),
-                                    Point((bl.x * scaleX).toDouble().coerceIn(0.0, bmp.width.toDouble() - 1.0), (bl.y * scaleY).toDouble().coerceIn(0.0, bmp.height.toDouble() - 1.0))
-                                )
-                                viewModel.applyCrop(quad, andNext = true)
-                            }
-                        }
-                    ) {
-                        Text(stringResource(id = R.string.next), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
-                    }
-                } else {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-            }
+            )
         }
-    }
+    )
     ) { padding ->
         Box(
             modifier = Modifier
@@ -610,4 +532,106 @@ fun CornerHandle(
                 }
             }
     )
+}
+
+@Composable
+fun CropTopBar(
+    isAutoRunning: Boolean,
+    hasNext: Boolean,
+    onCancel: () -> Unit,
+    onFull: () -> Unit,
+    onAiDetect: () -> Unit,
+    onAutoDetect: () -> Unit,
+    onSave: () -> Unit,
+    onNext: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 3.dp,
+        shadowElevation = 4.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .height(56.dp)
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 1. Cancel
+            IconButton(
+                modifier = Modifier.weight(1f),
+                enabled = !isAutoRunning,
+                onClick = onCancel
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(id = R.string.cancel))
+            }
+
+            // 2. Full
+            TextButton(
+                modifier = Modifier.weight(1f),
+                enabled = !isAutoRunning,
+                onClick = onFull
+            ) {
+                Text(stringResource(id = R.string.full), color = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+
+            // 3a. TF Auto (TFLite Model based detection)
+            TextButton(
+                modifier = Modifier.weight(1f),
+                enabled = !isAutoRunning,
+                onClick = onAiDetect
+            ) {
+                if (isAutoRunning) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("AI", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+            }
+
+            // 3. Auto
+            TextButton(
+                modifier = Modifier.weight(1f),
+                enabled = !isAutoRunning,
+                onClick = onAutoDetect
+            ) {
+                if (isAutoRunning) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(stringResource(id = R.string.auto), color = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+            }
+
+            // 4. Save
+            IconButton(
+                modifier = Modifier.weight(1f),
+                enabled = !isAutoRunning,
+                onClick = onSave
+            ) {
+                Icon(Icons.Default.Check, stringResource(id = R.string.save))
+            }
+
+            // 5. Next
+            if (hasNext) {
+                TextButton(
+                    modifier = Modifier.weight(1f),
+                    enabled = !isAutoRunning,
+                    onClick = onNext
+                ) {
+                    Text(stringResource(id = R.string.next), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
+                }
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+            }
+        }
+    }
 }

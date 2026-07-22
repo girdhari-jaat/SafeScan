@@ -33,6 +33,9 @@ class LiveEdgeDetectionEngine {
     private var tempApprox: MatOfPoint2f? = null
     private var tempMatOfPoint4: MatOfPoint? = null
     private val tempIntArray8 = IntArray(8)
+    private val tempFloatArray8 = FloatArray(8)
+    private var contourIntBuffer = IntArray(1024)
+    private val reusableCvPoints = Array<org.opencv.core.Point>(4) { org.opencv.core.Point() }
     private var yData: ByteArray? = null
     
     private val reusablePointsArray = Array<Point?>(4) { null }
@@ -262,12 +265,16 @@ class LiveEdgeDetectionEngine {
                                 if (tempContour2f != null && tempApprox != null) {
                                     Imgproc.approxPolyDP(tempContour2f, tempApprox, epsFactor * peri, true)
                                     if (tempApprox!!.total() == 4L) {
-                                        val approxArray = tempApprox!!.toArray()
-                                        if (isConvexPoints(approxArray) && getMaxCosinePoints(approxArray) < 0.4) {
-                                            reusablePointsArray[0] = Point(approxArray[0].x / resizeRatio, approxArray[0].y / resizeRatio)
-                                            reusablePointsArray[1] = Point(approxArray[1].x / resizeRatio, approxArray[1].y / resizeRatio)
-                                            reusablePointsArray[2] = Point(approxArray[2].x / resizeRatio, approxArray[2].y / resizeRatio)
-                                            reusablePointsArray[3] = Point(approxArray[3].x / resizeRatio, approxArray[3].y / resizeRatio)
+                                        tempApprox!!.get(0, 0, tempFloatArray8)
+                                        reusableCvPoints[0].x = tempFloatArray8[0].toDouble(); reusableCvPoints[0].y = tempFloatArray8[1].toDouble()
+                                        reusableCvPoints[1].x = tempFloatArray8[2].toDouble(); reusableCvPoints[1].y = tempFloatArray8[3].toDouble()
+                                        reusableCvPoints[2].x = tempFloatArray8[4].toDouble(); reusableCvPoints[2].y = tempFloatArray8[5].toDouble()
+                                        reusableCvPoints[3].x = tempFloatArray8[6].toDouble(); reusableCvPoints[3].y = tempFloatArray8[7].toDouble()
+                                        if (isConvexPoints(reusableCvPoints) && getMaxCosinePoints(reusableCvPoints) < 0.4) {
+                                            reusablePointsArray[0] = Point(tempFloatArray8[0] / resizeRatio, tempFloatArray8[1] / resizeRatio)
+                                            reusablePointsArray[1] = Point(tempFloatArray8[2] / resizeRatio, tempFloatArray8[3] / resizeRatio)
+                                            reusablePointsArray[2] = Point(tempFloatArray8[4] / resizeRatio, tempFloatArray8[5] / resizeRatio)
+                                            reusablePointsArray[3] = Point(tempFloatArray8[6] / resizeRatio, tempFloatArray8[7] / resizeRatio)
                                             currentCorners = orderPoints(reusablePointsArray)
                                             approxSuccess = true
                                             break
@@ -295,35 +302,46 @@ class LiveEdgeDetectionEngine {
                                 val hullPointsMat = MatOfPoint()
                                 try {
                                     Imgproc.convexHull(contour, hullInts)
-                                    val pts = contour.toArray()
-                                    val indices = hullInts.toArray()
-                                    val hullList = ArrayList<org.opencv.core.Point>()
-                                    for (idx in indices) {
-                                        hullList.add(pts[idx])
-                                    }
-                                    hullPointsMat.fromList(hullList)
-                                    
-                                    val hull32f = MatOfPoint2f()
-                                    val approxHull32f = MatOfPoint2f()
-                                    try {
-                                        hullPointsMat.convertTo(hull32f, CvType.CV_32F)
-                                        val hullPeri = Imgproc.arcLength(hull32f, true)
-                                        for (epsFactor in doubleArrayOf(0.015, 0.02, 0.03, 0.04)) {
-                                            Imgproc.approxPolyDP(hull32f, approxHull32f, epsFactor * hullPeri, true)
-                                            if (approxHull32f.total() == 4L) {
-                                                val approxArray = approxHull32f.toArray()
-                                                reusablePointsArray[0] = Point(approxArray[0].x / resizeRatio, approxArray[0].y / resizeRatio)
-                                                reusablePointsArray[1] = Point(approxArray[1].x / resizeRatio, approxArray[1].y / resizeRatio)
-                                                reusablePointsArray[2] = Point(approxArray[2].x / resizeRatio, approxArray[2].y / resizeRatio)
-                                                reusablePointsArray[3] = Point(approxArray[3].x / resizeRatio, approxArray[3].y / resizeRatio)
-                                                currentCorners = orderPoints(reusablePointsArray)
-                                                approxSuccess = true
-                                                break
-                                            }
+                                    val totalHull = hullInts.total().toInt()
+                                    if (totalHull > 0) {
+                                        val hullIndices = IntArray(totalHull)
+                                        hullInts.get(0, 0, hullIndices)
+                                        
+                                        val totalContour = contour.total().toInt()
+                                        val contourInts = IntArray(totalContour * 2)
+                                        contour.get(0, 0, contourInts)
+                                        
+                                        val hullPtsInts = IntArray(totalHull * 2)
+                                        for (idx in 0 until totalHull) {
+                                            val cIdx = hullIndices[idx]
+                                            hullPtsInts[idx * 2] = contourInts[cIdx * 2]
+                                            hullPtsInts[idx * 2 + 1] = contourInts[cIdx * 2 + 1]
                                         }
-                                    } finally {
-                                        hull32f.release()
-                                        approxHull32f.release()
+                                        hullPointsMat.put(0, 0, hullPtsInts)
+                                        
+                                        val hull32f = MatOfPoint2f()
+                                        val approxHull32f = MatOfPoint2f()
+                                        try {
+                                            hullPointsMat.convertTo(hull32f, CvType.CV_32F)
+                                            val hullPeri = Imgproc.arcLength(hull32f, true)
+                                            for (epsFactor in doubleArrayOf(0.015, 0.02, 0.03, 0.04)) {
+                                                Imgproc.approxPolyDP(hull32f, approxHull32f, epsFactor * hullPeri, true)
+                                                if (approxHull32f.total() == 4L) {
+                                                    val floatBuff = FloatArray(8)
+                                                    approxHull32f.get(0, 0, floatBuff)
+                                                    reusablePointsArray[0] = Point(floatBuff[0].toDouble() / resizeRatio, floatBuff[1].toDouble() / resizeRatio)
+                                                    reusablePointsArray[1] = Point(floatBuff[2].toDouble() / resizeRatio, floatBuff[3].toDouble() / resizeRatio)
+                                                    reusablePointsArray[2] = Point(floatBuff[4].toDouble() / resizeRatio, floatBuff[5].toDouble() / resizeRatio)
+                                                    reusablePointsArray[3] = Point(floatBuff[6].toDouble() / resizeRatio, floatBuff[7].toDouble() / resizeRatio)
+                                                    currentCorners = orderPoints(reusablePointsArray)
+                                                    approxSuccess = true
+                                                    break
+                                                }
+                                            }
+                                        } finally {
+                                            hull32f.release()
+                                            approxHull32f.release()
+                                        }
                                     }
                                 } catch (hullEx: Throwable) {
                                     Log.e("LiveEdgeDetectionEngine", "Hull fallback computation failed", hullEx)
@@ -440,32 +458,42 @@ class LiveEdgeDetectionEngine {
     }
 
     private fun getExtremePointsArray(contour: MatOfPoint): Array<org.opencv.core.Point>? {
-        val pts = contour.toArray()
-        if (pts.isEmpty()) return null
+        val total = contour.total().toInt()
+        if (total == 0) return null
+        val requiredSize = total * 2
+        if (contourIntBuffer.size < requiredSize) {
+            contourIntBuffer = IntArray(requiredSize)
+        }
+        contour.get(0, 0, contourIntBuffer)
 
         var minSum = Double.MAX_VALUE
         var maxSum = -Double.MAX_VALUE
         var minDiff = Double.MAX_VALUE
         var maxDiff = -Double.MAX_VALUE
 
-        var tl: org.opencv.core.Point? = null
-        var br: org.opencv.core.Point? = null
-        var tr: org.opencv.core.Point? = null
-        var bl: org.opencv.core.Point? = null
+        var tlX = 0.0; var tlY = 0.0
+        var trX = 0.0; var trY = 0.0
+        var brX = 0.0; var brY = 0.0
+        var blX = 0.0; var blY = 0.0
 
-        for (pt in pts) {
-            val sum = pt.x + pt.y
-            val diff = pt.y - pt.x
+        for (i in 0 until requiredSize step 2) {
+            val px = contourIntBuffer[i].toDouble()
+            val py = contourIntBuffer[i + 1].toDouble()
+            val sum = px + py
+            val diff = py - px
 
-            if (sum < minSum) { minSum = sum; tl = pt }
-            if (sum > maxSum) { maxSum = sum; br = pt }
-            if (diff < minDiff) { minDiff = diff; tr = pt }
-            if (diff > maxDiff) { maxDiff = diff; bl = pt }
+            if (sum < minSum) { minSum = sum; tlX = px; tlY = py }
+            if (sum > maxSum) { maxSum = sum; brX = px; brY = py }
+            if (diff < minDiff) { minDiff = diff; trX = px; trY = py }
+            if (diff > maxDiff) { maxDiff = diff; blX = px; blY = py }
         }
 
-        if (tl == null || tr == null || br == null || bl == null) return null
+        reusableCvPoints[0].x = tlX; reusableCvPoints[0].y = tlY
+        reusableCvPoints[1].x = trX; reusableCvPoints[1].y = trY
+        reusableCvPoints[2].x = brX; reusableCvPoints[2].y = brY
+        reusableCvPoints[3].x = blX; reusableCvPoints[3].y = blY
 
-        return arrayOf(tl, tr, br, bl)
+        return reusableCvPoints
     }
 
     private fun isConvexPoints(points: Array<org.opencv.core.Point>): Boolean {
