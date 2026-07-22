@@ -247,7 +247,7 @@ class EdgeDetectionEngine {
         imageMat: Mat,
         sw: Int,
         sh: Int,
-        est: RansacHelper.ForecastPct?,
+        est: ForecastPct?,
         isCardMode: Boolean,
         isManualCrop: Boolean
     ): List<Point>? {
