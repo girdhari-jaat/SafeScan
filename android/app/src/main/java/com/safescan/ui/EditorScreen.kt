@@ -40,28 +40,38 @@ import com.safescan.scanner.ScannerViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 
+// ======================================================
+// Editor Screen Main Entry Point
+// ======================================================
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(viewModel: ScannerViewModel) {
+    val context = LocalContext.current
+
+    // ------------------------------------------------------
+    // ViewModel State Collection
+    // ------------------------------------------------------
     val editorState by viewModel.editorState.collectAsState()
     val editingBitmap by viewModel.editingBitmapPreview.collectAsState()
     val recognizedText by viewModel.recognizedText.collectAsState()
     val isOcrRunning by viewModel.isOcrRunning.collectAsState()
-    val context = LocalContext.current
 
-    // State for controlling panels
-    var activePanel by remember { mutableStateOf<String?>("filters") } // "filters", "adjustments", null
-    var showExportPopover by remember { mutableStateOf(false) }
-    var showSettingsDialog by remember { mutableStateOf(false) }
-    var exportFolderSelected by remember { mutableStateOf("Internal Storage / Documents / SafeScan") }
-
-    // Settings State
+    // PDF Configuration States
     val currentMode by viewModel.currentMode.collectAsState()
     val pageSize by viewModel.pageSize.collectAsState()
     val pdfFilename by viewModel.pdfFilename.collectAsState()
     val pdfOrientation by viewModel.pdfOrientation.collectAsState()
     val jpegQuality by viewModel.jpegQuality.collectAsState()
     val autoPdf by viewModel.autoPdf.collectAsState()
+
+    // ------------------------------------------------------
+    // Local UI States & Panel Controls
+    // ------------------------------------------------------
+    var activePanel by remember { mutableStateOf<String?>("filters") } // "filters", "adjustments", null
+    var showExportPopover by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
+    var exportFolderSelected by remember { mutableStateOf("Internal Storage / Documents / SafeScan") }
 
     Scaffold(
         topBar = {
@@ -85,7 +95,10 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                 .background(MaterialTheme.colorScheme.surface)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // Image Canvas
+
+                // ======================================================
+                // Canvas & Preview
+                // ======================================================
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -100,12 +113,15 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                             modifier = Modifier.fillMaxSize()
                         )
 
-                        // Info Overlay
+                        // Image Resolution Overlay Badge
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomStart)
                                 .padding(16.dp)
-                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f), RoundedCornerShape(8.dp))
+                                .background(
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Text(
@@ -117,7 +133,9 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                     }
                 }
 
-                // Sub-panels
+                // ======================================================
+                // Filters & Adjustments Sub-Panels
+                // ======================================================
                 AnimatedVisibility(
                     visible = activePanel != null,
                     enter = slideInVertically { it } + fadeIn(),
@@ -126,20 +144,29 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                     EditorEnhancementPanel(
                         activePanel = activePanel,
                         editorState = editorState,
-                        onFilterSelected = { filter -> viewModel.updateEditorState(editorState.copy(filter = filter)) },
-                        onEditorStateUpdate = { newState -> viewModel.updateEditorState(newState) }
+                        onFilterSelected = { filter ->
+                            viewModel.updateEditorState(editorState.copy(filter = filter))
+                        },
+                        onEditorStateUpdate = { newState ->
+                            viewModel.updateEditorState(newState)
+                        }
                     )
                 }
 
-                // Bottom toolbar matching OSS design and capabilities
+                // ======================================================
+                // Bottom Action Bar Toolbar
+                // ======================================================
                 EditorBottomToolbar(
                     activePanel = activePanel,
                     onCropClick = {
                         val slotId = viewModel.editingSlotId.value
                         val jpgIndex = viewModel.editingJpgIndex.value
                         viewModel.closeEditor(save = true)
-                        if (slotId != null) viewModel.openCrop(slotId)
-                        else if (jpgIndex != null) viewModel.openCropForJpg(jpgIndex)
+                        if (slotId != null) {
+                            viewModel.openCrop(slotId)
+                        } else if (jpgIndex != null) {
+                            viewModel.openCropForJpg(jpgIndex)
+                        }
                     },
                     onRotateLeftClick = { viewModel.rotateEditingBitmap(-90f) },
                     onRotateRightClick = { viewModel.rotateEditingBitmap(90f) },
@@ -149,7 +176,9 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                 )
             }
 
-            // Floating Custom Popover Card
+            // ======================================================
+            // Floating Export Popover Card
+            // ======================================================
             AnimatedVisibility(
                 visible = showExportPopover,
                 enter = fadeIn() + slideInVertically { -20 },
@@ -200,7 +229,9 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                                         putExtra(android.content.Intent.EXTRA_STREAM, uri)
                                         addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                     }
-                                    context.startActivity(android.content.Intent.createChooser(intent, "Share Document PDF"))
+                                    context.startActivity(
+                                        android.content.Intent.createChooser(intent, "Share Document PDF")
+                                    )
                                 } catch (e: Exception) {
                                     Toast.makeText(context, "Error sharing file", Toast.LENGTH_SHORT).show()
                                 }
@@ -272,7 +303,11 @@ fun EditorScreen(viewModel: ScannerViewModel) {
         }
     }
 
-    // Modal Dialog for PDF Settings
+    // ======================================================
+    // Dialogs
+    // ======================================================
+
+    // PDF Export Settings Dialog
     if (showSettingsDialog) {
         EditorPdfSettingsDialog(
             pdfFilename = pdfFilename,
@@ -287,7 +322,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
         )
     }
 
-    // Recognized OCR Text Dialog
+    // OCR Text Result Dialog
     recognizedText?.let { text ->
         EditorOcrResultDialog(
             text = text,
@@ -295,6 +330,10 @@ fun EditorScreen(viewModel: ScannerViewModel) {
         )
     }
 }
+
+// ======================================================
+// Top Bar Component
+// ======================================================
 
 @Composable
 fun EditorTopBar(
@@ -370,6 +409,10 @@ fun EditorTopBar(
     }
 }
 
+// ======================================================
+// Enhancement Panel (Filters & Adjustments)
+// ======================================================
+
 @Composable
 fun EditorEnhancementPanel(
     activePanel: String?,
@@ -384,6 +427,10 @@ fun EditorEnhancementPanel(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             if (activePanel == "filters") {
+
+                // ------------------------------------------------------
+                // Filters Section
+                // ------------------------------------------------------
                 Text(
                     text = "Enhancement Filters",
                     style = MaterialTheme.typography.titleSmall,
@@ -403,6 +450,10 @@ fun EditorEnhancementPanel(
                     }
                 }
             } else if (activePanel == "adjustments") {
+
+                // ------------------------------------------------------
+                // Brightness & Contrast Adjustments Section
+                // ------------------------------------------------------
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -438,6 +489,7 @@ fun EditorEnhancementPanel(
                             Text("Reset", style = MaterialTheme.typography.labelMedium)
                         }
                     }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -478,6 +530,10 @@ fun EditorEnhancementPanel(
         }
     }
 }
+
+// ======================================================
+// Bottom Action Bar Component
+// ======================================================
 
 @Composable
 fun EditorBottomToolbar(
@@ -535,6 +591,10 @@ fun EditorBottomToolbar(
         }
     }
 }
+
+// ======================================================
+// Export Popover Card & Items
+// ======================================================
 
 @Composable
 fun EditorExportPopoverCard(
@@ -631,6 +691,39 @@ fun EditorExportPopoverCard(
         }
     }
 }
+
+@Composable
+fun PopoverMenuItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    onClick: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(
+            text = text,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+// ======================================================
+// Dialogs (PDF Settings & OCR Result)
+// ======================================================
 
 @Composable
 fun EditorPdfSettingsDialog(
@@ -782,6 +875,10 @@ fun EditorOcrResultDialog(
     )
 }
 
+// ======================================================
+// Helper UI Item Composables
+// ======================================================
+
 @Composable
 fun BottomToolbarItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -806,35 +903,6 @@ fun BottomToolbarItem(
             text = label,
             fontSize = 11.sp,
             color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-fun PopoverMenuItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    text: String,
-    onClick: () -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Text(
-            text = text,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -888,7 +956,11 @@ fun AdjustmentSlider(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(text = label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
             Text(
                 text = String.format("%.1f", value),
                 style = MaterialTheme.typography.bodyMedium,

@@ -35,11 +35,12 @@ class ScannerViewModel @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val scannerEngine: DocumentScannerEngine,
     val settingsRepository: SettingsRepository,
-    private val edgeDetectionEngine: com.safescan.scanner.EdgeDetectionEngine,
-    private val tfLiteEdgeDetectionEngine: com.safescan.scanner.TFLiteEdgeDetectionEngine,
-    private val pdfExporter: com.safescan.domain.PdfExporter,
-    private val documentRepository: com.safescan.data.DocumentRepository,
-    val documentScanner: DocumentScanner
+    val documentScanner: DocumentScanner,
+    private val detectEdgesUseCase: com.safescan.domain.usecase.DetectEdgesUseCase,
+    private val applyFilterUseCase: com.safescan.domain.usecase.ApplyFilterUseCase,
+    private val exportPdfUseCase: com.safescan.domain.usecase.ExportPdfUseCase,
+    private val manageSlotsUseCase: com.safescan.domain.usecase.ManageSlotsUseCase,
+    private val saveDocumentUseCase: com.safescan.domain.usecase.SaveDocumentUseCase
 ) : ViewModel() {
 
     // IMPROVEMENT: Using ScannerUiState with isAutoRunning
@@ -350,7 +351,7 @@ class ScannerViewModel @Inject constructor(
 
     fun reloadSavedDocuments() {
         viewModelScope.launch(Dispatchers.IO) {
-            val docs = documentRepository.getDocuments()
+            val docs = saveDocumentUseCase.getDocuments()
             withContext(Dispatchers.Main) {
                 savedDocuments.value = docs
             }
@@ -470,7 +471,7 @@ class ScannerViewModel @Inject constructor(
             var points: List<Point>? = null
             try {
                 if (!bitmap.isRecycled) {
-                    points = edgeDetectionEngine.detectEdges(bitmap, currentMode.value, isManualCrop = true)
+                    points = detectEdgesUseCase.detectWithOpenCV(bitmap, currentMode.value, isManualCrop = true)
                     Log.d("ScannerViewModel", "detectEdges: Successfully detected corners using OpenCV")
                 }
             } catch (e: Throwable) {
@@ -501,7 +502,7 @@ class ScannerViewModel @Inject constructor(
             var points: List<Point>? = null
             try {
                 if (!bitmap.isRecycled) {
-                    points = tfLiteEdgeDetectionEngine.detectEdges(bitmap)
+                    points = detectEdgesUseCase.detectWithTFLite(bitmap)
                     Log.d("ScannerViewModel", "detectEdgesWithTFLite: Successfully detected corners using TFLite")
                 }
             } catch (e: Throwable) {
@@ -922,7 +923,7 @@ class ScannerViewModel @Inject constructor(
                 }
                 
                 if (pagesData.isNotEmpty()) {
-                    documentRepository.saveDocument(docId, title, currentMode.value.name, pagesData)
+                    saveDocumentUseCase.saveDocument(docId, title, currentMode.value.name, pagesData)
                     reloadSavedDocuments()
                 }
                 
@@ -1237,7 +1238,7 @@ class ScannerViewModel @Inject constructor(
                     
                     // Sync to persistent library JSON if we are editing a saved document
                     openedDocumentId?.let { docId ->
-                        documentRepository.updatePageEdits(
+                        saveDocumentUseCase.updatePageEdits(
                             docId = docId,
                             pageId = slotId,
                             filter = "original",
@@ -1340,7 +1341,7 @@ class ScannerViewModel @Inject constructor(
                 // Sync to persistent library JSON if we are editing a saved document
                 openedDocumentId?.let { docId ->
                     val currentState = editorState.value
-                    documentRepository.updatePageEdits(
+                    saveDocumentUseCase.updatePageEdits(
                         docId = docId,
                         pageId = slotId,
                         filter = currentState.filter.name,
@@ -1509,15 +1510,15 @@ class ScannerViewModel @Inject constructor(
                 }
                 
                 if (pagesData.isNotEmpty()) {
-                    documentRepository.saveDocument(docId, title, currentMode.value.name, pagesData)
+                    saveDocumentUseCase.saveDocument(docId, title, currentMode.value.name, pagesData)
                     DiagnosticsLogger.info("Saved document meta of ${pagesData.size} pages securely offline.")
                     reloadSavedDocuments()
                 } else {
-                    documentRepository.deleteDocument(docId)
+                    saveDocumentUseCase.deleteDocument(docId)
                     reloadSavedDocuments()
                 }
 
-                // IMPROVEMENT: Using injected pdfExporter to keep a clean Singleton architecture
+                // IMPROVEMENT: Using injected exportPdfUseCase to keep a clean architecture
                 if (autoPdf.value) {
                     val slotsToExport = if (capturedJpgFiles.isNotEmpty()) {
                         capturedJpgFiles.mapIndexed { idx, file ->
@@ -1535,7 +1536,7 @@ class ScannerViewModel @Inject constructor(
                         }
                     }
                     DiagnosticsLogger.info("Exporting document to PDF at ${pageSize.value} layout off-thread...")
-                    val result = pdfExporter.exportCardsToPdf(
+                    val result = exportPdfUseCase.exportCardsToPdf(
                         slotsToExport,
                         title,
                         currentMode.value,
@@ -1619,7 +1620,7 @@ class ScannerViewModel @Inject constructor(
                 }
                 
                 if (pagesData.isNotEmpty()) {
-                    documentRepository.saveDocument(docId, title, currentMode.value.name, pagesData)
+                    saveDocumentUseCase.saveDocument(docId, title, currentMode.value.name, pagesData)
                     DiagnosticsLogger.info("Saved document meta of ${pagesData.size} pages securely offline.")
                     reloadSavedDocuments()
                     withContext(Dispatchers.Main) {
@@ -1627,7 +1628,7 @@ class ScannerViewModel @Inject constructor(
                         onResult(true)
                     }
                 } else {
-                    documentRepository.deleteDocument(docId)
+                    saveDocumentUseCase.deleteDocument(docId)
                     reloadSavedDocuments()
                     withContext(Dispatchers.Main) {
                         endSession()
@@ -1664,8 +1665,8 @@ class ScannerViewModel @Inject constructor(
         jpgCorners.clear()
         viewModelScope.launch(Dispatchers.IO) {
             val loadedSlots = doc.pages.map { page ->
-                val originalBmp = documentRepository.loadOriginalBitmap(doc.id, page.id)
-                val previewBmp = documentRepository.loadPreviewBitmap(doc.id, page.id) ?: originalBmp
+                val originalBmp = saveDocumentUseCase.loadOriginalBitmap(doc.id, page.id)
+                val previewBmp = saveDocumentUseCase.loadPreviewBitmap(doc.id, page.id) ?: originalBmp
                 
                 var originalPath: String? = null
                 var processedPath: String? = null
@@ -1708,14 +1709,14 @@ class ScannerViewModel @Inject constructor(
 
     fun deleteDocument(docId: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            documentRepository.deleteDocument(docId)
+            saveDocumentUseCase.deleteDocument(docId)
             reloadSavedDocuments()
         }
     }
 
     fun renameDocument(docId: String, newTitle: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            documentRepository.renameDocument(docId, newTitle)
+            saveDocumentUseCase.renameDocument(docId, newTitle)
             reloadSavedDocuments()
             if (openedDocumentId == docId) {
                 initialDocumentTitle = newTitle
@@ -1748,7 +1749,7 @@ class ScannerViewModel @Inject constructor(
         
         // Save the raw captured JPG immediately to Scans folder if saveJpg is ON
         if (saveJpg.value) {
-            val savedFile = documentRepository.saveJpgToScans(bitmap, jpegQuality.value.toInt())
+            val savedFile = saveDocumentUseCase.saveJpgToScans(bitmap, jpegQuality.value.toInt())
             if (savedFile != null) {
                 // Keep capturedJpgFiles empty so the app's document compilation & grid always use the unified slots pipeline,
                 // preventing duplicate pages, index-shifting, and ensuring edits/crops/filters are perfectly compiled and shared.
