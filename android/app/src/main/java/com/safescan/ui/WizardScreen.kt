@@ -330,7 +330,7 @@ fun WizardScreen(
                     selected = autoCapture,
                     modifier = Modifier.weight(1f),
                     onClick = {
-                        viewModel.toggleAutoCapture()
+                        viewModel.toggleAutoCapture(!autoCapture)
                     }
                 )
                 WizardSelectionButton(

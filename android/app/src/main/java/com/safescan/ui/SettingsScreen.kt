@@ -111,7 +111,7 @@ fun SettingsScreen(
                                 title = "Auto Capture",
                                 description = "Automatically capture document when stable",
                                 checked = autoCapture,
-                                onCheckedChange = { viewModel.toggleAutoCapture() }
+                                onCheckedChange = { viewModel.toggleAutoCapture(it) }
                             )
                             
                             val liveDetect by viewModel.liveDetect.collectAsState()

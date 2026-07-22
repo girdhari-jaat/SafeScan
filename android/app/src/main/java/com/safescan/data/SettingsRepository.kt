@@ -67,12 +67,10 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     val autoCaptureFlow: Flow<Boolean> = safeData
         .map { it[PreferencesKeys.AUTO_CAPTURE] ?: false }
 
-    suspend fun toggleAutoCapture() {
+    suspend fun setAutoCapture(enabled: Boolean) {
         context.dataStore.edit { preferences ->
-            val current = preferences[PreferencesKeys.AUTO_CAPTURE] ?: false
-            val newState = !current
-            preferences[PreferencesKeys.AUTO_CAPTURE] = newState
-            if (newState) {
+            preferences[PreferencesKeys.AUTO_CAPTURE] = enabled
+            if (enabled) {
                 preferences[PreferencesKeys.LIVE_DETECT] = true
             } else {
                 preferences[PreferencesKeys.LIVE_DETECT] = false

@@ -787,7 +787,7 @@ fun ScannerSettingsPopover(
                         icon = Icons.Default.CameraAlt,
                         label = "Auto Capture",
                         checked = autoCapture,
-                        onCheckedChange = { viewModel.toggleAutoCapture() }
+                        onCheckedChange = { viewModel.toggleAutoCapture(it) }
                     )
                     PopoverToggleRow(
                         icon = Icons.Default.AutoFixHigh,

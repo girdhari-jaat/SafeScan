@@ -57,9 +57,10 @@ class ScannerViewModel @Inject constructor(
     val autoCapture: StateFlow<Boolean> = settingsRepository.autoCaptureFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    fun toggleAutoCapture() {
+    fun toggleAutoCapture(enabled: Boolean) {
         viewModelScope.launch {
-            settingsRepository.toggleAutoCapture()
+            settingsRepository.setAutoCapture(enabled)
+            DiagnosticsLogger.info("Auto Capture toggled: $enabled")
         }
     }
 
