@@ -4,7 +4,7 @@ import android.graphics.Bitmap
 import com.safescan.data.ScannerMode
 import com.safescan.scanner.EdgeDetectionEngine
 import com.safescan.scanner.TFLiteEdgeDetectionEngine
-import org.opencv.core.Point
+import com.safescan.domain.model.Point
 import javax.inject.Inject
 import javax.inject.Singleton
 

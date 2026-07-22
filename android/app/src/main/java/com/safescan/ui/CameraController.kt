@@ -343,8 +343,6 @@ class CameraController(
 
     fun destroy() {
         unbindAll()
-        if (::cameraExecutor.isInitialized) {
-            cameraExecutor.shutdown()
-        }
+        cameraExecutor.shutdown()
     }
 }

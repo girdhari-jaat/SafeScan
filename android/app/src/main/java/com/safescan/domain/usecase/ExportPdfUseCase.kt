@@ -1,7 +1,6 @@
 package com.safescan.domain.usecase
 
 import android.content.Context
-import com.safescan.data.DocumentPage
 import com.safescan.data.ScannerMode
 import com.safescan.data.Slot
 import com.safescan.domain.PdfExporter
@@ -14,15 +13,6 @@ import javax.inject.Singleton
 class ExportPdfUseCase @Inject constructor(
     private val pdfExporter: PdfExporter
 ) {
-    suspend fun execute(
-        context: Context,
-        pages: List<DocumentPage>,
-        pageConfig: PageConfig,
-        outputFile: File
-    ) {
-        pdfExporter.exportToPdf(context, pages, pageConfig, outputFile)
-    }
-
     suspend fun exportCardsToPdf(
         slots: List<Slot>,
         filename: String,

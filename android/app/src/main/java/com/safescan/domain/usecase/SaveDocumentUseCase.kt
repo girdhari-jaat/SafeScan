@@ -2,8 +2,8 @@ package com.safescan.domain.usecase
 
 import android.graphics.Bitmap
 import com.safescan.data.DocumentMetadata
-import com.safescan.data.DocumentPage
 import com.safescan.data.DocumentRepository
+import com.safescan.data.PageSaveData
 import com.safescan.domain.model.Point
 import java.io.File
 import javax.inject.Inject
@@ -17,8 +17,8 @@ class SaveDocumentUseCase @Inject constructor(
         docId: String,
         title: String,
         mode: String,
-        pages: List<Pair<Bitmap, Bitmap>>
-    ): DocumentMetadata? {
+        pages: List<PageSaveData>
+    ): Boolean {
         return documentRepository.saveDocument(docId, title, mode, pages)
     }
 

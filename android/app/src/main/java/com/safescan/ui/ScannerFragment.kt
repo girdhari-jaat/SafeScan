@@ -61,7 +61,7 @@ import java.util.concurrent.TimeUnit
 class ScannerFragment : Fragment() {
 
     private var _binding: FragmentScannerBinding? = null
-    val binding get() = _binding
+    val binding get() = _binding!!
 
     val viewModel: ScannerViewModel by viewModels()
     val liveEdgeDetectionEngine by lazy { com.safescan.scanner.LiveEdgeDetectionEngine() }
@@ -957,13 +957,6 @@ class ScannerFragment : Fragment() {
             liveEdgeDetectionEngine.release()
         } catch (e: Exception) {
             Log.e("ScannerFragment", "Failed to release liveEdgeDetectionEngine", e)
-        }
-        if (::cameraExecutor.isInitialized) {
-            try {
-                cameraExecutor.shutdown()
-            } catch (e: Exception) {
-                Log.e("ScannerFragment", "Failed to shutdown cameraExecutor", e)
-            }
         }
         _binding = null
         shutterSound?.release()
