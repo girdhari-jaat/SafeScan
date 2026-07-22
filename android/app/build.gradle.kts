@@ -35,6 +35,7 @@ android {
     androidResources {
         // Keep only English and Urdu resources to significantly reduce app size
         localeFilters += listOf("en", "ur")
+        noCompress += listOf("tflite", "pdf", "db")
     }
 
     signingConfigs {
@@ -96,7 +97,6 @@ android {
             excludes.add("lib/x86_64/**")
         }
         resources {
-            noCompress.addAll(listOf("tflite", "pdf", "db"))
             excludes.add("META-INF/*.kotlin_module")
             excludes.add("META-INF/LICENSE*")
             excludes.add("META-INF/NOTICE*")
