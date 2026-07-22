@@ -693,8 +693,12 @@ class ScannerViewModel @Inject constructor(
         }
     }
     
+    private var jpegQualityJob: kotlinx.coroutines.Job? = null
+
     fun setJpegQuality(value: Float) {
-        viewModelScope.launch {
+        jpegQualityJob?.cancel()
+        jpegQualityJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(150)
             settingsRepository.setJpegQuality(value)
             DiagnosticsLogger.info("Export JPEG Quality set to: ${value.toInt()}%")
         }
@@ -1723,7 +1727,16 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    private var lastCaptureTimestampMs = 0L
+
     fun onCapture(bitmap: Bitmap, isNativeScanned: Boolean = false, forceSkipEditor: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (now - lastCaptureTimestampMs < 500L && !forceSkipEditor) {
+            DiagnosticsLogger.info("[Capture] Ignored duplicate capture request within ${now - lastCaptureTimestampMs}ms")
+            return
+        }
+        lastCaptureTimestampMs = now
+
         _uiState.update { it.copy(isLoading = true, error = null) }
         
         // Save the raw captured JPG immediately to Scans folder if saveJpg is ON

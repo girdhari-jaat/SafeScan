@@ -45,7 +45,8 @@ class LiveEdgeDetectionEngine {
     private var kernel7: Mat? = null
 
     private fun initMatsIfNeeded(width: Int, height: Int) {
-        if (src == null || lastWidth != width || lastHeight != height) {
+        if (src == null || lastWidth != width || lastHeight != height || isReleased) {
+            isReleased = false
             src?.release()
             resized?.release()
             gray?.release()
@@ -128,13 +129,17 @@ class LiveEdgeDetectionEngine {
         mode: com.safescan.data.ScannerMode? = null,
         onResult: (List<Point>?, Double) -> Unit
     ) {
-        if (isReleased || !processLock.tryLock()) {
+        if (!processLock.tryLock()) {
             imageProxy.close()
             return
         }
         try {
+            if (isReleased) {
+                isReleased = false
+            }
             ScannerDebugLogger.logEnter("LiveEdgeDetectionEngine.process")
             initMatsIfNeeded(imageProxy.width, imageProxy.height)
+            Log.d("LiveEdgeDetection", "Processing frame: ${imageProxy.width}x${imageProxy.height}, engine=$engineType, mode=$mode")
             var bitmap: android.graphics.Bitmap? = null
             val contours = ArrayList<MatOfPoint>()
             var actualGray: Mat? = null
@@ -357,6 +362,7 @@ class LiveEdgeDetectionEngine {
                 }
                 
                 if (foundCorners != null) {
+                    Log.d("LiveEdgeDetection", "Found 4 document corners: $foundCorners, sharpness=$sharpness")
                     framesWithoutDetection = 0
                     if (previousCorners != null) {
                         val maxDistance = foundCorners!!.mapIndexed { index, p ->

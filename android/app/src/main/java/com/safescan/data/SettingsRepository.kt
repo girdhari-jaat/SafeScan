@@ -110,6 +110,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
 
     val jpegQualityFlow: Flow<Float> = safeData
         .map { preferences -> preferences[PreferencesKeys.JPEG_QUALITY] ?: 80f }
+        .distinctUntilChanged()
 
     val pdfFilenameFlow: Flow<String> = safeData
         .map { preferences -> preferences[PreferencesKeys.PDF_FILENAME] ?: "Doc+Date+Time" }
