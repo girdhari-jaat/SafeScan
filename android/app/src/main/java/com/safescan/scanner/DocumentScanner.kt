@@ -59,19 +59,21 @@ class DocumentScanner(
             src = Mat()
             Utils.bitmapToMat(bitmap, src)
 
-            ptsSrc = MatOfPoint2f(
-                org.opencv.core.Point(tl.x, tl.y),
-                org.opencv.core.Point(tr.x, tr.y),
-                org.opencv.core.Point(br.x, br.y),
-                org.opencv.core.Point(bl.x, bl.y)
-            )
+            ptsSrc = MatOfPoint2f()
+            ptsSrc.put(0, 0, floatArrayOf(
+                tl.x.toFloat(), tl.y.toFloat(),
+                tr.x.toFloat(), tr.y.toFloat(),
+                br.x.toFloat(), br.y.toFloat(),
+                bl.x.toFloat(), bl.y.toFloat()
+            ))
 
-            ptsDst = MatOfPoint2f(
-                org.opencv.core.Point(0.0, 0.0),
-                org.opencv.core.Point(maxWidth.toDouble() - 1.0, 0.0),
-                org.opencv.core.Point(maxWidth.toDouble() - 1.0, maxHeight.toDouble() - 1.0),
-                org.opencv.core.Point(0.0, maxHeight.toDouble() - 1.0)
-            )
+            ptsDst = MatOfPoint2f()
+            ptsDst.put(0, 0, floatArrayOf(
+                0f, 0f,
+                maxWidth.toFloat() - 1f, 0f,
+                maxWidth.toFloat() - 1f, maxHeight.toFloat() - 1f,
+                0f, maxHeight.toFloat() - 1f
+            ))
 
             perspectiveTransform = Imgproc.getPerspectiveTransform(ptsSrc, ptsDst)
             outMat = Mat()

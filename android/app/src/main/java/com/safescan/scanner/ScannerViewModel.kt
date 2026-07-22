@@ -372,10 +372,10 @@ class ScannerViewModel @Inject constructor(
         // Use mutable points variable for smoothing
         var processedPoints = points
 
-        isDocumentDetected.value = (processedPoints != null && processedPoints.size == 4)
-        if (!autoCapture.value || processedPoints == null || processedPoints.size != 4) {
+        if (processedPoints == null || processedPoints.size != 4) {
             stableFrameCount = 0
             lastQuadPoints = null
+            isDocumentDetected.value = false
             return
         }
 
@@ -408,7 +408,14 @@ class ScannerViewModel @Inject constructor(
         }
         lastQuadPoints = processedPoints
 
+        // Green box & document detected state requires at least 2 stable counts
+        isDocumentDetected.value = (stableFrameCount >= 2)
+
         ScannerDebugLogger.logStability(stableFrameCount)
+
+        if (!autoCapture.value) {
+            return
+        }
 
         val isSharp = sharpness > 10.0 || sharpness == 0.0
         val trigger = stableFrameCount >= threshold && isSharp
@@ -417,6 +424,7 @@ class ScannerViewModel @Inject constructor(
         if (trigger) {
             stableFrameCount = 0
             lastQuadPoints = null
+            isDocumentDetected.value = false
             triggerAutoCapture()
         }
     }

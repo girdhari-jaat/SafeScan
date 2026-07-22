@@ -85,19 +85,21 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
                     srcMat = Mat()
                     Utils.bitmapToMat(bitmap, srcMat)
                     
-                    srcMatOfPoint2f = MatOfPoint2f(
-                        org.opencv.core.Point(tl.x, tl.y),
-                        org.opencv.core.Point(tr.x, tr.y),
-                        org.opencv.core.Point(br.x, br.y),
-                        org.opencv.core.Point(bl.x, bl.y)
-                    )
+                    srcMatOfPoint2f = MatOfPoint2f()
+                    srcMatOfPoint2f.put(0, 0, floatArrayOf(
+                        tl.x.toFloat(), tl.y.toFloat(),
+                        tr.x.toFloat(), tr.y.toFloat(),
+                        br.x.toFloat(), br.y.toFloat(),
+                        bl.x.toFloat(), bl.y.toFloat()
+                    ))
 
-                    dstMatOfPoint2f = MatOfPoint2f(
-                        org.opencv.core.Point(0.0, 0.0),
-                        org.opencv.core.Point(maxWidth.toDouble() - 1, 0.0),
-                        org.opencv.core.Point(maxWidth.toDouble() - 1, maxHeight.toDouble() - 1),
-                        org.opencv.core.Point(0.0, maxHeight.toDouble() - 1)
-                    )
+                    dstMatOfPoint2f = MatOfPoint2f()
+                    dstMatOfPoint2f.put(0, 0, floatArrayOf(
+                        0f, 0f,
+                        maxWidth.toFloat() - 1f, 0f,
+                        maxWidth.toFloat() - 1f, maxHeight.toFloat() - 1f,
+                        0f, maxHeight.toFloat() - 1f
+                    ))
 
                     transformMatrix = Imgproc.getPerspectiveTransform(srcMatOfPoint2f, dstMatOfPoint2f)
 

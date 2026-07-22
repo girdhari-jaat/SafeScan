@@ -931,6 +931,7 @@ class ScannerFragment : Fragment() {
                             Log.d("LiveEdgeDetection", "Analyzer received frame: ${width}x${height}, rot=$rotationDegrees")
                             
                             liveEdgeDetectionEngine.process(imageProxy, viewModel.documentScanner, viewModel.uiState.value.currentEngine, viewModel.currentMode.value) { corners, sharpness ->
+                                viewModel.onDocumentDetected(corners, sharpness)
                                 val mappedPoints = if (corners != null && corners.isNotEmpty()) {
                                     val mapped = mapPointsToPreviewView(corners, width, height, rotationDegrees)
                                     Log.d("LiveEdgeDetection", "Mapped raw corners $corners -> screen points $mapped")
@@ -948,13 +949,14 @@ class ScannerFragment : Fragment() {
                                             !viewModel.isSettingsOpen.value && 
                                             !viewModel.isDocumentOpenedFromLibrary.value && 
                                             !viewModel.isGridViewVisible.value
-                                    if (isOverlayStillActive && mappedPoints != null) {
+                                    val isStableDetected = viewModel.isDocumentDetected.value
+                                    if (isOverlayStillActive && mappedPoints != null && isStableDetected) {
                                         bindingObj?.overlayView?.visibility = View.VISIBLE
                                         bindingObj?.overlayView?.updateCorners(mappedPoints)
                                     } else {
                                         bindingObj?.overlayView?.updateCorners(null)
                                     }
-                                    if (corners != null && corners.isNotEmpty()) {
+                                    if (corners != null && corners.isNotEmpty() && isStableDetected) {
                                         if (!isTargetLocked) {
                                             isTargetLocked = true
                                             if (viewModel.vibrateOnCapture.value) {
@@ -965,7 +967,6 @@ class ScannerFragment : Fragment() {
                                         isTargetLocked = false
                                     }
                                 }
-                                viewModel.onDocumentDetected(corners, sharpness)
                             }
                         } catch (e: Exception) {
                             Log.e("ScannerFragment", "Live detection error", e)

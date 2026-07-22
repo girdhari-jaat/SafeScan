@@ -186,7 +186,6 @@ fun CropScreen(viewModel: ScannerViewModel) {
                 }
             )
         }
-    )
     ) { padding ->
         Box(
             modifier = Modifier

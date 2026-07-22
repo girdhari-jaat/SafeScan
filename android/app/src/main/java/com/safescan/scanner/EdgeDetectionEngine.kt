@@ -147,36 +147,42 @@ class EdgeDetectionEngine {
             val borderY = Math.round(sh * 0.02f)
             val borderX = Math.round(sw * 0.02f)
 
-            var finalPts: List<Point>? = null
-
             val est = RansacHelper.estimateForegroundPercentages(closedData, sw, sh)
-            if (est != null) {
-                finalPts = RansacHelper.scanTarget(
-                    sw, sh,
-                    est.leftPct, est.rightPct, est.topPct, est.bottomPct,
-                    borderX, borderY,
-                    closedData,
-                    magnitudesX, magnitudesY,
-                    thresholdX, thresholdY,
-                    isManualCropActive, isCardMode
-                )
 
-                if (finalPts == null) {
-                    val paddingX = Math.min(0.06, (est.rightPct - est.leftPct) * 0.08)
-                    val paddingY = Math.min(0.06, (est.bottomPct - est.topPct) * 0.08)
+            var finalPts: List<Point>? = detectContourQuad(resized, sw, sh, est, isCardMode, isManualCropActive)
 
+            if (finalPts != null) {
+                Log.d(TAG, "OpenCV Contour Quad successfully detected document edges")
+            } else {
+                Log.d(TAG, "Contour detection yielded no quad, trying RANSAC Outside-In Scan")
+                if (est != null) {
                     finalPts = RansacHelper.scanTarget(
                         sw, sh,
-                        Math.max(0.01, est.leftPct - paddingX),
-                        Math.min(0.99, est.rightPct + paddingX),
-                        Math.max(0.01, est.topPct - paddingY),
-                        Math.min(0.99, est.bottomPct + paddingY),
+                        est.leftPct, est.rightPct, est.topPct, est.bottomPct,
                         borderX, borderY,
                         closedData,
                         magnitudesX, magnitudesY,
                         thresholdX, thresholdY,
                         isManualCropActive, isCardMode
                     )
+
+                    if (finalPts == null) {
+                        val paddingX = Math.min(0.06, (est.rightPct - est.leftPct) * 0.08)
+                        val paddingY = Math.min(0.06, (est.bottomPct - est.topPct) * 0.08)
+
+                        finalPts = RansacHelper.scanTarget(
+                            sw, sh,
+                            Math.max(0.01, est.leftPct - paddingX),
+                            Math.min(0.99, est.rightPct + paddingX),
+                            Math.max(0.01, est.topPct - paddingY),
+                            Math.min(0.99, est.bottomPct + paddingY),
+                            borderX, borderY,
+                            closedData,
+                            magnitudesX, magnitudesY,
+                            thresholdX, thresholdY,
+                            isManualCropActive, isCardMode
+                        )
+                    }
                 }
             }
 
@@ -234,6 +240,124 @@ class EdgeDetectionEngine {
             src?.release(); resized?.release(); gray?.release()
             stretched?.release(); blurred?.release(); binary?.release(); closed?.release()
             gradX?.release(); gradY?.release()
+        }
+    }
+
+    private fun detectContourQuad(
+        imageMat: Mat,
+        sw: Int,
+        sh: Int,
+        est: RansacHelper.ForecastPct?,
+        isCardMode: Boolean,
+        isManualCrop: Boolean
+    ): List<Point>? {
+        var gray: Mat? = null
+        var blurred: Mat? = null
+        var edges: Mat? = null
+        var hierarchy: Mat? = null
+        val contours = ArrayList<org.opencv.core.MatOfPoint>()
+        try {
+            gray = Mat()
+            if (imageMat.channels() > 1) {
+                Imgproc.cvtColor(imageMat, gray, Imgproc.COLOR_RGBA2GRAY)
+            } else {
+                imageMat.copyTo(gray)
+            }
+
+            blurred = Mat()
+            Imgproc.GaussianBlur(gray, blurred, Size(5.0, 5.0), 0.0)
+
+            edges = Mat()
+            Imgproc.Canny(blurred, edges, 40.0, 120.0)
+
+            val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(3.0, 3.0))
+            Imgproc.dilate(edges, edges, kernel)
+            kernel.release()
+
+            hierarchy = Mat()
+            Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+
+            var bestQuad: List<Point>? = null
+            var maxArea = 0.0
+            val imgArea = sw.toDouble() * sh.toDouble()
+            val minArea = imgArea * 0.04
+
+            for (contour in contours) {
+                val cArea = Imgproc.contourArea(contour)
+                if (cArea < minArea) continue
+
+                var c2f: org.opencv.core.MatOfPoint2f? = null
+                var approx: org.opencv.core.MatOfPoint2f? = null
+                var hullMat: org.opencv.core.MatOfInt? = null
+                var hullPoints: org.opencv.core.MatOfPoint2f? = null
+                try {
+                    c2f = org.opencv.core.MatOfPoint2f()
+                    contour.convertTo(c2f, org.opencv.core.CvType.CV_32F)
+
+                    val peri = Imgproc.arcLength(c2f, true)
+                    approx = org.opencv.core.MatOfPoint2f()
+                    Imgproc.approxPolyDP(c2f, approx, 0.02 * peri, true)
+
+                    // If direct approx is not 4 points, attempt Convex Hull approx to smooth shadow/glare noise
+                    if (approx.total() != 4L) {
+                        hullMat = org.opencv.core.MatOfInt()
+                        Imgproc.convexHull(contour, hullMat)
+
+                        val ptsList = contour.toList()
+                        val hullIndices = hullMat.toList()
+                        val hPts = hullIndices.map { ptsList[it] }
+                        val hullContour = org.opencv.core.MatOfPoint()
+                        hullContour.fromList(hPts)
+
+                        hullPoints = org.opencv.core.MatOfPoint2f()
+                        hullContour.convertTo(hullPoints, org.opencv.core.CvType.CV_32F)
+                        hullContour.release()
+
+                        val hPeri = Imgproc.arcLength(hullPoints, true)
+                        approx.release()
+                        approx = org.opencv.core.MatOfPoint2f()
+                        Imgproc.approxPolyDP(hullPoints, approx, 0.025 * hPeri, true)
+                    }
+
+                    if (approx.total() == 4L) {
+                        val floatBuff = FloatArray(8)
+                        approx.get(0, 0, floatBuff)
+                        val rawPts = listOf(
+                            Point(floatBuff[0].toDouble(), floatBuff[1].toDouble()),
+                            Point(floatBuff[2].toDouble(), floatBuff[3].toDouble()),
+                            Point(floatBuff[4].toDouble(), floatBuff[5].toDouble()),
+                            Point(floatBuff[6].toDouble(), floatBuff[7].toDouble())
+                        )
+                        val validQuad = RansacHelper.validateAndRepairTier1Quad(
+                            rawPts, sw.toDouble(), sh.toDouble(), est, isCardMode, isManualCrop
+                        )
+                        if (validQuad.size == 4) {
+                            val area = RansacHelper.polygonArea(validQuad)
+                            if (area > maxArea) {
+                                maxArea = area
+                                bestQuad = validQuad
+                            }
+                        }
+                    }
+                } finally {
+                    c2f?.release()
+                    approx?.release()
+                    hullMat?.release()
+                    hullPoints?.release()
+                }
+            }
+            return bestQuad
+        } catch (e: Exception) {
+            Log.e(TAG, "Contour quad detection failed: ${e.message}")
+            return null
+        } finally {
+            gray?.release()
+            blurred?.release()
+            edges?.release()
+            hierarchy?.release()
+            for (c in contours) {
+                c.release()
+            }
         }
     }
 
