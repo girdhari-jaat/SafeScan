@@ -520,7 +520,7 @@ fun CornerHandle(
             .pointerInput(key ?: Unit) {
                 detectDragGestures(
                     onDragStart = { 
-                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        com.safescan.utils.HapticFeedbackHelper.triggerHaptic(view)
                         currentOnDragStart() 
                     },
                     onDragEnd = { currentOnDragEnd() },

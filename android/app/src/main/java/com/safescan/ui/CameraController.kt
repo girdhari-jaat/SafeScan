@@ -208,7 +208,7 @@ class CameraController(
                 try {
                     val currentTime = System.currentTimeMillis()
                     val isDocDetected = viewModel.isDocumentDetected.value
-                    val delayThreshold = if (isDocDetected) 350L else 180L
+                    val delayThreshold = if (isDocDetected) 60L else 40L
 
                     if (currentTime - lastAnalysisTime < delayThreshold) {
                         imageProxy.close()
@@ -252,7 +252,7 @@ class CameraController(
                                 if (!isTargetLocked) {
                                     isTargetLocked = true
                                     if (viewModel.vibrateOnCapture.value) {
-                                        bindingObj?.root?.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                                        bindingObj?.root?.let { com.safescan.utils.HapticFeedbackHelper.triggerHaptic(it) }
                                     }
                                 }
                             } else {

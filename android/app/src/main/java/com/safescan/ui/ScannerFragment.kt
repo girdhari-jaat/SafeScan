@@ -297,8 +297,15 @@ class ScannerFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         _binding = FragmentScannerBinding.inflate(inflater, container, false)
-        shutterSound = android.media.MediaActionSound()
-        shutterSound?.load(android.media.MediaActionSound.SHUTTER_CLICK)
+        viewLifecycleOwner.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val sound = android.media.MediaActionSound()
+                sound.load(android.media.MediaActionSound.SHUTTER_CLICK)
+                shutterSound = sound
+            } catch (e: Exception) {
+                Log.e("ScannerFragment", "Failed to pre-load shutter sound", e)
+            }
+        }
         return binding.root
     }
 
@@ -309,9 +316,12 @@ class ScannerFragment : Fragment() {
         cameraController = CameraController(this)
 
         setupPermissions()
-        setupCamera()
         setupObservers()
         setupListeners()
+
+        // Render default LIBRARY view mode instantly on frame 1
+        updateViewMode(FragmentViewMode.LIBRARY)
+
         setupNavigation()
     }
 

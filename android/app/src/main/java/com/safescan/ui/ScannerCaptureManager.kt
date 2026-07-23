@@ -220,28 +220,7 @@ class ScannerCaptureManager(
         }
 
         if (viewModel.vibrateOnCapture.value) {
-            try {
-                binding.root.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-
-                val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    val vibratorManager = currentContext.getSystemService(VibratorManager::class.java)
-                    vibratorManager?.defaultVibrator
-                } else {
-                    currentContext.getSystemService(Vibrator::class.java)
-                }
-                if (vibrator != null && vibrator.hasVibrator()) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        vibrator.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
-                    } else {
-                        @Suppress("DEPRECATION")
-                        vibrator.vibrate(50)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("ScannerCaptureManager", "Failed to vibrate on capture", e)
-            }
+            com.safescan.utils.HapticFeedbackHelper.triggerHaptic(binding.root, currentContext)
         }
 
         runAccuracyTest(fragment.binding.overlayView.getCorners())

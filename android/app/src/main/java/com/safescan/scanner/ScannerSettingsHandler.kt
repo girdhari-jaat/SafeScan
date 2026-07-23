@@ -3,7 +3,7 @@ package com.safescan.scanner
 import com.safescan.core.DiagnosticsLogger
 import com.safescan.data.FlashMode
 import com.safescan.data.ScannerMode
-import com.safescan.data.repository.SettingsRepository
+import com.safescan.data.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay

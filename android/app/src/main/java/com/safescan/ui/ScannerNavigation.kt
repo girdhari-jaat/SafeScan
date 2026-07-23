@@ -47,17 +47,15 @@ class ScannerNavigation(
         }
         fragment.requireActivity().onBackPressedDispatcher.addCallback(fragment.viewLifecycleOwner, callback)
 
-        // Check if we should start with camera or default to Library on startup
+        // Check if user set "Start with Camera" in settings; otherwise remain on Library
         fragment.viewLifecycleOwner.lifecycleScope.launch {
             try {
                 val startWithCam = viewModel.settingsRepository.startWithCameraFlow.first()
                 if (startWithCam) {
                     fragment.checkPermissionAndStartScanner()
-                } else {
-                    fragment.updateViewMode(ScannerFragment.FragmentViewMode.LIBRARY)
                 }
             } catch (e: Exception) {
-                fragment.updateViewMode(ScannerFragment.FragmentViewMode.LIBRARY)
+                // Keep default LIBRARY mode initialized on startup
             }
         }
     }

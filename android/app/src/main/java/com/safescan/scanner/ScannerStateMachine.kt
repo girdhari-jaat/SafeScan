@@ -11,7 +11,7 @@ class ScannerStateMachine(
 
     private var stableFrameCount = 0
     private var lastQuadPoints: List<Point>? = null
-    private val STABLE_FRAME_THRESHOLD = 8
+    private val STABLE_FRAME_THRESHOLD = 5
     private val STABILITY_TOLERANCE = 80.0
 
     var isFocusing = false
