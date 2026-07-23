@@ -19,7 +19,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
-import com.google.accompanist.systemuicontroller.rememberSystemUiController
 
 private val DarkColorScheme = darkColorScheme(
     primary = Color(0xFF10B981), // Emerald 500
@@ -92,18 +91,18 @@ fun SafeScanTheme(
         else -> LightColorScheme
     }
     
-    val systemUiController = rememberSystemUiController()
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            systemUiController.setStatusBarColor(
-                color = statusBarColor ?: colorScheme.primary,
-                darkIcons = !darkTheme
-            )
-            systemUiController.setNavigationBarColor(
-                color = navigationBarColor ?: colorScheme.surface,
-                darkIcons = !darkTheme
-            )
+            val window = (view.context as? Activity)?.window
+            if (window != null) {
+                window.statusBarColor = (statusBarColor ?: colorScheme.primary).toArgb()
+                window.navigationBarColor = (navigationBarColor ?: colorScheme.surface).toArgb()
+
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                insetsController.isAppearanceLightStatusBars = !darkTheme
+                insetsController.isAppearanceLightNavigationBars = !darkTheme
+            }
         }
     }
 

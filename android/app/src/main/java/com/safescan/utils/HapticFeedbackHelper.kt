@@ -19,6 +19,7 @@ object HapticFeedbackHelper {
             // 1. Trigger View-level HapticFeedback with flags ignoring restrictions
             view?.let { v ->
                 v.isHapticFeedbackEnabled = true
+                @Suppress("DEPRECATION")
                 v.performHapticFeedback(
                     HapticFeedbackConstants.KEYBOARD_TAP,
                     HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING or HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING

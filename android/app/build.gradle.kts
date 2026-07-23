@@ -125,11 +125,6 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$camerax_version")
     implementation("androidx.camera:camera-view:$camerax_version")
 
-    // System UI Controller
-    implementation("com.google.accompanist:accompanist-systemuicontroller:0.36.0")
-
-
-
     // OpenCV dependency
     implementation("com.quickbirdstudios:opencv:4.5.3.0")
 
