@@ -64,7 +64,12 @@ class ScannerStateMachine(
         updateState(DetectionState.NO_DOCUMENT)
     }
 
-    fun processFrame(points: List<Point>?, sharpness: Double, autoCaptureEnabled: Boolean) {
+    fun processFrame(
+        points: List<Point>?,
+        sharpness: Double,
+        autoCaptureEnabled: Boolean,
+        isDeviceMotionStable: Boolean = true
+    ) {
         // During AUTO_CAPTURING or focus, freeze state & overlay quad; do not reset or re-trigger
         if (isFocusing || detectionState == DetectionState.AUTO_CAPTURING) {
             return
@@ -124,7 +129,7 @@ class ScannerStateMachine(
         }
 
         val isSharp = sharpness > MIN_SHARPNESS_THRESHOLD
-        val trigger = stableFrameCount >= threshold && isSharp
+        val trigger = stableFrameCount >= threshold && isSharp && isDeviceMotionStable
         ScannerDebugLogger.logAutoCap(inBox = true, sharpness = sharpness, stable = stableFrameCount, trigger = trigger)
 
         if (trigger) {

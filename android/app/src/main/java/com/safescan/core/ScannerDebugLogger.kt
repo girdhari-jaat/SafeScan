@@ -159,6 +159,12 @@ object ScannerDebugLogger {
         DiagnosticsLogger.log("ℹ️ $msg")
     }
 
+    fun logTFLiteInit(message: String) {
+        val msg = "[TFLite] $message"
+        Log.i(TAG, msg)
+        DiagnosticsLogger.log("ℹ️ $msg")
+    }
+
     fun logError(module: String, message: String, throwable: Throwable? = null) {
         val fullMsg = "[$module] ERROR: $message"
         if (throwable != null) {

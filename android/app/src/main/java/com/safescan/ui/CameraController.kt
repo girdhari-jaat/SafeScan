@@ -32,6 +32,7 @@ class CameraController(
     var lastAnalysisTime = 0L
     var isTargetLocked = false
     var lastDetectedScreenCorners: List<PointF>? = null
+    var motionDetector: com.safescan.scanner.DeviceMotionDetector? = null
 
     val scannerStateMachine = com.safescan.scanner.ScannerStateMachine(
         onDocumentDetectedStateChanged = { isDetected ->
@@ -48,6 +49,9 @@ class CameraController(
     fun setupCamera() {
         if (!fragment.isAdded) return
         val currentContext = fragment.context ?: return
+        if (motionDetector == null) {
+            motionDetector = com.safescan.scanner.DeviceMotionDetector(currentContext)
+        }
         val binding = fragment.binding ?: return
         val viewModel = fragment.viewModel
 
@@ -226,7 +230,8 @@ class CameraController(
                     Log.d("LiveEdgeDetection", "Analyzer received frame: ${width}x${height}, rot=$rotationDegrees")
 
                     fragment.liveEdgeDetectionEngine.process(imageProxy, viewModel.documentScanner, viewModel.uiState.value.currentEngine, viewModel.currentMode.value) { corners, sharpness ->
-                        scannerStateMachine.processFrame(corners, sharpness, viewModel.autoCapture.value)
+                        val isStable = motionDetector?.isDeviceStable ?: true
+                        scannerStateMachine.processFrame(corners, sharpness, viewModel.autoCapture.value, isStable)
 
                         val activeQuad = corners ?: scannerStateMachine.getHeldPoints()
                         val mappedPoints = if (activeQuad != null && activeQuad.isNotEmpty()) {
@@ -355,6 +360,7 @@ class CameraController(
     }
 
     fun unbindAll() {
+        motionDetector?.stop()
         cameraProvider?.unbindAll()
         imageAnalysis?.clearAnalyzer()
         isCameraBound = false

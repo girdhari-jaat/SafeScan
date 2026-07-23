@@ -63,6 +63,9 @@ class TFLiteEngine(private val context: Context) {
     private val liveThresholds = doubleArrayOf(0.5, 0.7, 0.85)
     private val batchThresholds = doubleArrayOf(0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95)
 
+    val isGpuAccelerated: Boolean
+        get() = gpuDelegate != null
+
     init {
         try {
             // Memory leak and File Descriptor leak fix: using use() blocks to guarantee that streams & file descriptors close safely after mapping
@@ -80,8 +83,10 @@ class TFLiteEngine(private val context: Context) {
                         options.addDelegate(gpuDelegate)
                         interpreter = Interpreter(tfliteModel, options)
                         Log.d("TFLiteEngine", "Native TFLite model loaded successfully with GPU acceleration")
+                        com.safescan.core.ScannerDebugLogger.logTFLiteInit("Model loaded successfully with GPU acceleration")
                     } catch (gpuEx: Throwable) {
                         Log.w("TFLiteEngine", "GPU acceleration not supported or failed to initialize. Falling back to CPU safely.", gpuEx)
+                        com.safescan.core.ScannerDebugLogger.logTFLiteInit("GPU acceleration failed, falling back to CPU")
                         // Clean up GPU delegate if it was created
                         try {
                             gpuDelegate?.close()
@@ -95,11 +100,13 @@ class TFLiteEngine(private val context: Context) {
                         options.setNumThreads(4) // Use 4 CPU threads for high performance
                         interpreter = Interpreter(tfliteModel, options)
                         Log.d("TFLiteEngine", "Native TFLite model loaded successfully with CPU (4 threads)")
+                        com.safescan.core.ScannerDebugLogger.logTFLiteInit("Model loaded successfully with CPU (4 threads)")
                     }
                 }
             }
         } catch (e: Throwable) {
             Log.e("TFLiteEngine", "Fatal error loading Native TFLite model", e)
+            com.safescan.core.ScannerDebugLogger.logError("TFLiteEngine", "Fatal error loading Native TFLite model", e)
         }
     }
 

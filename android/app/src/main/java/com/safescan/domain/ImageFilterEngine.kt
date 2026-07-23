@@ -33,103 +33,114 @@ object ImageFilterEngine {
     }
 
     fun applyCardFilter(src: Mat): Mat {
-        val outMat = Mat()
-        var shadowRemoved: Mat? = null
-        var denoised: Mat? = null
+        val out = Mat()
+
         var hsv: Mat? = null
-        var greenMask: Mat? = null
-        var greenEnhanced: Mat? = null
-        var lab: Mat? = null
-        var mergedLab: Mat? = null
-        var enhancedBgr: Mat? = null
-        var sharpened: Mat? = null
-        var kernel: Mat? = null
-        val channels = ArrayList<Mat>()
+        var channels: MutableList<Mat>? = null
         var clahe: org.opencv.imgproc.CLAHE? = null
+        var blurred: Mat? = null
+        var enhanced: Mat? = null
 
         try {
-            if (src.empty()) {
-                return outMat
-            }
+            if (src.empty()) return out
 
-            // STEP 1: Continuous lighting normalization & shadow removal (natural background cleanup)
-            shadowRemoved = removeShadowsColor(src)
-
-            // STEP 2: Denoise via edge-preserving Bilateral Filter to smooth background plastic/paper textures
-            denoised = Mat()
-            Imgproc.bilateralFilter(shadowRemoved, denoised, 5, 40.0, 40.0)
-
-            // STEP 3: HSV Green Masking to preserve Pakistani CNIC green header & crescent emblem
+            // BGR -> HSV
             hsv = Mat()
-            Imgproc.cvtColor(denoised, hsv, Imgproc.COLOR_BGR2HSV)
+            Imgproc.cvtColor(src, hsv, Imgproc.COLOR_BGR2HSV)
 
-            greenMask = Mat()
-            // Green range in OpenCV HSV: Hue ~ 35 to 85, Saturation > 30, Value > 30
-            val lowerGreen = org.opencv.core.Scalar(35.0, 30.0, 30.0)
-            val upperGreen = org.opencv.core.Scalar(85.0, 255.0, 255.0)
-            Core.inRange(hsv, lowerGreen, upperGreen, greenMask)
+            channels = ArrayList()
+            Core.split(hsv, channels)
 
-            // STEP 4: CLAHE Sharpening on L (Lightness) channel to make CNIC text stand out
-            lab = Mat()
-            Imgproc.cvtColor(denoised, lab, Imgproc.COLOR_BGR2Lab)
-            Core.split(lab, channels) // channels[0]=L, [1]=A, [2]=B
+            // -----------------------------
+            // Reduce Green/Overall Saturation
+            // -----------------------------
+            // S channel = 65%
+            channels[1].convertTo(
+                channels[1],
+                -1,
+                0.65,
+                0.0
+            )
 
-            if (channels.isNotEmpty() && !channels[0].empty()) {
-                clahe = Imgproc.createCLAHE(2.0, Size(8.0, 8.0))
-                clahe.apply(channels[0], channels[0])
-            }
+            // -----------------------------
+            // Improve brightness consistency
+            // -----------------------------
+            clahe = Imgproc.createCLAHE(
+                1.5,
+                Size(8.0, 8.0)
+            )
 
-            mergedLab = Mat()
-            Core.merge(channels, mergedLab)
+            clahe.apply(
+                channels[2],
+                channels[2]
+            )
 
-            enhancedBgr = Mat()
-            Imgproc.cvtColor(mergedLab, enhancedBgr, Imgproc.COLOR_Lab2BGR)
+            // Merge HSV
+            Core.merge(channels, hsv)
 
-            // Blend preserved Pakistani CNIC green features using greenMask
-            if (greenMask != null && !greenMask.empty() && Core.countNonZero(greenMask) > 0) {
-                greenEnhanced = Mat()
-                enhancedBgr.copyTo(greenEnhanced)
-                shadowRemoved.copyTo(greenEnhanced, greenMask)
-                greenEnhanced.copyTo(enhancedBgr)
-            }
+            // HSV -> BGR
+            enhanced = Mat()
+            Imgproc.cvtColor(
+                hsv,
+                enhanced,
+                Imgproc.COLOR_HSV2BGR
+            )
 
-            // STEP 5: Soft professional sharpening filter to make fonts and CNIC details crisp
-            kernel = Mat(3, 3, CvType.CV_32F)
-            kernel.put(0, 0, floatArrayOf(
-                0f, -0.4f, 0f,
-                -0.4f, 2.6f, -0.4f,
-                0f, -0.4f, 0f
-            ))
-            sharpened = Mat()
-            Imgproc.filter2D(enhancedBgr, sharpened, -1, kernel)
+            // -----------------------------
+            // Lightweight Unsharp Mask
+            // -----------------------------
+            blurred = Mat()
+            Imgproc.GaussianBlur(
+                enhanced,
+                blurred,
+                Size(0.0, 0.0),
+                1.5
+            )
 
-            // Convert to final RGBA output
-            Imgproc.cvtColor(sharpened, outMat, Imgproc.COLOR_BGR2RGBA)
+            Core.addWeighted(
+                enhanced,
+                1.25,
+                blurred,
+                -0.25,
+                0.0,
+                out
+            )
+
+            // Final RGBA
+            Imgproc.cvtColor(
+                out,
+                out,
+                Imgproc.COLOR_BGR2RGBA
+            )
 
         } catch (e: Exception) {
-            e.printStackTrace()
+
             if (!src.empty()) {
-                Imgproc.cvtColor(src, outMat, Imgproc.COLOR_BGR2RGBA)
+                Imgproc.cvtColor(
+                    src,
+                    out,
+                    Imgproc.COLOR_BGR2RGBA
+                )
             }
+
         } finally {
-            safeRelease(shadowRemoved)
-            safeRelease(denoised)
-            safeRelease(hsv)
-            safeRelease(greenMask)
-            safeRelease(greenEnhanced)
-            safeRelease(lab)
-            safeRelease(mergedLab)
-            safeRelease(enhancedBgr)
-            safeRelease(sharpened)
-            safeRelease(kernel)
-            for (m in channels) {
-                safeRelease(m)
+
+            hsv?.release()
+
+            channels?.forEach {
+                it.release()
             }
-            channels.clear()
-            safeCollectGarbage(clahe)
+
+            blurred?.release()
+            enhanced?.release()
+
+            try {
+                clahe?.collectGarbage()
+            } catch (_: Exception) {
+            }
         }
 
-        return outMat
+        return out
     }
 
     fun applyFilter(src: Mat, filterType: FilterType): Mat {

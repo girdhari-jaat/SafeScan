@@ -68,6 +68,9 @@ class ScannerObservers(
                 viewModel.liveDetect.collect { enabled ->
                     if (!enabled) {
                         fragment.binding?.overlayView?.updateCorners(null)
+                        fragment.cameraController.motionDetector?.stop()
+                    } else {
+                        fragment.cameraController.motionDetector?.start()
                     }
                 }
             }

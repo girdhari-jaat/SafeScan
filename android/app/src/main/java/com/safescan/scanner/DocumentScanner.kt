@@ -17,6 +17,9 @@ class DocumentScanner(
     private val tfLiteEngine: TFLiteEngine,
     private val context: Context
 ) {
+    val isGpuAccelerated: Boolean
+        get() = tfLiteEngine.isGpuAccelerated
+
     fun detectDocument(bitmap: Bitmap, isLive: Boolean = false): Quadrilateral? {
         return tfLiteEngine.detectCorners(bitmap, isLive)
     }

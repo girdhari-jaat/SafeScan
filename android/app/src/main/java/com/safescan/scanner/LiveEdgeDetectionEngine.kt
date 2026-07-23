@@ -43,6 +43,7 @@ class LiveEdgeDetectionEngine {
     private var framesWithoutDetection = 0
     private var lastWidth = 0
     private var lastHeight = 0
+    private var lastLoggedProcessorType: String? = null
     
     private var kernel5: Mat? = null
     private var kernel7: Mat? = null
@@ -151,6 +152,12 @@ class LiveEdgeDetectionEngine {
                 var sharpness = 0.0
 
                 if (engineType == ScannerEngineType.LOCAL_ML) {
+                    val processorType = if (documentScanner?.isGpuAccelerated == true) "TFLite (GPU)" else "TFLite (CPU)"
+                    if (processorType != lastLoggedProcessorType) {
+                        Log.i("LiveEdgeDetectionEngine", "Processing frame using: $processorType")
+                        lastLoggedProcessorType = processorType
+                    }
+                    
                     bitmap = imageProxy.toBitmap()
                     if (bitmap == null) {
                         ScannerDebugLogger.logExit("LiveEdgeDetectionEngine.process")
@@ -179,6 +186,11 @@ class LiveEdgeDetectionEngine {
                         }
                     }
                 } else {
+                    val processorType = "OpenCV (Fallback)"
+                    if (processorType != lastLoggedProcessorType) {
+                        Log.i("LiveEdgeDetectionEngine", "Processing frame using: $processorType")
+                        lastLoggedProcessorType = processorType
+                    }
                     // Extremely fast path: bypass Bitmap conversion completely for OpenCV Engine
                     val yPlane = imageProxy.planes[0]
                     val yBuffer = yPlane.buffer
