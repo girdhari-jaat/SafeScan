@@ -329,7 +329,11 @@ class ScannerFragment : Fragment() {
         permissionManager.setupPermissions()
     }
 
-    private fun setupCamera() {
+    fun setupCamera() {
+        cameraController.setupCamera()
+    }
+
+    fun updateCameraState() {
         cameraController.setupCamera()
     }
 

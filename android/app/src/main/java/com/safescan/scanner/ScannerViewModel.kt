@@ -952,18 +952,20 @@ class ScannerViewModel @Inject constructor(
                 // Sync to persistent library JSON if we are editing a saved document
                 openedDocumentId?.let { docId ->
                     val currentState = editorState.value
-                    saveDocumentUseCase.updatePageEdits(
-                        docId = docId,
-                        pageId = slotId,
-                        filter = currentState.filter.name,
-                        brightness = currentState.brightness,
-                        contrast = currentState.contrast,
-                        sharpness = currentState.sharpness,
-                        saturation = currentState.saturation,
-                        rotation = 0,
-                        corners = null,
-                        newPreview = processed
-                    )
+                    viewModelScope.launch(Dispatchers.IO) {
+                        saveDocumentUseCase.updatePageEdits(
+                            docId = docId,
+                            pageId = slotId,
+                            filter = currentState.filter.name,
+                            brightness = currentState.brightness,
+                            contrast = currentState.contrast,
+                            sharpness = currentState.sharpness,
+                            saturation = currentState.saturation,
+                            rotation = 0,
+                            corners = null,
+                            newPreview = processed
+                        )
+                    }
                 }
             }
             editingJpgIndex.value?.let { index ->
@@ -1358,19 +1360,16 @@ class ScannerViewModel @Inject constructor(
 
         _uiState.update { it.copy(isLoading = true, error = null) }
         
-        // Save the raw captured JPG immediately to Scans folder if saveJpg is ON
-        if (saveJpg.value) {
-            val savedFile = saveDocumentUseCase.saveJpgToScans(bitmap, jpegQuality.value.toInt())
-            if (savedFile != null) {
-                // Keep capturedJpgFiles empty so the app's document compilation & grid always use the unified slots pipeline,
-                // preventing duplicate pages, index-shifting, and ensuring edits/crops/filters are perfectly compiled and shared.
-                // capturedJpgFiles.add(savedFile)
-                DiagnosticsLogger.info("[Save] Raw captured JPG saved to Scans folder: ${savedFile.absolutePath}")
-            }
-        }
-        
         viewModelScope.launch(Dispatchers.IO) {
             ScannerDebugLogger.logEnter("ScannerViewModel.onCapture")
+
+            // Save the raw captured JPG immediately to Scans folder if saveJpg is ON
+            if (saveJpg.value) {
+                val savedFile = saveDocumentUseCase.saveJpgToScans(bitmap, jpegQuality.value.toInt())
+                if (savedFile != null) {
+                    DiagnosticsLogger.info("[Save] Raw captured JPG saved to Scans folder: ${savedFile.absolutePath}")
+                }
+            }
             
             captureMutex.withLock {
                 // Dynamically scale the image based on our negotiated CameraHardwareConfig constraints (supporting Fast, Standard, High, and high-megapixel modes)

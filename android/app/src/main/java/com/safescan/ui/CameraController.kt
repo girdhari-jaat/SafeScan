@@ -65,7 +65,7 @@ class CameraController(
                 !isSettingsOpen &&
                 !usePhoneCam &&
                 !useNativeScan &&
-                fragment.allPermissionsGranted()
+                fragment.permissionManager.allPermissionsGranted()
 
         if (shouldCameraBeOn) {
             val mode = viewModel.currentMode.value

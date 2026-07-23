@@ -10,7 +10,7 @@ import android.net.Uri
 import android.util.Log
 import com.safescan.core.ScannerDebugLogger
 import com.safescan.data.ScannerMode
-import com.safescan.scanner.Point
+import com.safescan.domain.model.Point
 import com.safescan.utils.PageConfig
 
 object ScannerImageUtils {
