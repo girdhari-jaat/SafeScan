@@ -84,11 +84,6 @@ class ScannerCaptureManager(
 
     fun focusAndTakePhoto(isAutoCapture: Boolean = false) {
         if (isCapturingPhoto) return
-        if (isAutoCapture) {
-            if (fragment.cameraController.scannerStateMachine.isFocusing) return
-        } else {
-            fragment.cameraController.scannerStateMachine.isFocusing = false
-        }
         fragment.cameraController.scannerStateMachine.isFocusing = true
 
         val binding = fragment.binding

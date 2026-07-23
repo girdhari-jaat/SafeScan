@@ -39,6 +39,9 @@ class CameraController(
         },
         onAutoCaptureTriggered = {
             fragment.viewModel.triggerAutoCapture()
+        },
+        onDetectionStateChanged = { state ->
+            fragment.viewModel.detectionState.value = state
         }
     )
 
@@ -224,16 +227,22 @@ class CameraController(
 
                     fragment.liveEdgeDetectionEngine.process(imageProxy, viewModel.documentScanner, viewModel.uiState.value.currentEngine, viewModel.currentMode.value) { corners, sharpness ->
                         scannerStateMachine.processFrame(corners, sharpness, viewModel.autoCapture.value)
-                        val mappedPoints = if (corners != null && corners.isNotEmpty()) {
-                            val mapped = mapPointsToPreviewView(corners, width, height, rotationDegrees)
-                            Log.d("LiveEdgeDetection", "Mapped raw corners $corners -> screen points $mapped")
+
+                        val activeQuad = corners ?: scannerStateMachine.getHeldPoints()
+                        val mappedPoints = if (activeQuad != null && activeQuad.isNotEmpty()) {
+                            val mapped = mapPointsToPreviewView(activeQuad, width, height, rotationDegrees)
                             if (mapped.size == 4) {
                                 lastDetectedScreenCorners = mapped
+                                mapped
+                            } else {
+                                lastDetectedScreenCorners
                             }
-                            mapped
+                        } else if (scannerStateMachine.detectionState == com.safescan.scanner.DetectionState.AUTO_CAPTURING && lastDetectedScreenCorners != null) {
+                            lastDetectedScreenCorners
                         } else {
                             null
                         }
+
                         fragment.activity?.runOnUiThread {
                             val bindingObj = fragment.binding
                             val isOverlayStillActive = !viewModel.isEditing.value &&
@@ -241,14 +250,14 @@ class CameraController(
                                     !viewModel.isSettingsOpen.value &&
                                     !viewModel.isDocumentOpenedFromLibrary.value &&
                                     !viewModel.isGridViewVisible.value
-                            val isStableDetected = viewModel.isDocumentDetected.value
-                            if (bindingObj != null && isOverlayStillActive && mappedPoints != null && isStableDetected) {
+                            val isDetectedState = scannerStateMachine.detectionState != com.safescan.scanner.DetectionState.NO_DOCUMENT
+                            if (bindingObj != null && isOverlayStillActive && isDetectedState && mappedPoints != null) {
                                 bindingObj.overlayView.visibility = View.VISIBLE
                                 bindingObj.overlayView.updateCorners(mappedPoints)
-                            } else {
-                                bindingObj?.overlayView?.updateCorners(null)
+                            } else if (bindingObj != null && !isDetectedState) {
+                                bindingObj.overlayView.updateCorners(null)
                             }
-                            if (corners != null && corners.isNotEmpty() && isStableDetected) {
+                            if (isDetectedState) {
                                 if (!isTargetLocked) {
                                     isTargetLocked = true
                                     if (viewModel.vibrateOnCapture.value) {
@@ -267,7 +276,7 @@ class CameraController(
             } else {
                 imageProxy.close()
                 isTargetLocked = false
-                scannerStateMachine.processFrame(null, 0.0, false)
+                scannerStateMachine.resetDetection()
                 fragment.activity?.runOnUiThread {
                     fragment.binding?.overlayView?.clear()
                 }
