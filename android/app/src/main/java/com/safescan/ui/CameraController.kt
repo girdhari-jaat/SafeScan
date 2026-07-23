@@ -33,6 +33,15 @@ class CameraController(
     var isTargetLocked = false
     var lastDetectedScreenCorners: List<PointF>? = null
 
+    val scannerStateMachine = com.safescan.scanner.ScannerStateMachine(
+        onDocumentDetectedStateChanged = { isDetected ->
+            fragment.viewModel.isDocumentDetected.value = isDetected
+        },
+        onAutoCaptureTriggered = {
+            fragment.viewModel.triggerAutoCapture()
+        }
+    )
+
     fun setupCamera() {
         if (!fragment.isAdded) return
         val currentContext = fragment.context ?: return
@@ -213,7 +222,7 @@ class CameraController(
                     Log.d("LiveEdgeDetection", "Analyzer received frame: ${width}x${height}, rot=$rotationDegrees")
 
                     fragment.liveEdgeDetectionEngine.process(imageProxy, viewModel.documentScanner, viewModel.uiState.value.currentEngine, viewModel.currentMode.value) { corners, sharpness ->
-                        viewModel.onDocumentDetected(corners, sharpness)
+                        scannerStateMachine.processFrame(corners, sharpness, viewModel.autoCapture.value)
                         val mappedPoints = if (corners != null && corners.isNotEmpty()) {
                             val mapped = mapPointsToPreviewView(corners, width, height, rotationDegrees)
                             Log.d("LiveEdgeDetection", "Mapped raw corners $corners -> screen points $mapped")
@@ -257,7 +266,7 @@ class CameraController(
             } else {
                 imageProxy.close()
                 isTargetLocked = false
-                viewModel.onDocumentDetected(null, 0.0)
+                scannerStateMachine.processFrame(null, 0.0, false)
                 fragment.activity?.runOnUiThread {
                     fragment.binding?.overlayView?.updateCorners(null)
                 }

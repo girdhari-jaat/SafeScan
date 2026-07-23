@@ -702,16 +702,16 @@ class ScannerFragment : Fragment() {
     fun focusAndTakePhoto(isAutoCapture: Boolean = false) {
         if (isCapturingPhoto) return
         if (isAutoCapture) {
-            if (viewModel.isFocusing) return
+            if (cameraController.scannerStateMachine.isFocusing) return
         } else {
             // Manual capture takes precedence - clear any lock or auto-capture cooldown
-            viewModel.isFocusing = false
+            cameraController.scannerStateMachine.isFocusing = false
         }
-        viewModel.isFocusing = true
+        cameraController.scannerStateMachine.isFocusing = true
 
         val binding = _binding
         if (binding == null) {
-            viewModel.isFocusing = false
+            cameraController.scannerStateMachine.isFocusing = false
             takePhoto()
             return
         }
@@ -744,7 +744,7 @@ class ScannerFragment : Fragment() {
         
         val future = cameraControl?.startFocusAndMetering(action)
         if (future == null) {
-            viewModel.isFocusing = false
+            cameraController.scannerStateMachine.isFocusing = false
             takePhoto()
             return
         }
@@ -791,13 +791,13 @@ class ScannerFragment : Fragment() {
         isCapturingPhoto = true
 
         if (viewModel.usePhoneCamera.value) {
-            viewModel.isFocusing = false
+            cameraController.scannerStateMachine.isFocusing = false
             isCapturingPhoto = false
             openPhoneCamera()
             return
         }
         if (viewModel.useNativeScanner.value) {
-            viewModel.isFocusing = false
+            cameraController.scannerStateMachine.isFocusing = false
             isCapturingPhoto = false
             val maxPages = when (viewModel.currentMode.value) {
                 com.safescan.data.ScannerMode.CARD -> 2
@@ -809,17 +809,17 @@ class ScannerFragment : Fragment() {
         }
 
         val imageCapture = imageCapture ?: run {
-            viewModel.isFocusing = false
+            cameraController.scannerStateMachine.isFocusing = false
             isCapturingPhoto = false
             return
         }
         val currentContext = context ?: run {
-            viewModel.isFocusing = false
+            cameraController.scannerStateMachine.isFocusing = false
             isCapturingPhoto = false
             return
         }
         val binding = _binding ?: run {
-            viewModel.isFocusing = false
+            cameraController.scannerStateMachine.isFocusing = false
             isCapturingPhoto = false
             return
         }
@@ -900,10 +900,10 @@ class ScannerFragment : Fragment() {
                         if (viewModel.autoCapture.value) {
                             viewLifecycleOwner.lifecycleScope.launch {
                                 kotlinx.coroutines.delay(2500)
-                                viewModel.isFocusing = false
+                                cameraController.scannerStateMachine.isFocusing = false
                             }
                         } else {
-                            viewModel.isFocusing = false
+                            cameraController.scannerStateMachine.isFocusing = false
                         }
                     } finally {
                         imageProxy.close()
@@ -912,7 +912,7 @@ class ScannerFragment : Fragment() {
 
                 override fun onError(exception: ImageCaptureException) {
                     cameraControl?.cancelFocusAndMetering()
-                    viewModel.isFocusing = false
+                    cameraController.scannerStateMachine.isFocusing = false
                     isCapturingPhoto = false
                     Log.e("ScannerFragment", "Photo capture failed: ${exception.message}", exception)
                     _binding?.progressBar?.visibility = View.GONE
