@@ -68,6 +68,7 @@ class ScannerFragment : Fragment() {
 
     lateinit var cameraController: CameraController
     val permissionManager = PermissionManager(this)
+    val captureManager = ScannerCaptureManager(this)
 
     val cameraExecutor get() = cameraController.cameraExecutor
     val imageCapture get() = cameraController.imageCapture
@@ -92,7 +93,7 @@ class ScannerFragment : Fragment() {
     }
     var currentViewMode = FragmentViewMode.LIBRARY
     private var lastBackPressedTime = 0L
-    private var isCapturingPhoto = false
+    val isCapturingPhoto get() = captureManager.isCapturingPhoto
 
     override fun onPause() {
         super.onPause()
@@ -124,7 +125,7 @@ class ScannerFragment : Fragment() {
                         inputStream?.close()
                         if (importedBitmap != null) {
                             // Always apply EXIF orientation correction so images display upright
-                            val exifRotation = getExifRotation(requireContext(), uri)
+                            val exifRotation = ScannerImageUtils.getExifRotation(requireContext(), uri)
                             if (exifRotation != 0) {
                                 val matrix = android.graphics.Matrix().apply { postRotate(exifRotation.toFloat()) }
                                 val rotated = android.graphics.Bitmap.createBitmap(importedBitmap, 0, 0, importedBitmap.width, importedBitmap.height, matrix, true)
@@ -133,7 +134,7 @@ class ScannerFragment : Fragment() {
                             }
                             // If Auto-Rotation is enabled, apply intelligent mode-based aspect ratio correction
                             if (viewModel.autoRotation.value) {
-                                importedBitmap = autoRotateForMode(importedBitmap, viewModel.currentMode.value)
+                                importedBitmap = ScannerImageUtils.autoRotateForMode(importedBitmap, viewModel.currentMode.value)
                             }
                             viewModel.onCapture(importedBitmap, forceSkipEditor = list.size > 1)
                             successCount++
@@ -151,45 +152,12 @@ class ScannerFragment : Fragment() {
         }
     }
 
-    private var photoUri: android.net.Uri? = null
-
-    private val takePictureLauncher = registerForActivityResult(
+    val takePictureLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.TakePicture()
     ) { success ->
         if (success) {
-            photoUri?.let { uri ->
-                try {
-                    val bitmap = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                        android.graphics.ImageDecoder.decodeBitmap(
-                            android.graphics.ImageDecoder.createSource(requireContext().contentResolver, uri)
-                        )
-                    } else {
-                        @Suppress("DEPRECATION")
-                        android.provider.MediaStore.Images.Media.getBitmap(requireContext().contentResolver, uri)
-                    }
-                    // It returns a hardware bitmap on P+. We might need to copy it to a software bitmap to process it.
-                    var softwareBitmap = bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
-                    if (softwareBitmap != bitmap && !bitmap.isRecycled) {
-                        bitmap.recycle()
-                    }
-                    
-                    // Always apply EXIF orientation correction so images display upright
-                    val exifRotation = getExifRotation(requireContext(), uri)
-                    if (exifRotation != 0) {
-                        val matrix = android.graphics.Matrix().apply { postRotate(exifRotation.toFloat()) }
-                        val rotated = android.graphics.Bitmap.createBitmap(softwareBitmap, 0, 0, softwareBitmap.width, softwareBitmap.height, matrix, true)
-                        softwareBitmap.recycle()
-                        softwareBitmap = rotated
-                    }
-                    // If Auto-Rotation is enabled, apply intelligent mode-based aspect ratio correction
-                    if (viewModel.autoRotation.value) {
-                        softwareBitmap = autoRotateForMode(softwareBitmap, viewModel.currentMode.value)
-                    }
-                    
-                    viewModel.onCapture(softwareBitmap, isNativeScanned = true)
-                } catch (e: Exception) {
-                    Log.e("ScannerFragment", "Failed to process captured image", e)
-                }
+            captureManager.photoUri?.let { uri ->
+                captureManager.processCapturedPhonePhoto(uri)
             }
         }
     }
@@ -209,7 +177,7 @@ class ScannerFragment : Fragment() {
                             inputStream?.close()
                             if (scanBitmap != null) {
                                 // Always apply EXIF orientation correction so images display upright
-                                val exifRotation = getExifRotation(requireContext(), uri)
+                                val exifRotation = ScannerImageUtils.getExifRotation(requireContext(), uri)
                                 if (exifRotation != 0) {
                                     val matrix = android.graphics.Matrix().apply { postRotate(exifRotation.toFloat()) }
                                     val rotated = android.graphics.Bitmap.createBitmap(scanBitmap, 0, 0, scanBitmap.width, scanBitmap.height, matrix, true)
@@ -218,7 +186,7 @@ class ScannerFragment : Fragment() {
                                 }
                                 // If Auto-Rotation is enabled, apply intelligent mode-based aspect ratio correction
                                 if (viewModel.autoRotation.value) {
-                                    scanBitmap = autoRotateForMode(scanBitmap, viewModel.currentMode.value)
+                                    scanBitmap = ScannerImageUtils.autoRotateForMode(scanBitmap, viewModel.currentMode.value)
                                 }
                                 viewModel.onCapture(scanBitmap, isNativeScanned = true, forceSkipEditor = true)
                             }
@@ -322,7 +290,7 @@ class ScannerFragment : Fragment() {
         }
     }
 
-    private var shutterSound: android.media.MediaActionSound? = null
+    var shutterSound: android.media.MediaActionSound? = null
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -537,391 +505,16 @@ class ScannerFragment : Fragment() {
         ScannerUiActions(this).setupListeners()
     }
 
-    private fun mapPointsToPreviewView(
-        points: List<Point>,
-        bitmapWidth: Int,
-        bitmapHeight: Int,
-        rotationDegrees: Int
-    ): List<android.graphics.PointF> {
-        val binding = _binding ?: return emptyList()
-        val viewWidth = binding.previewView.width.toFloat()
-        val viewHeight = binding.previewView.height.toFloat()
-        if (viewWidth == 0f || viewHeight == 0f) return emptyList()
-
-        val rotatedWidth: Float
-        val rotatedHeight: Float
-        if (rotationDegrees == 90 || rotationDegrees == 270) {
-            rotatedWidth = bitmapHeight.toFloat()
-            rotatedHeight = bitmapWidth.toFloat()
-        } else {
-            rotatedWidth = bitmapWidth.toFloat()
-            rotatedHeight = bitmapHeight.toFloat()
-        }
-
-        val frameRatio = rotatedWidth / rotatedHeight
-        val viewRatio = viewWidth / viewHeight
-
-        val scale: Float
-        val dx: Float
-        val dy: Float
-
-        if (frameRatio > viewRatio) {
-            // Frame is wider than view -> width fits, top/bottom black bars
-            scale = viewWidth / rotatedWidth
-            dx = 0f
-            dy = (viewHeight - rotatedHeight * scale) / 2f
-        } else {
-            // Frame is taller than view -> height fits, left/right black bars
-            scale = viewHeight / rotatedHeight
-            dx = (viewWidth - rotatedWidth * scale) / 2f
-            dy = 0f
-        }
-
-        Log.d("LiveEdgeDetection", "mapPointsToPreviewView: dx=$dx dy=$dy scale=$scale viewW=$viewWidth viewH=$viewHeight rot=$rotationDegrees")
-
-        return points.map { pt ->
-            val normX = pt.x.toFloat() / bitmapWidth
-            val normY = pt.y.toFloat() / bitmapHeight
-
-            val rotatedX: Float
-            val rotatedY: Float
-            when (rotationDegrees) {
-                90 -> {
-                    rotatedX = 1f - normY
-                    rotatedY = normX
-                }
-                180 -> {
-                    rotatedX = 1f - normX
-                    rotatedY = 1f - normY
-                }
-                270 -> {
-                    rotatedX = normY
-                    rotatedY = 1f - normX
-                }
-                else -> {
-                    rotatedX = normX
-                    rotatedY = normY
-                }
-            }
-
-            val screenX = (rotatedX * rotatedWidth * scale) + dx
-            val screenY = (rotatedY * rotatedHeight * scale) + dy
-
-            android.graphics.PointF(screenX, screenY)
-        }
-    }
-
-    private fun getOverlayHoleRect(pw: Float, ph: Float): android.graphics.RectF {
-        val mode = viewModel.currentMode.value
-        val finalRatio = com.safescan.utils.PageConfig.getOnscreenLayoutRatio(requireContext(), mode)
-
-        val maxWidth = pw * 0.90f
-        val maxHeight = ph * 0.85f
-
-        var rectWidth = maxWidth
-        var rectHeight = rectWidth / finalRatio
-
-        if (rectHeight > maxHeight) {
-            rectHeight = maxHeight
-            rectWidth = rectHeight * finalRatio
-        }
-
-        val rectLeft = (pw - rectWidth) / 2f
-        val rectTop = (ph - rectHeight) / 2f
-        return android.graphics.RectF(rectLeft, rectTop, rectLeft + rectWidth, rectTop + rectHeight)
-    }
-
-    private fun getExifRotation(context: android.content.Context, uri: android.net.Uri): Int {
-        var rotation = 0
-        try {
-            context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                val exifInterface = android.media.ExifInterface(inputStream)
-                val orientation = exifInterface.getAttributeInt(
-                    android.media.ExifInterface.TAG_ORIENTATION,
-                    android.media.ExifInterface.ORIENTATION_NORMAL
-                )
-                rotation = when (orientation) {
-                    android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90
-                    android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180
-                    android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270
-                    else -> 0
-                }
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("ScannerFragment", "Failed to read EXIF rotation for uri: $uri", e)
-        }
-        return rotation
-    }
-
-    private fun autoRotateForMode(bitmap: android.graphics.Bitmap, mode: com.safescan.data.ScannerMode): android.graphics.Bitmap {
-        val isLandscape = bitmap.width > bitmap.height
-        val needsRotation = when (mode) {
-            com.safescan.data.ScannerMode.DOCUMENT -> isLandscape // DOCUMENT should be portrait
-            com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> !isLandscape // CARD/GRID should be landscape
-        }
-        return if (needsRotation) {
-            val angle = when (mode) {
-                com.safescan.data.ScannerMode.DOCUMENT -> 90f
-                com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> -90f
-            }
-            com.safescan.core.ScannerDebugLogger.logAutoRotation(angle)
-            val matrix = android.graphics.Matrix().apply { postRotate(angle) }
-            val rotated = android.graphics.Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-            bitmap.recycle()
-            rotated
-        } else {
-            com.safescan.core.ScannerDebugLogger.logAutoRotation(0f)
-            bitmap
-        }
-    }
-
-    fun updateCameraState() {
-        cameraController.setupCamera()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        updateCameraState()
-    }
-
-    fun allPermissionsGranted(): Boolean {
-        return permissionManager.allPermissionsGranted()
-    }
-
-    private fun openPhoneCamera() {
-        val context = requireContext()
-        val photoFile = java.io.File(context.cacheDir, "temp_camera_${System.currentTimeMillis()}.jpg")
-        photoUri = androidx.core.content.FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            photoFile
-        )
-        takePictureLauncher.launch(photoUri)
-    }
-
     fun focusAndTakePhoto(isAutoCapture: Boolean = false) {
-        if (isCapturingPhoto) return
-        if (isAutoCapture) {
-            if (cameraController.scannerStateMachine.isFocusing) return
-        } else {
-            // Manual capture takes precedence - clear any lock or auto-capture cooldown
-            cameraController.scannerStateMachine.isFocusing = false
-        }
-        cameraController.scannerStateMachine.isFocusing = true
-
-        val binding = _binding
-        if (binding == null) {
-            cameraController.scannerStateMachine.isFocusing = false
-            takePhoto()
-            return
-        }
-        
-        val previewView = binding.previewView
-        val mappedCorners = binding.overlayView.getCorners()
-        
-        var centerX = previewView.width / 2f
-        var centerY = previewView.height / 2f
-        
-        if (mappedCorners != null && mappedCorners.size == 4) {
-            var sumX = 0f
-            var sumY = 0f
-            for (p in mappedCorners) {
-                sumX += p.x
-                sumY += p.y
-            }
-            centerX = sumX / 4f
-            centerY = sumY / 4f
-        }
-
-        val factory = previewView.meteringPointFactory
-        val point = factory.createPoint(centerX, centerY)
-        // Relaxed settings for Auto Capture
-        val flags = if (isAutoCapture) androidx.camera.core.FocusMeteringAction.FLAG_AF else androidx.camera.core.FocusMeteringAction.FLAG_AF or androidx.camera.core.FocusMeteringAction.FLAG_AE
-        val action = androidx.camera.core.FocusMeteringAction.Builder(
-            point, 
-            flags
-        ).build()
-        
-        val future = cameraControl?.startFocusAndMetering(action)
-        if (future == null) {
-            cameraController.scannerStateMachine.isFocusing = false
-            takePhoto()
-            return
-        }
-
-        future.addListener({
-            try {
-                val result = future.get()
-                if (result.isFocusSuccessful) {
-                    Log.d("ScannerFragment", "Focus locked and successful. Triggering photo capture.")
-                } else {
-                    Log.d("ScannerFragment", "Focus lock failed or timed out. Proceeding to take photo as fallback.")
-                    cameraControl?.cancelFocusAndMetering()
-                }
-            } catch (e: Exception) {
-                Log.e("ScannerFragment", "Focus metering listener exception", e)
-                cameraControl?.cancelFocusAndMetering()
-            }
-            takePhoto()
-        }, androidx.core.content.ContextCompat.getMainExecutor(requireContext()))
+        captureManager.focusAndTakePhoto(isAutoCapture)
     }
 
-    private fun runAccuracyTest(previewCorners: List<android.graphics.PointF>?) {
-        android.util.Log.d("ScannerTest", "=== ACCURACY TEST START ===")
-        com.safescan.core.DiagnosticsLogger.info("ScannerTest: === ACCURACY TEST START ===")
-        val cornersToLog = previewCorners ?: lastDetectedScreenCorners
-        if (cornersToLog.isNullOrEmpty()) {
-            android.util.Log.d("ScannerTest", "Corners: No document corners detected on overlay")
-            com.safescan.core.DiagnosticsLogger.info("ScannerTest: Corners: No document corners detected on overlay")
-        } else {
-            cornersToLog.forEachIndexed { i, p -> 
-                android.util.Log.d("ScannerTest", "Corner $i: View(${p.x},${p.y})")
-                com.safescan.core.DiagnosticsLogger.info("ScannerTest: Corner $i: View(${p.x},${p.y})")
-            }
-        }
-        android.util.Log.d("ScannerTest", "=== ACCURACY TEST END ===")
-        com.safescan.core.DiagnosticsLogger.info("ScannerTest: === ACCURACY TEST END ===")
+    fun openPhoneCamera() {
+        captureManager.openPhoneCamera()
     }
 
-    private fun takePhoto() {
-        if (isCapturingPhoto) {
-            Log.w("ScannerFragment", "takePhoto ignored: photo capture already in progress")
-            return
-        }
-        isCapturingPhoto = true
-
-        if (viewModel.usePhoneCamera.value) {
-            cameraController.scannerStateMachine.isFocusing = false
-            isCapturingPhoto = false
-            openPhoneCamera()
-            return
-        }
-        if (viewModel.useNativeScanner.value) {
-            cameraController.scannerStateMachine.isFocusing = false
-            isCapturingPhoto = false
-            val maxPages = when (viewModel.currentMode.value) {
-                com.safescan.data.ScannerMode.CARD -> 2
-                com.safescan.data.ScannerMode.GRID -> 8
-                else -> 150
-            }
-            openDocumentScanner(maxPages)
-            return
-        }
-
-        val imageCapture = imageCapture ?: run {
-            cameraController.scannerStateMachine.isFocusing = false
-            isCapturingPhoto = false
-            return
-        }
-        val currentContext = context ?: run {
-            cameraController.scannerStateMachine.isFocusing = false
-            isCapturingPhoto = false
-            return
-        }
-        val binding = _binding ?: run {
-            cameraController.scannerStateMachine.isFocusing = false
-            isCapturingPhoto = false
-            return
-        }
-
-        binding.progressBar.visibility = View.VISIBLE
-
-        // Play shutter sound if enabled
-        if (viewModel.clickSound.value) {
-            try {
-                shutterSound?.play(android.media.MediaActionSound.SHUTTER_CLICK)
-            } catch (e: Exception) {
-                Log.e("ScannerFragment", "Failed to play shutter sound", e)
-            }
-        }
-
-        // Trigger vibration/haptic feedback if enabled
-        if (viewModel.vibrateOnCapture.value) {
-            try {
-                // Use performHapticFeedback for modern devices
-                binding.root.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
-                
-                // Also use Vibrator for redundancy
-                val vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                    val vibratorManager = currentContext.getSystemService(android.os.VibratorManager::class.java)
-                    vibratorManager?.defaultVibrator
-                } else {
-                    currentContext.getSystemService(android.os.Vibrator::class.java)
-                }
-                if (vibrator != null && vibrator.hasVibrator()) {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                        vibrator.vibrate(android.os.VibrationEffect.createPredefined(android.os.VibrationEffect.EFFECT_CLICK))
-                    } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        vibrator.vibrate(android.os.VibrationEffect.createOneShot(50, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
-                    } else {
-                        @Suppress("DEPRECATION")
-                        vibrator.vibrate(50)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("ScannerFragment", "Failed to vibrate on capture", e)
-            }
-        }
-
-        runAccuracyTest(_binding?.overlayView?.getCorners())
-
-        imageCapture.takePicture(
-            ContextCompat.getMainExecutor(currentContext),
-            object : ImageCapture.OnImageCapturedCallback() {
-                override fun onCaptureSuccess(imageProxy: ImageProxy) {
-                    // FIX: FINAL LEAK
-                    try {
-                        cameraControl?.cancelFocusAndMetering()
-                        val rawBitmap = imageProxy.toBitmap()
-                        // ALWAYS rotate the raw camera sensor bitmap by imageProxy.imageInfo.rotationDegrees
-                        // so it displays in standard upright portrait/landscape orientation matching the screen preview.
-                        val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-                        com.safescan.core.ScannerDebugLogger.logCameraRotation(rotationDegrees)
-                        val bitmap = if (rotationDegrees != 0) {
-                            val matrix = android.graphics.Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-                            val rotated = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
-                            rawBitmap.recycle()
-                            rotated
-                        } else {
-                            rawBitmap
-                        }
-
-                        // No cropping to visual cutout overlay frame is needed. We pass the full-resolution uncropped camera image.
-                        var finalBitmap = bitmap
-
-                        // If Auto-Rotation is enabled, apply intelligent mode-based aspect ratio/layout correction
-                        // (We always auto-rotate CARD and GRID captures so portrait overlays are transformed to landscape instantly)
-                        if (viewModel.autoRotation.value || viewModel.currentMode.value == com.safescan.data.ScannerMode.CARD || viewModel.currentMode.value == com.safescan.data.ScannerMode.GRID) {
-                            finalBitmap = autoRotateForMode(finalBitmap, viewModel.currentMode.value)
-                        }
-
-                        viewModel.onCapture(finalBitmap)
-                        isCapturingPhoto = false
-                        if (viewModel.autoCapture.value) {
-                            viewLifecycleOwner.lifecycleScope.launch {
-                                kotlinx.coroutines.delay(2500)
-                                cameraController.scannerStateMachine.isFocusing = false
-                            }
-                        } else {
-                            cameraController.scannerStateMachine.isFocusing = false
-                        }
-                    } finally {
-                        imageProxy.close()
-                    }
-                }
-
-                override fun onError(exception: ImageCaptureException) {
-                    cameraControl?.cancelFocusAndMetering()
-                    cameraController.scannerStateMachine.isFocusing = false
-                    isCapturingPhoto = false
-                    Log.e("ScannerFragment", "Photo capture failed: ${exception.message}", exception)
-                    _binding?.progressBar?.visibility = View.GONE
-                    context?.let { ctx ->
-                        Toast.makeText(ctx, "Capture failed: ${exception.localizedMessage}", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-        )
+    fun runAccuracyTest(previewCorners: List<android.graphics.PointF>?) {
+        captureManager.runAccuracyTest(previewCorners)
     }
 
     fun toggleFlash() {

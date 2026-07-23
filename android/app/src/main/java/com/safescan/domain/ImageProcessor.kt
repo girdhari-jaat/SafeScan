@@ -19,7 +19,18 @@ import com.safescan.core.ScannerDebugLogger
 
 object ImageProcessor {
 
+    private fun safeRelease(mat: Mat?) {
+        if (mat != null) {
+            try {
+                mat.release()
+            } catch (e: Throwable) {
+                // Ignore safe release errors
+            }
+        }
+    }
+
     suspend fun cropDocument(bitmap: Bitmap, quad: Quadrilateral): Bitmap = withContext(Dispatchers.Default) {
+        if (bitmap.isRecycled) return@withContext bitmap
         ScannerDebugLogger.logEnter("ImageProcessor.cropDocument")
         var src: Mat? = null
         var ptsSrc: MatOfPoint2f? = null
@@ -75,15 +86,16 @@ object ImageProcessor {
             ScannerDebugLogger.logExit("ImageProcessor.cropDocument")
             bitmap
         } finally {
-            src?.release()
-            ptsSrc?.release()
-            ptsDst?.release()
-            perspectiveTransform?.release()
-            outMat?.release()
+            safeRelease(src)
+            safeRelease(ptsSrc)
+            safeRelease(ptsDst)
+            safeRelease(perspectiveTransform)
+            safeRelease(outMat)
         }
     }
 
     suspend fun apply(bitmap: Bitmap, state: EditorState): Bitmap = withContext(Dispatchers.Default) {
+        if (bitmap.isRecycled) return@withContext bitmap
         ScannerDebugLogger.logEnter("ImageProcessor.apply")
         val startTime = System.currentTimeMillis()
         var src: Mat? = null
@@ -99,7 +111,7 @@ object ImageProcessor {
             // Convert ARGB to BGR for proper processing
             Imgproc.cvtColor(src, src, Imgproc.COLOR_RGBA2BGR)
 
-            // Apply Brightness & Contrast (centered around midpoint 127.5 to prevent blowout and preserve shapes/text)
+            // Apply Brightness & Contrast
             val alpha = state.contrast.toDouble().coerceIn(0.5, 3.0)
             val brightnessOffset = (state.brightness.toDouble() * 255.0 / 100.0).coerceIn(-100.0, 100.0)
             val beta = 127.5 * (1.0 - alpha) + brightnessOffset
@@ -143,16 +155,17 @@ object ImageProcessor {
             ScannerDebugLogger.logExit("ImageProcessor.apply")
             bitmap
         } finally {
-            src?.release()
-            outMat?.release()
-            blurred?.release()
-            dst?.release()
-            hsv?.release()
-            channels?.forEach { it.release() }
+            safeRelease(src)
+            safeRelease(outMat)
+            safeRelease(blurred)
+            safeRelease(dst)
+            safeRelease(hsv)
+            channels?.forEach { safeRelease(it) }
         }
     }
 
     suspend fun autoEnhance(bitmap: Bitmap): Bitmap = withContext(Dispatchers.Default) {
+        if (bitmap.isRecycled) return@withContext bitmap
         var src: Mat? = null
         var lab: Mat? = null
         var labChannels: ArrayList<Mat>? = null
@@ -208,16 +221,17 @@ object ImageProcessor {
             e.printStackTrace()
             bitmap
         } finally {
-            src?.release()
-            lab?.release()
-            labChannels?.forEach { it.release() }
-            dilated?.release()
-            kernel?.release()
-            bgIllum?.release()
-            diff?.release()
-            ones?.release()
-            bgrChannels?.forEach { it.release() }
-            outMat?.release()
+            safeRelease(src)
+            safeRelease(lab)
+            labChannels?.forEach { safeRelease(it) }
+            safeRelease(dilated)
+            safeRelease(kernel)
+            safeRelease(bgIllum)
+            safeRelease(diff)
+            safeRelease(ones)
+            bgrChannels?.forEach { safeRelease(it) }
+            safeRelease(outMat)
         }
     }
 }
+

@@ -167,6 +167,8 @@ class ScannerViewModel @Inject constructor(
     val originalJpgBitmaps = mutableMapOf<Int, Bitmap>()
     val jpgCorners = mutableMapOf<Int, List<com.safescan.domain.model.Point>>()
 
+    private val settingsHandler = ScannerSettingsHandler(settingsRepository, viewModelScope)
+
     // High-Performance LRU (Least Recently Used) Cache for high-res Bitmaps in RAM to prevent OOM
     private val highResCache = object : android.util.LruCache<String, Bitmap>(8) {
         override fun entryRemoved(evicted: Boolean, key: String?, oldValue: Bitmap?, newValue: Bitmap?) {
@@ -243,45 +245,6 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    private fun generateDefaultTitle(mode: ScannerMode): String {
-        val sdf = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault())
-        val timestamp = sdf.format(java.util.Date())
-        return when (mode) {
-            ScannerMode.DOCUMENT -> "Doc_$timestamp"
-            ScannerMode.CARD, ScannerMode.GRID -> "Card_$timestamp"
-        }
-    }
-
-    private fun resolveDynamicFilename(pattern: String, mode: ScannerMode): String {
-        val sdf = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault())
-        val timestamp = sdf.format(java.util.Date())
-        
-        val trimmed = pattern.trim()
-        if (trimmed.isEmpty() || 
-            trimmed.equals("Doc+Date+Time", ignoreCase = true) || 
-            trimmed.equals("Card+Date+Time", ignoreCase = true) || 
-            trimmed.equals("Doc_yyyyMMdd_HHmm", ignoreCase = true) || 
-            trimmed.equals("Card_yyyyMMdd_HHmm", ignoreCase = true) || 
-            trimmed.equals("Scan_Document", ignoreCase = true)) {
-            return when (mode) {
-                ScannerMode.DOCUMENT -> "Doc_$timestamp"
-                ScannerMode.CARD, ScannerMode.GRID -> "Card_$timestamp"
-            }
-        }
-        
-        var resolved = pattern
-        if (resolved.contains("Doc+Date+Time", ignoreCase = true)) {
-            resolved = resolved.replace("Doc+Date+Time", "Doc_$timestamp", ignoreCase = true)
-        }
-        if (resolved.contains("Card+Date+Time", ignoreCase = true)) {
-            resolved = resolved.replace("Card+Date+Time", "Card_$timestamp", ignoreCase = true)
-        }
-        if (resolved.contains("Date+Time", ignoreCase = true)) {
-            resolved = resolved.replace("Date+Time", timestamp, ignoreCase = true)
-        }
-        return resolved
-    }
-
     fun getOrGenerateDocumentTitle(docId: String?): String {
         // 1. If we have an initialDocumentTitle stored, return it
         initialDocumentTitle?.let { return it }
@@ -296,7 +259,7 @@ class ScannerViewModel @Inject constructor(
         }
 
         // 3. Otherwise, generate a new dynamic filename and cache it in initialDocumentTitle
-        val newTitle = resolveDynamicFilename(pdfFilename.value, currentMode.value)
+        val newTitle = ScannerTitleUtils.resolveDynamicFilename(pdfFilename.value, currentMode.value)
         initialDocumentTitle = newTitle
         return newTitle
     }
@@ -431,308 +394,46 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    fun switchMode(mode: ScannerMode) {
-        viewModelScope.launch {
-            settingsRepository.setScannerMode(mode)
-        }
-    }
-
-    fun toggleAutoCrop(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setAutoCrop(enabled)
-            DiagnosticsLogger.info("Auto Crop toggled: $enabled")
-        }
-    }
-
-    fun cycleFlashMode() {
-        viewModelScope.launch {
-            val nextMode = when (flashMode.value) {
-                com.safescan.data.FlashMode.OFF -> com.safescan.data.FlashMode.AUTO
-                com.safescan.data.FlashMode.AUTO -> com.safescan.data.FlashMode.ON
-                com.safescan.data.FlashMode.ON -> com.safescan.data.FlashMode.TORCH
-                com.safescan.data.FlashMode.TORCH -> com.safescan.data.FlashMode.OFF
-            }
-            settingsRepository.setFlashMode(nextMode)
-            DiagnosticsLogger.info("Flash mode cycled to: ${nextMode.name}")
-        }
-    }
-
-    fun toggleFlash(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setFlashOn(enabled)
-            DiagnosticsLogger.info("Flash toggled: $enabled")
-        }
-    }
-
-    fun toggleDoubleFocus(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setDoubleFocus(enabled)
-            DiagnosticsLogger.info("Double Focus toggled: $enabled")
-        }
-    }
-
-    fun setFocusMode(mode: String) {
-        viewModelScope.launch {
-            settingsRepository.setFocusMode(mode)
-            DiagnosticsLogger.info("Focus Mode set to: $mode")
-        }
-    }
-
-    fun toggleSaveJpg(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setSaveJpg(enabled)
-            DiagnosticsLogger.info("Save Raw JPG toggled: $enabled")
-        }
-    }
-
-    fun toggleAutoPdf(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setAutoPdf(enabled)
-            DiagnosticsLogger.info("Auto-PDF generation toggled: $enabled")
-        }
-    }
-
-    fun toggleBatchScan(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setBatchScan(enabled)
-            DiagnosticsLogger.info("Batch Scan toggled: $enabled")
-        }
-    }
-
-    fun toggleShowGrid(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setShowGrid(enabled)
-            DiagnosticsLogger.info("Show Grid Lines toggled: $enabled")
-        }
-    }
-
-    fun toggleClickSound(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setClickSound(enabled)
-            DiagnosticsLogger.info("Capture shutter sound toggled: $enabled")
-        }
-    }
-
-    fun toggleAutoOrientation(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setAutoOrientation(enabled)
-            DiagnosticsLogger.info("Auto Orientation toggled: $enabled")
-        }
-    }
-
-    fun toggleShadowRemove(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setShadowRemove(enabled)
-            DiagnosticsLogger.info("Shadow Removal toggled: $enabled")
-        }
-    }
-
-    fun toggleAutoRotation(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setAutoRotation(enabled)
-            DiagnosticsLogger.info("Auto Rotation toggled: $enabled")
-        }
-    }
-
-    fun setDefaultFilter(filter: String) {
-        viewModelScope.launch {
-            settingsRepository.setDefaultFilter(filter)
-            DiagnosticsLogger.info("Default Filter set to: $filter")
-        }
-    }
-
-    fun setUiLanguage(language: String) {
-        viewModelScope.launch {
-            settingsRepository.setUiLanguage(language)
-            DiagnosticsLogger.info("UI Language set to: $language")
-        }
-    }
-
-    fun setVibrateOnCapture(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setVibrateOnCapture(enabled)
-            DiagnosticsLogger.info("Vibrate On Capture toggled: $enabled")
-        }
-    }
-
-    fun setSaveToGallery(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setSaveToGallery(enabled)
-            DiagnosticsLogger.info("Save To Gallery toggled: $enabled")
-        }
-    }
-
-    fun toggleLiveDetect(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setLiveDetect(enabled)
-            DiagnosticsLogger.info("Live Edge Detection toggled: $enabled")
-        }
-    }
-
-    fun toggleBatterySaver(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setBatterySaver(enabled)
-            DiagnosticsLogger.info("Battery Saver toggled: $enabled")
-        }
-    }
-
-    fun toggleStartWithCamera(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setStartWithCamera(enabled)
-            DiagnosticsLogger.info("Start with Camera toggled: $enabled")
-        }
-    }
-
-    fun toggleUsePhoneCamera(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setUsePhoneCamera(enabled)
-            DiagnosticsLogger.info("Use Phone Camera toggled: $enabled")
-        }
-    }
-
-    fun toggleUseNativeScanner(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setUseNativeScanner(enabled)
-            DiagnosticsLogger.info("ML Kit Native Scanner toggled: $enabled")
-        }
-    }
-
-    fun setHdMode(mode: String) {
-        viewModelScope.launch {
-            settingsRepository.setHdMode(mode)
-            DiagnosticsLogger.info("Capture Quality set to: $mode")
-        }
-    }
-    
-    fun setDpi(value: Float) {
-        viewModelScope.launch {
-            settingsRepository.setDpi(value)
-            DiagnosticsLogger.info("Export DPI resolution set to: ${value.toInt()}")
-        }
-    }
-    
-    private var jpegQualityJob: kotlinx.coroutines.Job? = null
-
-    fun setJpegQuality(value: Float) {
-        jpegQualityJob?.cancel()
-        jpegQualityJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(150)
-            settingsRepository.setJpegQuality(value)
-            DiagnosticsLogger.info("Export JPEG Quality set to: ${value.toInt()}%")
-        }
-    }
-    
-    fun setPdfFilename(value: String) {
-        viewModelScope.launch {
-            settingsRepository.setPdfFilename(value)
-            DiagnosticsLogger.info("Default PDF filename set to: '$value'")
-        }
-    }
-
-    fun setWizardDontShowAgain(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setWizardDontShowAgain(enabled)
-            DiagnosticsLogger.info("Wizard Don't Show Again set to: $enabled")
-        }
-    }
-
-    fun setWizardWarp(warp: String) {
-        viewModelScope.launch {
-            settingsRepository.setWizardWarp(warp)
-            DiagnosticsLogger.info("Wizard Warp set to: $warp")
-        }
-    }
-
-    fun setWizardRotation(rotation: String) {
-        viewModelScope.launch {
-            settingsRepository.setWizardRotation(rotation)
-            DiagnosticsLogger.info("Wizard Rotation set to: $rotation")
-        }
-    }
-
-    fun setWizardManualCrop(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setWizardManualCrop(enabled)
-            DiagnosticsLogger.info("Wizard Manual Crop set to: $enabled")
-        }
-    }
-    
-    fun setPageSize(value: String) {
-        viewModelScope.launch {
-            settingsRepository.setPageSize(value)
-            DiagnosticsLogger.info("Export Page Size set to: $value")
-        }
-    }
-
-    fun setPdfOrientation(value: String) {
-        viewModelScope.launch {
-            settingsRepository.setPdfOrientation(value)
-            DiagnosticsLogger.info("Export PDF Orientation set to: $value")
-        }
-    }
+    fun switchMode(mode: ScannerMode) = settingsHandler.switchMode(mode)
+    fun toggleAutoCrop(enabled: Boolean) = settingsHandler.toggleAutoCrop(enabled)
+    fun cycleFlashMode() = settingsHandler.cycleFlashMode(flashMode.value)
+    fun toggleFlash(enabled: Boolean) = settingsHandler.toggleFlash(enabled)
+    fun toggleDoubleFocus(enabled: Boolean) = settingsHandler.toggleDoubleFocus(enabled)
+    fun setFocusMode(mode: String) = settingsHandler.setFocusMode(mode)
+    fun toggleSaveJpg(enabled: Boolean) = settingsHandler.toggleSaveJpg(enabled)
+    fun toggleAutoPdf(enabled: Boolean) = settingsHandler.toggleAutoPdf(enabled)
+    fun toggleBatchScan(enabled: Boolean) = settingsHandler.toggleBatchScan(enabled)
+    fun toggleShowGrid(enabled: Boolean) = settingsHandler.toggleShowGrid(enabled)
+    fun toggleClickSound(enabled: Boolean) = settingsHandler.toggleClickSound(enabled)
+    fun toggleAutoOrientation(enabled: Boolean) = settingsHandler.toggleAutoOrientation(enabled)
+    fun toggleShadowRemove(enabled: Boolean) = settingsHandler.toggleShadowRemove(enabled)
+    fun toggleAutoRotation(enabled: Boolean) = settingsHandler.toggleAutoRotation(enabled)
+    fun setDefaultFilter(filter: String) = settingsHandler.setDefaultFilter(filter)
+    fun setUiLanguage(language: String) = settingsHandler.setUiLanguage(language)
+    fun setVibrateOnCapture(enabled: Boolean) = settingsHandler.setVibrateOnCapture(enabled)
+    fun setSaveToGallery(enabled: Boolean) = settingsHandler.setSaveToGallery(enabled)
+    fun toggleLiveDetect(enabled: Boolean) = settingsHandler.toggleLiveDetect(enabled)
+    fun toggleBatterySaver(enabled: Boolean) = settingsHandler.toggleBatterySaver(enabled)
+    fun toggleStartWithCamera(enabled: Boolean) = settingsHandler.toggleStartWithCamera(enabled)
+    fun toggleUsePhoneCamera(enabled: Boolean) = settingsHandler.toggleUsePhoneCamera(enabled)
+    fun toggleUseNativeScanner(enabled: Boolean) = settingsHandler.toggleUseNativeScanner(enabled)
+    fun setHdMode(mode: String) = settingsHandler.setHdMode(mode)
+    fun setDpi(value: Float) = settingsHandler.setDpi(value)
+    fun setJpegQuality(value: Float) = settingsHandler.setJpegQuality(value)
+    fun setPdfFilename(value: String) = settingsHandler.setPdfFilename(value)
+    fun setWizardDontShowAgain(enabled: Boolean) = settingsHandler.setWizardDontShowAgain(enabled)
+    fun setWizardWarp(warp: String) = settingsHandler.setWizardWarp(warp)
+    fun setWizardRotation(rotation: String) = settingsHandler.setWizardRotation(rotation)
+    fun setWizardManualCrop(enabled: Boolean) = settingsHandler.setWizardManualCrop(enabled)
+    fun setPageSize(value: String) = settingsHandler.setPageSize(value)
+    fun setPdfOrientation(value: String) = settingsHandler.setPdfOrientation(value)
 
     fun saveImageToGallery(context: android.content.Context, bitmap: Bitmap) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val resolver = context.contentResolver
-            val contentValues = android.content.ContentValues().apply {
-                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "SafeScan_${System.currentTimeMillis()}.jpg")
-                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DCIM + "/SafeScan")
-            }
-            val uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-            if (uri != null) {
-                try {
-                    resolver.openOutputStream(uri)?.use { out ->
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
-                    }
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Image saved to DCIM/SafeScan", Toast.LENGTH_SHORT).show()
-                    }
-                } catch (e: Exception) {
-                    Log.e("ScannerViewModel", "Failed to save image", e)
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Failed to save image", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            } else {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Failed to save image", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
+        ScannerExportUtils.saveImageToGallery(context, bitmap, viewModelScope)
     }
 
     fun savePdfToPublicDocuments(context: android.content.Context, sourceFile: java.io.File) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val resolver = context.contentResolver
-            val contentValues = android.content.ContentValues().apply {
-                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, sourceFile.name)
-                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
-                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOCUMENTS + "/SafeScan")
-            }
-            val uri = resolver.insert(android.provider.MediaStore.Files.getContentUri("external"), contentValues)
-            if (uri != null) {
-                try {
-                    resolver.openOutputStream(uri)?.use { out ->
-                        java.io.FileInputStream(sourceFile).use { input ->
-                            input.copyTo(out)
-                        }
-                    }
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "PDF saved to Documents/SafeScan", Toast.LENGTH_SHORT).show()
-                    }
-                } catch (e: Exception) {
-                    Log.e("ScannerViewModel", "Failed to save PDF", e)
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Failed to save PDF", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            } else {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Failed to save PDF", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
+        ScannerExportUtils.savePdfToPublicDocuments(context, sourceFile, viewModelScope)
     }
 
     fun onSlotClick(slotId: String) {

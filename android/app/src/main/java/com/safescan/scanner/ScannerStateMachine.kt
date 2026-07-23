@@ -11,8 +11,8 @@ class ScannerStateMachine(
 
     private var stableFrameCount = 0
     private var lastQuadPoints: List<Point>? = null
-    private val STABLE_FRAME_THRESHOLD = 3
-    private val STABILITY_TOLERANCE = 120.0
+    private val STABLE_FRAME_THRESHOLD = 8
+    private val STABILITY_TOLERANCE = 80.0
 
     var isFocusing = false
 
@@ -52,7 +52,7 @@ class ScannerStateMachine(
             } else {
                 // If there's a slight tremor or minor lighting shift, don't hard-reset to 1.
                 // Gracefully decrement or hold the stableFrameCount to prevent user frustration.
-                stableFrameCount = (stableFrameCount - 1).coerceAtLeast(1)
+                stableFrameCount = (stableFrameCount - 1).coerceAtLeast(0)
             }
         } else {
             stableFrameCount = 1
@@ -69,7 +69,7 @@ class ScannerStateMachine(
             return
         }
 
-        val isSharp = sharpness > 10.0 || sharpness == 0.0
+        val isSharp = sharpness > 10.0
         val trigger = stableFrameCount >= threshold && isSharp
         ScannerDebugLogger.logAutoCap(inBox = true, sharpness = sharpness, stable = stableFrameCount, trigger = trigger)
 

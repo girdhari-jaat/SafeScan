@@ -7,7 +7,6 @@ plugins {
     id("kotlin-kapt")
     id("com.google.dagger.hilt.android")
     id("io.gitlab.arturbosch.detekt")
-    id("org.jlleitschuh.gradle.ktlint")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -91,7 +90,6 @@ android {
 
     packaging {
         jniLibs {
-            useLegacyPackaging = true
             excludes.add("lib/armeabi-v7a/**")
             excludes.add("lib/x86/**")
             excludes.add("lib/x86_64/**")

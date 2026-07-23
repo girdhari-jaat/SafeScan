@@ -122,7 +122,9 @@ object ImageFilterEngine {
             safeRelease(enhancedBgr)
             safeRelease(sharpened)
             safeRelease(kernel)
-            channels.forEach { safeRelease(it) }
+            for (m in channels) {
+                safeRelease(m)
+            }
             channels.clear()
             safeCollectGarbage(clahe)
         }

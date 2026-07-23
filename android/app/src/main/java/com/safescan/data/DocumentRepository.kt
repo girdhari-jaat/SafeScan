@@ -6,6 +6,8 @@ import android.graphics.BitmapFactory
 import android.util.Log
 import com.safescan.domain.model.Point
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -30,13 +32,13 @@ class DocumentRepository @Inject constructor(
     /**
      * Saves a captured bitmap to /Android/data/com.safescan/files/Scans/timestamp.jpg
      */
-    fun saveJpgToScans(bitmap: Bitmap, quality: Int): File? {
-        val scansDir = context.getExternalFilesDir("Scans") ?: return null
+    suspend fun saveJpgToScans(bitmap: Bitmap, quality: Int): File? = withContext(Dispatchers.IO) {
+        val scansDir = context.getExternalFilesDir("Scans") ?: return@withContext null
         if (!scansDir.exists()) {
             scansDir.mkdirs()
         }
         val file = File(scansDir, "${System.currentTimeMillis()}.jpg")
-        return try {
+        return@withContext try {
             FileOutputStream(file).use { out ->
                 bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
             }
@@ -50,11 +52,11 @@ class DocumentRepository @Inject constructor(
     /**
      * Retrieves all saved documents by reading metadata.json from each sub-folder.
      */
-    fun getDocuments(): List<DocumentMetadata> {
-        val root = baseDir ?: return emptyList()
+    suspend fun getDocuments(): List<DocumentMetadata> = withContext(Dispatchers.IO) {
+        val root = baseDir ?: return@withContext emptyList()
         val docsList = mutableListOf<DocumentMetadata>()
 
-        val folders = root.listFiles { file -> file.isDirectory } ?: return emptyList()
+        val folders = root.listFiles { file -> file.isDirectory } ?: return@withContext emptyList()
         for (folder in folders) {
             val metaFile = File(folder, "metadata.json")
             if (metaFile.exists()) {
@@ -67,20 +69,20 @@ class DocumentRepository @Inject constructor(
                 }
             }
         }
-        return docsList.sortedByDescending { it.createdAt }
+        return@withContext docsList.sortedByDescending { it.createdAt }
     }
 
     /**
      * Saves a brand new document or updates an existing one on disk.
      * Pages is a list of Page ID to Pair(OriginalBitmap, PreviewBitmap).
      */
-    fun saveDocument(
+    suspend fun saveDocument(
         docId: String,
         title: String,
         mode: String,
         pagesData: List<PageSaveData>
-    ): Boolean {
-        val root = baseDir ?: return false
+    ): Boolean = withContext(Dispatchers.IO) {
+        val root = baseDir ?: return@withContext false
         val docFolder = File(root, docId)
         if (!docFolder.exists()) {
             docFolder.mkdirs()
@@ -138,13 +140,13 @@ class DocumentRepository @Inject constructor(
             pages = pagesMetaList
         )
 
-        return writeMetaFile(docFolder, meta)
+        return@withContext writeMetaFile(docFolder, meta)
     }
 
     /**
      * Updates page-specific edits on an existing document metadata.
      */
-    fun updatePageEdits(
+    suspend fun updatePageEdits(
         docId: String,
         pageId: String,
         filter: String,
@@ -155,11 +157,11 @@ class DocumentRepository @Inject constructor(
         rotation: Int,
         corners: List<Point>?,
         newPreview: Bitmap? = null
-    ): Boolean {
-        val root = baseDir ?: return false
+    ): Boolean = withContext(Dispatchers.IO) {
+        val root = baseDir ?: return@withContext false
         val docFolder = File(root, docId)
         val metaFile = File(docFolder, "metadata.json")
-        if (!metaFile.exists()) return false
+        if (!metaFile.exists()) return@withContext false
 
         try {
             val jsonStr = metaFile.readText()
@@ -183,21 +185,21 @@ class DocumentRepository @Inject constructor(
                 } else page
             }
             val updatedDoc = doc.copy(pages = updatedPages)
-            return writeMetaFile(docFolder, updatedDoc)
+            return@withContext writeMetaFile(docFolder, updatedDoc)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update page edits for doc: $docId, page: $pageId", e)
-            return false
+            return@withContext false
         }
     }
 
     /**
      * Updates OCR Text for a specific page.
      */
-    fun updatePageOcrText(docId: String, pageId: String, text: String): Boolean {
-        val root = baseDir ?: return false
+    suspend fun updatePageOcrText(docId: String, pageId: String, text: String): Boolean = withContext(Dispatchers.IO) {
+        val root = baseDir ?: return@withContext false
         val docFolder = File(root, docId)
         val metaFile = File(docFolder, "metadata.json")
-        if (!metaFile.exists()) return false
+        if (!metaFile.exists()) return@withContext false
 
         try {
             val jsonStr = metaFile.readText()
@@ -208,49 +210,49 @@ class DocumentRepository @Inject constructor(
                 } else page
             }
             val updatedDoc = doc.copy(pages = updatedPages)
-            return writeMetaFile(docFolder, updatedDoc)
+            return@withContext writeMetaFile(docFolder, updatedDoc)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update page OCR for doc: $docId, page: $pageId", e)
-            return false
+            return@withContext false
         }
     }
 
-    fun deleteDocument(docId: String): Boolean {
-        val root = baseDir ?: return false
+    suspend fun deleteDocument(docId: String): Boolean = withContext(Dispatchers.IO) {
+        val root = baseDir ?: return@withContext false
         val docFolder = File(root, docId)
         if (docFolder.exists()) {
-            return deleteRecursive(docFolder)
+            return@withContext deleteRecursive(docFolder)
         }
-        return false
+        return@withContext false
     }
 
-    fun renameDocument(docId: String, newTitle: String): Boolean {
-        val root = baseDir ?: return false
+    suspend fun renameDocument(docId: String, newTitle: String): Boolean = withContext(Dispatchers.IO) {
+        val root = baseDir ?: return@withContext false
         val docFolder = File(root, docId)
         val metaFile = File(docFolder, "metadata.json")
-        if (!metaFile.exists()) return false
+        if (!metaFile.exists()) return@withContext false
 
         try {
             val jsonStr = metaFile.readText()
             val doc = parseDocumentMetadata(jsonStr)
             val updatedDoc = doc.copy(title = newTitle)
-            return writeMetaFile(docFolder, updatedDoc)
+            return@withContext writeMetaFile(docFolder, updatedDoc)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to rename document $docId", e)
-            return false
+            return@withContext false
         }
     }
 
-    fun loadOriginalBitmap(docId: String, pageId: String): Bitmap? {
-        val root = baseDir ?: return null
+    suspend fun loadOriginalBitmap(docId: String, pageId: String): Bitmap? = withContext(Dispatchers.IO) {
+        val root = baseDir ?: return@withContext null
         val file = File(root, "$docId/pages/$pageId.jpg")
-        return if (file.exists()) BitmapFactory.decodeFile(file.absolutePath) else null
+        return@withContext if (file.exists()) BitmapFactory.decodeFile(file.absolutePath) else null
     }
 
-    fun loadPreviewBitmap(docId: String, pageId: String): Bitmap? {
-        val root = baseDir ?: return null
+    suspend fun loadPreviewBitmap(docId: String, pageId: String): Bitmap? = withContext(Dispatchers.IO) {
+        val root = baseDir ?: return@withContext null
         val file = File(root, "$docId/previews/$pageId.jpg")
-        return if (file.exists()) BitmapFactory.decodeFile(file.absolutePath) else null
+        return@withContext if (file.exists()) BitmapFactory.decodeFile(file.absolutePath) else null
     }
 
     private fun saveBitmapToFile(bmp: Bitmap, file: File) {

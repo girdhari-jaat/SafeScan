@@ -9,12 +9,6 @@ class OverlayView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
-    private val backgroundPaint = Paint().apply {
-        color = Color.parseColor("#99000000") // 60% black
-        style = Paint.Style.FILL
-        isAntiAlias = true
-    }
-    
     private val strokePaint = Paint().apply {
         color = Color.parseColor("#FF10B981") // Emerald green
         style = Paint.Style.STROKE
@@ -36,6 +30,11 @@ class OverlayView @JvmOverloads constructor(
     
     fun getHoleRect(): RectF {
         return holeRect
+    }
+
+    fun clear() {
+        corners = null
+        invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {

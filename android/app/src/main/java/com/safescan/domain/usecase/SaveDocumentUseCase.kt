@@ -13,7 +13,7 @@ import javax.inject.Singleton
 class SaveDocumentUseCase @Inject constructor(
     private val documentRepository: DocumentRepository
 ) {
-    fun saveDocument(
+    suspend fun saveDocument(
         docId: String,
         title: String,
         mode: String,
@@ -22,15 +22,15 @@ class SaveDocumentUseCase @Inject constructor(
         return documentRepository.saveDocument(docId, title, mode, pages)
     }
 
-    fun deleteDocument(docId: String) {
+    suspend fun deleteDocument(docId: String) {
         documentRepository.deleteDocument(docId)
     }
 
-    fun renameDocument(docId: String, newTitle: String) {
+    suspend fun renameDocument(docId: String, newTitle: String) {
         documentRepository.renameDocument(docId, newTitle)
     }
 
-    fun updatePageEdits(
+    suspend fun updatePageEdits(
         docId: String,
         pageId: String,
         filter: String,
@@ -47,19 +47,19 @@ class SaveDocumentUseCase @Inject constructor(
         )
     }
 
-    fun saveJpgToScans(bitmap: Bitmap, quality: Int): File? {
+    suspend fun saveJpgToScans(bitmap: Bitmap, quality: Int): File? {
         return documentRepository.saveJpgToScans(bitmap, quality)
     }
 
-    fun getDocuments(): List<DocumentMetadata> {
+    suspend fun getDocuments(): List<DocumentMetadata> {
         return documentRepository.getDocuments()
     }
 
-    fun loadOriginalBitmap(docId: String, pageId: String): Bitmap? {
+    suspend fun loadOriginalBitmap(docId: String, pageId: String): Bitmap? {
         return documentRepository.loadOriginalBitmap(docId, pageId)
     }
 
-    fun loadPreviewBitmap(docId: String, pageId: String): Bitmap? {
+    suspend fun loadPreviewBitmap(docId: String, pageId: String): Bitmap? {
         return documentRepository.loadPreviewBitmap(docId, pageId)
     }
 }

@@ -77,6 +77,7 @@ class CameraController(
             startCamera()
         } else {
             binding.previewView.visibility = View.GONE
+            binding.overlayView.clear()
             val provider = this.cameraProvider
             if (provider != null && isCameraBound) {
                 try {
@@ -268,7 +269,7 @@ class CameraController(
                 isTargetLocked = false
                 scannerStateMachine.processFrame(null, 0.0, false)
                 fragment.activity?.runOnUiThread {
-                    fragment.binding?.overlayView?.updateCorners(null)
+                    fragment.binding?.overlayView?.clear()
                 }
             }
         }
@@ -348,6 +349,7 @@ class CameraController(
         cameraProvider?.unbindAll()
         imageAnalysis?.clearAnalyzer()
         isCameraBound = false
+        fragment.binding?.overlayView?.clear()
     }
 
     fun destroy() {

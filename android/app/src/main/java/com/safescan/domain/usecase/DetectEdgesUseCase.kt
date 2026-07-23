@@ -14,14 +14,24 @@ class DetectEdgesUseCase @Inject constructor(
     private val tfLiteEdgeDetectionEngine: TFLiteEdgeDetectionEngine
 ) {
     fun detectWithOpenCV(
-        bitmap: Bitmap,
+        bitmap: Bitmap?,
         mode: ScannerMode,
         isManualCrop: Boolean
     ): List<Point>? {
-        return edgeDetectionEngine.detectEdges(bitmap, mode, isManualCrop)
+        if (bitmap == null || bitmap.isRecycled) return null
+        return try {
+            edgeDetectionEngine.detectEdges(bitmap, mode, isManualCrop)
+        } catch (e: Exception) {
+            null
+        }
     }
 
-    fun detectWithTFLite(bitmap: Bitmap): List<Point>? {
-        return tfLiteEdgeDetectionEngine.detectEdges(bitmap)
+    fun detectWithTFLite(bitmap: Bitmap?): List<Point>? {
+        if (bitmap == null || bitmap.isRecycled) return null
+        return try {
+            tfLiteEdgeDetectionEngine.detectEdges(bitmap)
+        } catch (e: Exception) {
+            null
+        }
     }
 }
