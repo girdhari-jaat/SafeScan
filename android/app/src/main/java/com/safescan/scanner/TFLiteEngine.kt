@@ -78,20 +78,13 @@ class TFLiteEngine(private val context: Context) {
                     val tfliteModel = fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
 
                     try {
-                        // Try initializing with GPU Delegate using CompatibilityList for device-specific tuning
+                        // Try initializing with standard GPU Delegate
                         val options = Interpreter.Options()
-                        val compatList = org.tensorflow.lite.gpu.CompatibilityList()
-                        
-                        if (compatList.isDelegateSupportedOnThisDevice) {
-                            val delegateOptions = compatList.bestOptionsForThisDevice
-                            gpuDelegate = GpuDelegate(delegateOptions)
-                            options.addDelegate(gpuDelegate)
-                            interpreter = Interpreter(tfliteModel, options)
-                            Log.d("TFLiteEngine", "Native TFLite model loaded successfully with GPU acceleration")
-                            com.safescan.core.ScannerDebugLogger.logTFLiteInit("Model loaded successfully with GPU acceleration")
-                        } else {
-                            throw UnsupportedOperationException("GPU not supported on this device according to CompatibilityList")
-                        }
+                        gpuDelegate = GpuDelegate()
+                        options.addDelegate(gpuDelegate)
+                        interpreter = Interpreter(tfliteModel, options)
+                        Log.d("TFLiteEngine", "Native TFLite model loaded successfully with GPU acceleration")
+                        com.safescan.core.ScannerDebugLogger.logTFLiteInit("Model loaded successfully with GPU acceleration")
                     } catch (gpuEx: Throwable) {
                         Log.w("TFLiteEngine", "GPU acceleration not supported or failed to initialize. Falling back to CPU safely.", gpuEx)
                         com.safescan.core.ScannerDebugLogger.logTFLiteInit("GPU acceleration failed, falling back to CPU")
