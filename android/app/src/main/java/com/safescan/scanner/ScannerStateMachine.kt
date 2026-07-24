@@ -35,7 +35,7 @@ class ScannerStateMachine(
 
     private val MAX_MISSING_FRAMES = 10
     private val STABLE_FRAME_THRESHOLD = 8
-    private val MIN_SHARPNESS_THRESHOLD = 25.0
+    private val MIN_SHARPNESS_THRESHOLD = 35.0
     private val REQUIRED_STABLE_FRAMES_FOR_OVERLAY = 4
     private val EMA_ALPHA = 0.6f
 

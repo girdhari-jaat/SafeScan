@@ -140,7 +140,7 @@ class EdgeDetectionEngine {
             }
 
             val meanBrightness = Core.mean(gray).`val`[0]
-            val isLowLight = meanBrightness < 85.0
+            val isLowLight = meanBrightness < 95.0
             if (isLowLight) {
                 thresholdX *= 0.70
                 thresholdY *= 0.70

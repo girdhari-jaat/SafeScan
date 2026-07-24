@@ -12,12 +12,12 @@ import com.safescan.domain.model.Quadrilateral
 import org.opencv.android.Utils
 import org.opencv.core.CvType
 import org.opencv.core.Mat
+import org.opencv.core.MatOfInt
 import org.opencv.core.MatOfPoint
 import org.opencv.core.MatOfPoint2f
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.gpu.CompatibilityList
 import org.tensorflow.lite.gpu.GpuDelegate
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -82,20 +82,9 @@ class TFLiteEngine(private val context: Context) {
                     val tfliteModel = fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
 
                     try {
-                        // Try initializing with GPU Delegate using device compatibility options
+                        // Try initializing with GPU Delegate
                         val options = Interpreter.Options()
-                        val compatList = CompatibilityList()
-                        val delegateOptions = if (compatList.isDelegateSupportedOnThisDevice) {
-                            compatList.bestOptionsForThisDevice.apply {
-                                setPrecisionLossAllowed(true)
-                            }
-                        } else {
-                            GpuDelegate.Options().apply {
-                                setPrecisionLossAllowed(true)
-                                setInferencePreference(GpuDelegate.Options.INFERENCE_PREFERENCE_FAST_SINGLE_ANSWER)
-                            }
-                        }
-                        gpuDelegate = GpuDelegate(delegateOptions)
+                        gpuDelegate = GpuDelegate()
                         options.addDelegate(gpuDelegate)
                         interpreter = Interpreter(tfliteModel, options)
                         Log.d("TFLiteEngine", "Native TFLite model loaded successfully with GPU acceleration")
@@ -323,7 +312,7 @@ class TFLiteEngine(private val context: Context) {
                                 if (approxPoints == null && contour.total() >= 4) {
                                     Imgproc.convexHull(contour, hullMat)
                                     val ptsList = contour.toList()
-                                    val hullIndices = hullMat.toList()
+                                    val hullIndices = hullMat.toArray()
                                     if (hullIndices.size >= 4) {
                                         val hPts = hullIndices.map { ptsList[it] }
                                         contourMatOfPoint.fromList(hPts)
