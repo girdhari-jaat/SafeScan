@@ -17,6 +17,7 @@ import org.opencv.core.MatOfPoint2f
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.gpu.CompatibilityList
 import org.tensorflow.lite.gpu.GpuDelegate
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -56,6 +57,9 @@ class TFLiteEngine(private val context: Context) {
     private val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, Size(5.0, 5.0))
     private val contour2f = MatOfPoint2f()
     private val approx = MatOfPoint2f()
+    private val hullMat = MatOfInt()
+    private val hullPoints = MatOfPoint2f()
+    private val contourMatOfPoint = MatOfPoint()
     private val contoursList = ArrayList<MatOfPoint>()
     private val tempFloat8 = FloatArray(8)
     private var contourIntBuffer = IntArray(1024)
@@ -78,9 +82,20 @@ class TFLiteEngine(private val context: Context) {
                     val tfliteModel = fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
 
                     try {
-                        // Try initializing with standard GPU Delegate
+                        // Try initializing with GPU Delegate using device compatibility options
                         val options = Interpreter.Options()
-                        gpuDelegate = GpuDelegate()
+                        val compatList = CompatibilityList()
+                        val delegateOptions = if (compatList.isDelegateSupportedOnThisDevice) {
+                            compatList.bestOptionsForThisDevice.apply {
+                                setPrecisionLossAllowed(true)
+                            }
+                        } else {
+                            GpuDelegate.Options().apply {
+                                setPrecisionLossAllowed(true)
+                                setInferencePreference(GpuDelegate.Options.INFERENCE_PREFERENCE_FAST_SINGLE_ANSWER)
+                            }
+                        }
+                        gpuDelegate = GpuDelegate(delegateOptions)
                         options.addDelegate(gpuDelegate)
                         interpreter = Interpreter(tfliteModel, options)
                         Log.d("TFLiteEngine", "Native TFLite model loaded successfully with GPU acceleration")
@@ -284,30 +299,72 @@ class TFLiteEngine(private val context: Context) {
 
                                 // Zero-Allocation native-to-native contour conversion to prevent heavy JVM allocations
                                 contour.convertTo(contour2f, CvType.CV_32F)
-                                    
-                                    val peri = Imgproc.arcLength(contour2f, true)
-                                    var approxPoints: List<Point>? = null
-                                    
-                                    // Try to simplify to exactly 4 vertices
-                                    for (i in 1..15) {
-                                        val epsilon = (i * 0.01) * peri
-                                        Imgproc.approxPolyDP(contour2f, approx, epsilon, true)
-                                        if (approx.total() == 4L) {
-                                            approx.get(0, 0, tempFloat8)
-                                            approxPoints = listOf(
-                                                Point(tempFloat8[0].toDouble(), tempFloat8[1].toDouble()),
-                                                Point(tempFloat8[2].toDouble(), tempFloat8[3].toDouble()),
-                                                Point(tempFloat8[4].toDouble(), tempFloat8[5].toDouble()),
-                                                Point(tempFloat8[6].toDouble(), tempFloat8[7].toDouble())
-                                            )
-                                            break
+                                
+                                val peri = Imgproc.arcLength(contour2f, true)
+                                var approxPoints: List<Point>? = null
+                                
+                                // 1. Try direct approxPolyDP on smooth mask boundary
+                                for (i in 1..15) {
+                                    val epsilon = (i * 0.01) * peri
+                                    Imgproc.approxPolyDP(contour2f, approx, epsilon, true)
+                                    if (approx.total() == 4L) {
+                                        approx.get(0, 0, tempFloat8)
+                                        approxPoints = listOf(
+                                            Point(tempFloat8[0].toDouble(), tempFloat8[1].toDouble()),
+                                            Point(tempFloat8[2].toDouble(), tempFloat8[3].toDouble()),
+                                            Point(tempFloat8[4].toDouble(), tempFloat8[5].toDouble()),
+                                            Point(tempFloat8[6].toDouble(), tempFloat8[7].toDouble())
+                                        )
+                                        break
+                                    }
+                                }
+                                
+                                // 2. Convex Hull pass: Smooths out mask boundary noise & prevents single corner from projecting outwards
+                                if (approxPoints == null && contour.total() >= 4) {
+                                    Imgproc.convexHull(contour, hullMat)
+                                    val ptsList = contour.toList()
+                                    val hullIndices = hullMat.toList()
+                                    if (hullIndices.size >= 4) {
+                                        val hPts = hullIndices.map { ptsList[it] }
+                                        contourMatOfPoint.fromList(hPts)
+                                        contourMatOfPoint.convertTo(hullPoints, CvType.CV_32F)
+                                        val hPeri = Imgproc.arcLength(hullPoints, true)
+
+                                        for (i in 1..20) {
+                                            val epsilon = (i * 0.01) * hPeri
+                                            Imgproc.approxPolyDP(hullPoints, approx, epsilon, true)
+                                            if (approx.total() == 4L) {
+                                                approx.get(0, 0, tempFloat8)
+                                                approxPoints = listOf(
+                                                    Point(tempFloat8[0].toDouble(), tempFloat8[1].toDouble()),
+                                                    Point(tempFloat8[2].toDouble(), tempFloat8[3].toDouble()),
+                                                    Point(tempFloat8[4].toDouble(), tempFloat8[5].toDouble()),
+                                                    Point(tempFloat8[6].toDouble(), tempFloat8[7].toDouble())
+                                                )
+                                                break
+                                            }
+                                        }
+
+                                        // 3. If convex hull approx yields 5..12 vertices (e.g. rounded corners), pick best 4 vertices maximizing area
+                                        if (approxPoints == null) {
+                                            val totalPts = approx.total().toInt()
+                                            if (totalPts in 4..12) {
+                                                val polyPts = ArrayList<Point>(totalPts)
+                                                val floatBuf = FloatArray(totalPts * 2)
+                                                approx.get(0, 0, floatBuf)
+                                                for (k in 0 until totalPts) {
+                                                    polyPts.add(Point(floatBuf[k * 2].toDouble(), floatBuf[k * 2 + 1].toDouble()))
+                                                }
+                                                approxPoints = findBest4CornerQuad(polyPts)
+                                            }
                                         }
                                     }
-                                    
-                                    // Fallback: Get extreme projection points
-                                    if (approxPoints == null && contour.total() >= 4) {
-                                        approxPoints = getExtremePoints(contour)
-                                    }
+                                }
+
+                                // 4. Fallback: Extreme projection points
+                                if (approxPoints == null && contour.total() >= 4) {
+                                    approxPoints = getExtremePoints(contour)
+                                }
                                     
                                     // Validate and score the quadrilateral
                                     if (approxPoints != null && approxPoints.size == 4 && isConvexPoints(approxPoints)) {
@@ -533,6 +590,38 @@ class TFLiteEngine(private val context: Context) {
 
         return listOf(tl, tr, br, bl)
     }
+
+    private fun findBest4CornerQuad(pts: List<Point>): List<Point>? {
+        val n = pts.size
+        if (n < 4) return null
+        if (n == 4) return pts
+
+        var maxArea = -1.0
+        var bestQuad: List<Point>? = null
+
+        for (i in 0 until n - 3) {
+            for (j in i + 1 until n - 2) {
+                for (k in j + 1 until n - 1) {
+                    for (m in k + 1 until n) {
+                        val quad = listOf(pts[i], pts[j], pts[k], pts[m])
+                        if (isConvexPoints(quad)) {
+                            val area = Math.abs(
+                                (quad[0].x * (quad[1].y - quad[3].y) +
+                                 quad[1].x * (quad[2].y - quad[0].y) +
+                                 quad[2].x * (quad[3].y - quad[1].y) +
+                                 quad[3].x * (quad[0].y - quad[2].y)) / 2.0
+                            )
+                            if (area > maxArea) {
+                                maxArea = area
+                                bestQuad = quad
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return bestQuad
+    }
     
     fun close() {
         executionLock.lock()
@@ -561,6 +650,9 @@ class TFLiteEngine(private val context: Context) {
             kernel.release()
             contour2f.release()
             approx.release()
+            hullMat.release()
+            hullPoints.release()
+            contourMatOfPoint.release()
         } finally {
             executionLock.unlock()
         }
