@@ -193,19 +193,23 @@ object RansacHelper {
 
         val wLen = Math.hypot(c[1].x - c[0].x, c[1].y - c[0].y)
         val hLen = Math.hypot(c[3].x - c[0].x, c[3].y - c[0].y)
-        val r = wLen / hLen
+        
+        val maxSide = Math.max(wLen, hLen)
+        val minSide = Math.min(wLen, hLen)
+        val aspect = maxSide / Math.max(1e-3, minSide)
 
-        val tolerance = 0.35
+        // Documents (A4, Letter, ID Cards, Receipts) are NOT square (choras). Block aspect ratio < 1.18
+        if (aspect < 1.18) {
+            return emptyList()
+        }
 
         var isValid = false
         if (isCardMode) {
-            val cardRatio = 1.586
-            isValid = abs(r - cardRatio) < tolerance || abs(r - (1.0 / cardRatio)) < tolerance
+            // ID Cards: 1.586 nominal ratio (allow 1.30 to 1.85)
+            isValid = aspect in 1.30..1.85
         } else {
-            val ratio34 = 0.75
-            val ratioA4 = 0.707
-            isValid = abs(r - ratio34) < tolerance || abs(r - (1.0 / ratio34)) < tolerance ||
-                    abs(r - ratioA4) < tolerance || abs(r - (1.0 / ratioA4)) < tolerance
+            // Documents: A4 (1.414), Letter (1.294), Legal (1.54), Books & Receipts (allow 1.18 to 2.50)
+            isValid = aspect in 1.18..2.50
         }
 
         return if (isValid) c else emptyList()

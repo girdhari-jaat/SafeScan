@@ -162,6 +162,7 @@ class LiveEdgeDetectionEngine {
                     bitmap = imageProxy.toBitmap()
                     if (bitmap == null) {
                         ScannerDebugLogger.logExit("LiveEdgeDetectionEngine.process")
+                        imageProxy.close()
                         return
                     }
                     if (bitmap!!.config != android.graphics.Bitmap.Config.ARGB_8888 || !bitmap!!.isMutable) {

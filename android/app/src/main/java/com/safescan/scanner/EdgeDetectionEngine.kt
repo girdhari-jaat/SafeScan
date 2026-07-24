@@ -29,6 +29,8 @@ class EdgeDetectionEngine {
         var src: Mat? = null
         var resized: Mat? = null
         var gray: Mat? = null
+        var bgIllum: Mat? = null
+        var normalizedGray: Mat? = null
         var stretched: Mat? = null
         var blurred: Mat? = null
         var binary: Mat? = null
@@ -43,7 +45,7 @@ class EdgeDetectionEngine {
             val resizeRatio = MAX_RESIZE_DIM / Math.max(src.width(), src.height())
             resized = Mat()
             val scaleFactor = if (resizeRatio < 1.0) {
-                Imgproc.resize(src, resized, Size(src.width() * resizeRatio, src.height() * resizeRatio), 0.0, 0.0, Imgproc.INTER_CUBIC)
+                Imgproc.resize(src, resized, Size(src.width() * resizeRatio, src.height() * resizeRatio), 0.0, 0.0, Imgproc.INTER_AREA)
                 resizeRatio
             } else {
                 src.copyTo(resized)
@@ -56,35 +58,39 @@ class EdgeDetectionEngine {
             gray = Mat()
             Imgproc.cvtColor(resized, gray, Imgproc.COLOR_RGBA2GRAY)
 
-            // 1. Normalize Contrast (Min-Max Stretch) to make text bounds and physical edges pop
-            val minMax = Core.minMaxLoc(gray)
-            val minG = minMax.minVal
-            val maxG = minMax.maxVal
-            val range = if (maxG - minG > 0.0) maxG - minG else 1.0
-            val stretchFactor = if (mode == com.safescan.data.ScannerMode.CARD || mode == com.safescan.data.ScannerMode.GRID) 260.0 else 255.0
+            // Super fast & scale-invariant shadow-flattening
+            bgIllum = Mat()
+            val smallGray = Mat()
+            val smallIllum = Mat()
+            val maxDim = Math.max(sw, sh).toDouble()
+            val shadowScale = if (maxDim > 300.0) 300.0 / maxDim else 1.0
+            val targetW = Math.max(1, (sw * shadowScale).toInt())
+            val targetH = Math.max(1, (sh * shadowScale).toInt())
             
+            Imgproc.resize(gray, smallGray, Size(targetW.toDouble(), targetH.toDouble()), 0.0, 0.0, Imgproc.INTER_AREA)
+            val illumKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(15.0, 15.0))
+            Imgproc.morphologyEx(smallGray, smallIllum, Imgproc.MORPH_CLOSE, illumKernel)
+            illumKernel.release()
+            
+            Imgproc.resize(smallIllum, bgIllum, Size(sw.toDouble(), sh.toDouble()), 0.0, 0.0, Imgproc.INTER_LINEAR)
+            smallGray.release()
+            smallIllum.release()
+
+            normalizedGray = Mat()
+            Core.divide(gray, bgIllum, normalizedGray, 255.0)
+
+            // 1. CLAHE (Contrast Limited Adaptive Histogram Equalization) for low-light & high-contrast document edges
             stretched = Mat()
-            gray.convertTo(stretched, -1, stretchFactor / range, -minG * (stretchFactor / range))
+            val clahe = Imgproc.createCLAHE(2.5, Size(8.0, 8.0))
+            clahe.apply(normalizedGray, stretched)
 
-            // 2. Adaptive bilateral smoothing parameters
-            var blurDiameter = 5
-            var blurSigmaI = 20.0
-            var blurSigmaS = 10.0
-            
-            if (mode == com.safescan.data.ScannerMode.CARD || mode == com.safescan.data.ScannerMode.GRID) {
-                blurDiameter = 5
-                blurSigmaI = 25.0
-            } else {
-                blurDiameter = 3
-                blurSigmaI = 15.0
-            }
-
+            // 2. High-speed Gaussian smoothing for edge detection
             blurred = Mat()
-            Imgproc.bilateralFilter(stretched, blurred, blurDiameter, blurSigmaI, blurSigmaS)
+            Imgproc.GaussianBlur(stretched, blurred, Size(5.0, 5.0), 0.0)
 
             // 3. Otsu Dynamic Auto-Thresholding & Morphological Closing
             binary = Mat()
-            Imgproc.threshold(blurred, binary, 0.0, 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
+            val otsuVal = Imgproc.threshold(blurred, binary, 0.0, 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
 
             closed = Mat()
             val k = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
@@ -149,7 +155,16 @@ class EdgeDetectionEngine {
 
             val est = RansacHelper.estimateForegroundPercentages(closedData, sw, sh)
 
-            var finalPts: List<Point>? = detectContourQuad(resized, sw, sh, est, isCardMode, isManualCropActive)
+            var finalPts: List<Point>? = detectContourQuad(
+                stretched ?: resized,
+                closed,
+                otsuVal,
+                sw,
+                sh,
+                est,
+                isCardMode,
+                isManualCropActive
+            )
 
             if (finalPts != null) {
                 Log.d(TAG, "OpenCV Contour Quad successfully detected document edges")
@@ -237,7 +252,7 @@ class EdgeDetectionEngine {
             return RansacHelper.orderPoints(originalPoints)
 
         } finally {
-            src?.release(); resized?.release(); gray?.release()
+            src?.release(); resized?.release(); gray?.release(); bgIllum?.release(); normalizedGray?.release()
             stretched?.release(); blurred?.release(); binary?.release(); closed?.release()
             gradX?.release(); gradY?.release()
         }
@@ -245,6 +260,8 @@ class EdgeDetectionEngine {
 
     private fun detectContourQuad(
         imageMat: Mat,
+        closedMat: Mat?,
+        otsuVal: Double,
         sw: Int,
         sh: Int,
         est: ForecastPct?,
@@ -267,8 +284,12 @@ class EdgeDetectionEngine {
             blurred = Mat()
             Imgproc.GaussianBlur(gray, blurred, Size(5.0, 5.0), 0.0)
 
+            // Dynamic Canny thresholds tied to Otsu auto-threshold
+            val lowThresh = Math.max(20.0, otsuVal * 0.35)
+            val highThresh = Math.max(60.0, otsuVal * 0.85)
+
             edges = Mat()
-            Imgproc.Canny(blurred, edges, 40.0, 120.0)
+            Imgproc.Canny(blurred, edges, lowThresh, highThresh)
 
             val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(3.0, 3.0))
             Imgproc.dilate(edges, edges, kernel)
@@ -277,75 +298,19 @@ class EdgeDetectionEngine {
             hierarchy = Mat()
             Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
 
-            var bestQuad: List<Point>? = null
-            var maxArea = 0.0
-            val imgArea = sw.toDouble() * sh.toDouble()
-            val minArea = imgArea * 0.04
+            var bestQuad = evaluateContoursForQuad(contours, sw, sh, est, isCardMode, isManualCrop)
 
-            for (contour in contours) {
-                val cArea = Imgproc.contourArea(contour)
-                if (cArea < minArea) continue
-
-                var c2f: org.opencv.core.MatOfPoint2f? = null
-                var approx: org.opencv.core.MatOfPoint2f? = null
-                var hullMat: org.opencv.core.MatOfInt? = null
-                var hullPoints: org.opencv.core.MatOfPoint2f? = null
-                try {
-                    c2f = org.opencv.core.MatOfPoint2f()
-                    contour.convertTo(c2f, org.opencv.core.CvType.CV_32F)
-
-                    val peri = Imgproc.arcLength(c2f, true)
-                    approx = org.opencv.core.MatOfPoint2f()
-                    Imgproc.approxPolyDP(c2f, approx, 0.02 * peri, true)
-
-                    // If direct approx is not 4 points, attempt Convex Hull approx to smooth shadow/glare noise
-                    if (approx.total() != 4L) {
-                        hullMat = org.opencv.core.MatOfInt()
-                        Imgproc.convexHull(contour, hullMat)
-
-                        val ptsList = contour.toList()
-                        val hullIndices = hullMat.toList()
-                        val hPts = hullIndices.map { ptsList[it] }
-                        val hullContour = org.opencv.core.MatOfPoint()
-                        hullContour.fromList(hPts)
-
-                        hullPoints = org.opencv.core.MatOfPoint2f()
-                        hullContour.convertTo(hullPoints, org.opencv.core.CvType.CV_32F)
-                        hullContour.release()
-
-                        val hPeri = Imgproc.arcLength(hullPoints, true)
-                        approx.release()
-                        approx = org.opencv.core.MatOfPoint2f()
-                        Imgproc.approxPolyDP(hullPoints, approx, 0.025 * hPeri, true)
-                    }
-
-                    if (approx.total() == 4L) {
-                        val floatBuff = FloatArray(8)
-                        approx.get(0, 0, floatBuff)
-                        val rawPts = listOf(
-                            Point(floatBuff[0].toDouble(), floatBuff[1].toDouble()),
-                            Point(floatBuff[2].toDouble(), floatBuff[3].toDouble()),
-                            Point(floatBuff[4].toDouble(), floatBuff[5].toDouble()),
-                            Point(floatBuff[6].toDouble(), floatBuff[7].toDouble())
-                        )
-                        val validQuad = RansacHelper.validateAndRepairTier1Quad(
-                            rawPts, sw.toDouble(), sh.toDouble(), est, isCardMode, isManualCrop
-                        )
-                        if (validQuad.size == 4) {
-                            val area = RansacHelper.polygonArea(validQuad)
-                            if (area > maxArea) {
-                                maxArea = area
-                                bestQuad = validQuad
-                            }
-                        }
-                    }
-                } finally {
-                    c2f?.release()
-                    approx?.release()
-                    hullMat?.release()
-                    hullPoints?.release()
-                }
+            // Fallback pass on closed binary mask if Canny yields no quad
+            if (bestQuad == null && closedMat != null) {
+                for (c in contours) c.release()
+                contours.clear()
+                hierarchy.release()
+                hierarchy = Mat()
+                
+                Imgproc.findContours(closedMat, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+                bestQuad = evaluateContoursForQuad(contours, sw, sh, est, isCardMode, isManualCrop)
             }
+
             return bestQuad
         } catch (e: Exception) {
             Log.e(TAG, "Contour quad detection failed: ${e.message}")
@@ -359,6 +324,120 @@ class EdgeDetectionEngine {
                 c.release()
             }
         }
+    }
+
+    private fun evaluateContoursForQuad(
+        contours: List<org.opencv.core.MatOfPoint>,
+        sw: Int,
+        sh: Int,
+        est: ForecastPct?,
+        isCardMode: Boolean,
+        isManualCrop: Boolean
+    ): List<Point>? {
+        var bestQuad: List<Point>? = null
+        var maxScore = -1.0
+        val imgArea = sw.toDouble() * sh.toDouble()
+        val minArea = imgArea * 0.04
+        val maxInnerArea = imgArea * 0.92
+
+        for (contour in contours) {
+            val cArea = Imgproc.contourArea(contour)
+            if (cArea < minArea) continue
+
+            var c2f: org.opencv.core.MatOfPoint2f? = null
+            var approx: org.opencv.core.MatOfPoint2f? = null
+            var hullMat: org.opencv.core.MatOfInt? = null
+            var hullPoints: org.opencv.core.MatOfPoint2f? = null
+            try {
+                c2f = org.opencv.core.MatOfPoint2f()
+                contour.convertTo(c2f, org.opencv.core.CvType.CV_32F)
+
+                val peri = Imgproc.arcLength(c2f, true)
+                approx = org.opencv.core.MatOfPoint2f()
+                Imgproc.approxPolyDP(c2f, approx, 0.02 * peri, true)
+
+                // If direct approx is not 4 points, attempt Convex Hull approx to smooth shadow/glare noise
+                if (approx.total() != 4L) {
+                    hullMat = org.opencv.core.MatOfInt()
+                    Imgproc.convexHull(contour, hullMat)
+
+                    val ptsList = contour.toList()
+                    val hullIndices = hullMat.toList()
+                    val hPts = hullIndices.map { ptsList[it] }
+                    val hullContour = org.opencv.core.MatOfPoint()
+                    hullContour.fromList(hPts)
+
+                    hullPoints = org.opencv.core.MatOfPoint2f()
+                    hullContour.convertTo(hullPoints, org.opencv.core.CvType.CV_32F)
+                    hullContour.release()
+
+                    val hPeri = Imgproc.arcLength(hullPoints, true)
+                    approx.release()
+                    approx = org.opencv.core.MatOfPoint2f()
+                    Imgproc.approxPolyDP(hullPoints, approx, 0.025 * hPeri, true)
+                }
+
+                if (approx.total() == 4L) {
+                    val floatBuff = FloatArray(8)
+                    approx.get(0, 0, floatBuff)
+                    val rawPts = listOf(
+                        Point(floatBuff[0].toDouble(), floatBuff[1].toDouble()),
+                        Point(floatBuff[2].toDouble(), floatBuff[3].toDouble()),
+                        Point(floatBuff[4].toDouble(), floatBuff[5].toDouble()),
+                        Point(floatBuff[6].toDouble(), floatBuff[7].toDouble())
+                    )
+                    val validQuad = RansacHelper.validateAndRepairTier1Quad(
+                        rawPts, sw.toDouble(), sh.toDouble(), est, isCardMode, isManualCrop
+                    )
+                    if (validQuad.size == 4) {
+                        val area = RansacHelper.polygonArea(validQuad)
+
+                        val topLen = Math.hypot(validQuad[1].x - validQuad[0].x, validQuad[1].y - validQuad[0].y)
+                        val botLen = Math.hypot(validQuad[2].x - validQuad[3].x, validQuad[2].y - validQuad[3].y)
+                        val leftLen = Math.hypot(validQuad[3].x - validQuad[0].x, validQuad[3].y - validQuad[0].y)
+                        val rightLen = Math.hypot(validQuad[2].x - validQuad[1].x, validQuad[2].y - validQuad[1].y)
+
+                        val avgW = (topLen + botLen) / 2.0
+                        val avgH = (leftLen + rightLen) / 2.0
+                        val aspect = Math.max(avgW, avgH) / Math.max(1e-3, Math.min(avgW, avgH))
+
+                        // Check if candidate quad touches outer frame borders (false outer line in low light)
+                        var borderTouchCount = 0
+                        val marginX = sw * 0.025
+                        val marginY = sh * 0.025
+                        for (p in validQuad) {
+                            if (p.x <= marginX || p.x >= sw - marginX || p.y <= marginY || p.y >= sh - marginY) {
+                                borderTouchCount++
+                            }
+                        }
+
+                        // Score calculation: Give penalty if quad is an outer border line, fills >92% of screen, or is square (choras)
+                        var score = area
+                        
+                        if (aspect in 1.25..1.75) {
+                            score *= 1.35 // Boost ideal document ratio range (A4, Letter, ID Card)
+                        } else if (aspect < 1.18) {
+                            score *= 0.15 // Heavy penalty for near-square (choras) shapes
+                        }
+
+                        if (borderTouchCount >= 3 || area > maxInnerArea) {
+                            score *= 0.35 // Penalize outer background/frame lines
+                        }
+
+                        if (score > maxScore) {
+                            maxScore = score
+                            bestQuad = validQuad
+                        }
+                    }
+                }
+            } finally {
+                c2f?.release()
+                approx?.release()
+                hullMat?.release()
+                hullPoints?.release()
+            }
+        }
+        return bestQuad
     }
 
     fun getFallbackQuad(w: Double, h: Double): List<Point> {

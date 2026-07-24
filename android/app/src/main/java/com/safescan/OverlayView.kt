@@ -13,6 +13,8 @@ class OverlayView @JvmOverloads constructor(
         color = Color.parseColor("#FF10B981") // Emerald green
         style = Paint.Style.STROKE
         strokeWidth = 6f
+        strokeJoin = Paint.Join.ROUND
+        strokeCap = Paint.Cap.ROUND
         isAntiAlias = true
     }
 
@@ -29,7 +31,7 @@ class OverlayView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        // Draw live edge detection corners if available
+        // Draw live edge detection polygon if corners are detected
         corners?.let { pts ->
             if (pts.size == 4) {
                 edgePath.reset()
@@ -38,16 +40,19 @@ class OverlayView @JvmOverloads constructor(
                 edgePath.lineTo(pts[2].x, pts[2].y)
                 edgePath.lineTo(pts[3].x, pts[3].y)
                 edgePath.close()
+
+                // Dynamic green outline for live detected document boundary
                 canvas.drawPath(edgePath, strokePaint)
             }
         }
     }
 
-    // Keep these to prevent compilation errors if called from Fragment
     fun getCorners(): List<PointF>? = corners
+
     fun updateCorners(newCorners: List<PointF>?) {
         if (corners == newCorners) return
         corners = newCorners
         invalidate()
     }
 }
+

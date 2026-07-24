@@ -191,8 +191,10 @@ object ImageProcessor {
         var src: Mat? = null
         var lab: Mat? = null
         var labChannels: ArrayList<Mat>? = null
+        var processL: Mat? = null
         var dilated: Mat? = null
         var kernel: Mat? = null
+        var bgIllumSmall: Mat? = null
         var bgIllum: Mat? = null
         var diff: Mat? = null
         var ones: Mat? = null
@@ -239,13 +241,14 @@ object ImageProcessor {
                 1.0
             }
             
-            val processL = if (downscaleFactor < 1.0) {
+            processL = if (downscaleFactor < 1.0) {
                 val resizedL = Mat()
                 Imgproc.resize(lChannel, resizedL, Size(), downscaleFactor, downscaleFactor, Imgproc.INTER_LINEAR)
                 resizedL
             } else {
-                lChannel
+                null
             }
+            val targetL = processL ?: lChannel
             
             // Scale the dynamic kernel sizes to match the downscaled image
             var scaledKernel = Math.round(dynamicKernelSize * downscaleFactor).toInt()
@@ -262,18 +265,16 @@ object ImageProcessor {
             
             dilated = Mat()
             kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(scaledKernel.toDouble(), scaledKernel.toDouble()))
-            Imgproc.dilate(processL, dilated, kernel)
+            Imgproc.dilate(targetL, dilated, kernel)
             
-            val bgIllumSmall = Mat()
+            bgIllumSmall = Mat()
             Imgproc.medianBlur(dilated, bgIllumSmall, scaledBlur)
             
             bgIllum = Mat()
             if (downscaleFactor < 1.0) {
                 Imgproc.resize(bgIllumSmall, bgIllum, lChannel.size(), 0.0, 0.0, Imgproc.INTER_LINEAR)
-                processL.release()
-                bgIllumSmall.release()
             } else {
-                bgIllum = bgIllumSmall
+                bgIllumSmall.copyTo(bgIllum)
             }
             
             diff = Mat()
@@ -315,8 +316,10 @@ object ImageProcessor {
             safeRelease(src)
             safeRelease(lab)
             labChannels?.forEach { safeRelease(it) }
+            safeRelease(processL)
             safeRelease(dilated)
             safeRelease(kernel)
+            safeRelease(bgIllumSmall)
             safeRelease(bgIllum)
             safeRelease(diff)
             safeRelease(ones)
