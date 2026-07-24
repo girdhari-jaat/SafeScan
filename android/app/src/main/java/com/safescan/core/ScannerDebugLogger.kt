@@ -74,8 +74,8 @@ object ScannerDebugLogger {
         // High frequency: skip DiagnosticsLogger to keep UI smooth and lightweight
     }
 
-    fun logStability(stableCount: Int) {
-        val msg = "[Stability] Stable frame count: $stableCount/3"
+    fun logStability(stableCount: Int, threshold: Int = 8) {
+        val msg = "[Stability] Stable frame count: $stableCount/$threshold"
         Log.d(TAG, msg)
         
         if (stableCount == 0) {
@@ -86,7 +86,7 @@ object ScannerDebugLogger {
             lastStableCount = 0
         } else if (stableCount != lastStableCount) {
             lastStableCount = stableCount
-            DiagnosticsLogger.log("⚡ [Stability] Frame stable: $stableCount/3")
+            DiagnosticsLogger.log("⚡ [Stability] Frame stable: $stableCount/$threshold")
         }
     }
 

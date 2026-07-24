@@ -162,15 +162,30 @@ class TFLiteEngine(private val context: Context) {
                 currentCanvas.drawColor(Color.BLACK)
 
                 val scale = Math.min(inputSize.toFloat() / bitmap.width, inputSize.toFloat() / bitmap.height)
-                val dx = (inputSize - bitmap.width * scale) / 2f
-                val dy = (inputSize - bitmap.height * scale) / 2f
+                val targetW = Math.round(bitmap.width * scale).toInt().coerceAtLeast(1)
+                val targetH = Math.round(bitmap.height * scale).toInt().coerceAtLeast(1)
+
+                // High-performance anti-aliased downscaling using OpenCV INTER_AREA
+                val srcMat = Mat()
+                Utils.bitmapToMat(bitmap, srcMat)
+                val resizedMat = Mat()
+                Imgproc.resize(srcMat, resizedMat, Size(targetW.toDouble(), targetH.toDouble()), 0.0, 0.0, Imgproc.INTER_AREA)
+
+                val resizedBitmap = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
+                Utils.matToBitmap(resizedMat, resizedBitmap)
+
+                srcMat.release()
+                resizedMat.release()
+
+                val dx = (inputSize - targetW) / 2f
+                val dy = (inputSize - targetH) / 2f
 
                 // Safe reuse of shared Matrix to prevent memory reallocation and state leaks
                 matrix.reset()
-                matrix.postScale(scale, scale)
                 matrix.postTranslate(dx, dy)
 
-                currentCanvas.drawBitmap(bitmap, matrix, paint)
+                currentCanvas.drawBitmap(resizedBitmap, matrix, paint)
+                resizedBitmap.recycle()
                 
                 // Zero-copy: Rewind pre-allocated input buffer and populate
                 inputBuffer.rewind()

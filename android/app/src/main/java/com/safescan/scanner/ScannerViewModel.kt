@@ -48,7 +48,7 @@ class ScannerViewModel @Inject constructor(
     val uiState: StateFlow<ScannerUiState> = _uiState.asStateFlow()
 
     val isDocumentDetected = MutableStateFlow(false)
-    val detectionState = MutableStateFlow(com.safescan.scanner.DetectionState.NO_DOCUMENT)
+    val detectionState = MutableStateFlow(com.safescan.scanner.DetectionState.IDLE)
 
     private val captureMutex = kotlinx.coroutines.sync.Mutex()
 

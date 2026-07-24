@@ -228,7 +228,7 @@ class CameraController(
 
                     fragment.liveEdgeDetectionEngine.process(imageProxy, viewModel.documentScanner, viewModel.uiState.value.currentEngine, viewModel.currentMode.value) { corners, sharpness ->
                         val isStable = motionDetector?.isDeviceStable ?: true
-                        scannerStateMachine.processFrame(corners, sharpness, viewModel.autoCapture.value, isStable)
+                        scannerStateMachine.processFrame(corners, sharpness, viewModel.autoCapture.value, isStable, width, height)
 
                         val activeQuad = scannerStateMachine.getHeldPoints()
                         val mappedPoints = if (activeQuad != null && activeQuad.isNotEmpty()) {
@@ -244,13 +244,21 @@ class CameraController(
                                     !viewModel.isCropping.value &&
                                     !viewModel.isSettingsOpen.value &&
                                     !viewModel.isDocumentOpenedFromLibrary.value &&
-                                    !viewModel.isGridViewVisible.value
-                            val isDetectedState = scannerStateMachine.detectionState != com.safescan.scanner.DetectionState.NO_DOCUMENT
-                            if (bindingObj != null && isOverlayStillActive && isDetectedState && mappedPoints != null) {
-                                bindingObj.overlayView.visibility = View.VISIBLE
-                                bindingObj.overlayView.updateCorners(mappedPoints)
-                            } else if (bindingObj != null && !isDetectedState) {
-                                bindingObj.overlayView.updateCorners(null)
+                                    !viewModel.isGridViewVisible.value &&
+                                    fragment.currentViewMode == ScannerFragment.FragmentViewMode.SCANNER
+                            val isDetectedState = scannerStateMachine.detectionState != com.safescan.scanner.DetectionState.IDLE &&
+                                                  scannerStateMachine.detectionState != com.safescan.scanner.DetectionState.COOLDOWN
+                            
+                            val showOverlay = isOverlayStillActive && isDetectedState && mappedPoints != null
+                            
+                            if (bindingObj != null) {
+                                if (showOverlay) {
+                                    bindingObj.overlayView.visibility = View.VISIBLE
+                                    bindingObj.overlayView.updateCorners(mappedPoints)
+                                } else {
+                                    bindingObj.overlayView.visibility = View.GONE
+                                    bindingObj.overlayView.updateCorners(null)
+                                }
                             }
                             if (isDetectedState) {
                                 if (!isTargetLocked) {
@@ -355,7 +363,9 @@ class CameraController(
         cameraProvider?.unbindAll()
         imageAnalysis?.clearAnalyzer()
         isCameraBound = false
+        isTargetLocked = false
         fragment.binding?.overlayView?.clear()
+        fragment.binding?.overlayView?.visibility = View.GONE
         scannerStateMachine.resetDetection()
     }
 

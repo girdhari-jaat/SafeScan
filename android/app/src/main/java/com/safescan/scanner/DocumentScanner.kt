@@ -62,28 +62,38 @@ class DocumentScanner(
             src = Mat()
             Utils.bitmapToMat(bitmap, src)
 
-            ptsSrc = MatOfPoint2f()
-            ptsSrc.put(0, 0, floatArrayOf(
-                tl.x.toFloat(), tl.y.toFloat(),
-                tr.x.toFloat(), tr.y.toFloat(),
-                br.x.toFloat(), br.y.toFloat(),
-                bl.x.toFloat(), bl.y.toFloat()
-            ))
+            ptsSrc = MatOfPoint2f(
+                org.opencv.core.Point(tl.x, tl.y),
+                org.opencv.core.Point(tr.x, tr.y),
+                org.opencv.core.Point(br.x, br.y),
+                org.opencv.core.Point(bl.x, bl.y)
+            )
 
-            ptsDst = MatOfPoint2f()
-            ptsDst.put(0, 0, floatArrayOf(
-                0f, 0f,
-                maxWidth.toFloat() - 1f, 0f,
-                maxWidth.toFloat() - 1f, maxHeight.toFloat() - 1f,
-                0f, maxHeight.toFloat() - 1f
-            ))
+            ptsDst = MatOfPoint2f(
+                org.opencv.core.Point(0.0, 0.0),
+                org.opencv.core.Point(maxWidth.toDouble() - 1.0, 0.0),
+                org.opencv.core.Point(maxWidth.toDouble() - 1.0, maxHeight.toDouble() - 1.0),
+                org.opencv.core.Point(0.0, maxHeight.toDouble() - 1.0)
+            )
 
+            android.util.Log.d("DocumentScanner", "getPerspectiveTransform: ptsSrc type = ${ptsSrc.type()}, ptsDst type = ${ptsDst.type()}")
             perspectiveTransform = Imgproc.getPerspectiveTransform(ptsSrc, ptsDst)
             outMat = Mat()
+            android.util.Log.d("DocumentScanner", "warpPerspective: src type = ${src.type()}, perspectiveTransform type = ${perspectiveTransform.type()}")
             Imgproc.warpPerspective(src, outMat, perspectiveTransform, Size(maxWidth.toDouble(), maxHeight.toDouble()))
 
             val resultBitmap = Bitmap.createBitmap(maxWidth, maxHeight, Bitmap.Config.ARGB_8888)
-            Utils.matToBitmap(outMat, resultBitmap)
+            val finalOutMat = if (outMat.type() == org.opencv.core.CvType.CV_8UC1) {
+                val temp = Mat()
+                Imgproc.cvtColor(outMat, temp, Imgproc.COLOR_GRAY2RGBA)
+                temp
+            } else {
+                outMat
+            }
+            Utils.matToBitmap(finalOutMat, resultBitmap)
+            if (finalOutMat != outMat) {
+                finalOutMat.release()
+            }
             return resultBitmap
         } catch (e: Exception) {
             e.printStackTrace()

@@ -155,6 +155,7 @@ class LiveEdgeDetectionEngine {
                     val processorType = if (documentScanner?.isGpuAccelerated == true) "TFLite (GPU)" else "TFLite (CPU)"
                     if (processorType != lastLoggedProcessorType) {
                         Log.i("LiveEdgeDetectionEngine", "Processing frame using: $processorType")
+                        com.safescan.core.DiagnosticsLogger.info("Live edge detection active: running on $processorType")
                         lastLoggedProcessorType = processorType
                     }
                     
@@ -369,17 +370,7 @@ class LiveEdgeDetectionEngine {
                                     hullPointsMat.release()
                                 }
 
-                                // Final bounding box fallback if convex hull approximation fails to yield 4 corners
-                                if (currentCorners == null) {
-                                    val rect = Imgproc.boundingRect(contour)
-                                    if (rect.width > 0 && rect.height > 0) {
-                                        reusablePointsArray[0] = Point(rect.x / resizeRatio, rect.y / resizeRatio)
-                                        reusablePointsArray[1] = Point((rect.x + rect.width) / resizeRatio, rect.y / resizeRatio)
-                                        reusablePointsArray[2] = Point((rect.x + rect.width) / resizeRatio, (rect.y + rect.height) / resizeRatio)
-                                        reusablePointsArray[3] = Point(rect.x / resizeRatio, (rect.y + rect.height) / resizeRatio)
-                                        currentCorners = orderPoints(reusablePointsArray)
-                                    }
-                                }
+
                             }
 
                             if (currentCorners != null) {

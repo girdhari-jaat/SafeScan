@@ -1,0 +1,134 @@
+================================================================================
+           SAFE SCAN - HIGH-PERFORMANCE PIXEL PIPELINE ARCHITECTURE
+                 DOCUMENT SCANNER & AUTO-CAPTURE FLOW MAP
+================================================================================
+
+This document maps out the architecture and code paths of the high-performance document
+scanning pipeline in Safe Scan Android. It specifically traces:
+1. The Core Scanning Files
+2. The Green Polygon Overlay Flow (Detection, Stabilization & Rendering)
+3. The Auto-Capture (AutoCap) Flow (Stability, Sharpness & Auto-Triggering)
+
+--------------------------------------------------------------------------------
+1. CORE FILE ROLES & RESPONSIBILITIES
+--------------------------------------------------------------------------------
+
+* LiveEdgeDetectionEngine.kt
+  --------------------------
+  - Role: Real-time OpenCV-powered frame analyzer.
+  - Function: Receives live camera preview frames, scales them down for rapid edge analysis,
+    calculates contours (using Canny, Dilation & findContours), filters the largest
+    convex quad boundary representing a document, and calculates the image sharpness 
+    (using Laplacian variance on the sub-matrix of the detected quad).
+
+* ScannerStateMachine.kt
+  ----------------------
+  - Role: Core reactive state and stability manager.
+  - Function: Implements a mathematical state machine with three states:
+    `NO_DOCUMENT`, `DOCUMENT_VISIBLE`, and `AUTO_CAPTURING`. It applies Exponential Moving
+    Average (EMA) smoothing to corners and tracks consecutive stable frames (using 5% of
+    the document's diagonal as the dynamic tolerance threshold). It triggers the auto-capture
+    event when threshold conditions are met.
+
+* ScannerFragment.kt
+  ------------------
+  - Role: Primary Scanning Fragment and View controller.
+  - Function: Binds layout views (such as PreviewView & OverlayView), orchestrates the main 
+    lifecycle bindings (handling onPause/onStop camera unbindings), manages camera state 
+    negotiation, and observes scanning events to trigger actions or update UI states.
+
+* CameraController.kt
+  -------------------
+  - Role: The bridge linking CameraX, LiveEdgeDetectionEngine, and ScannerStateMachine.
+  - Function: Configures CameraX Preview, ImageCapture, and ImageAnalysis use cases.
+    Its analysis analyzer thread feeds frames to LiveEdgeDetectionEngine, passes outputs to
+    ScannerStateMachine, maps the detected corners to the preview coordinate system, and
+    updates the binding.overlayView UI on the main thread.
+
+* OverlayView.kt
+  --------------
+  - Role: Native custom drawing view.
+  - Function: Receives mapped coordinates from CameraController and uses Android's
+    Canvas Path APIs to draw the glowing green polygon overlay on top of the live preview.
+
+* ScannerCaptureManager.kt
+  ------------------------
+  - Role: Camera capture and focusing executioner.
+  - Function: Coordinates autofocus centering on the detected polygon, sets auto-exposure,
+    handles haptic feedbacks, and triggers actual image capture.
+
+
+--------------------------------------------------------------------------------
+2. THE GREEN POLYGON OVERLAY FLOW (STEP-BY-STEP)
+--------------------------------------------------------------------------------
+
+Step 1: Frame Ingestion & Analysis
+  - In CameraController.kt (setupAnalyzer), the CameraX analyzer intercepts a frame.
+  - The frame is passed directly to LiveEdgeDetectionEngine.kt (process).
+
+Step 2: Corner Detection & Sharpness Estimation
+  - In LiveEdgeDetectionEngine.kt:
+    * The frame is converted to an OpenCV Mat and grayscaled.
+    * Gaussian Blur and Canny edge detection are applied.
+    * Imgproc.findContours retrieves all candidate shapes.
+    * Imgproc.approxPolyDP filters out quadrilaterals (convex, 4-sided shape within target aspect ratios).
+    * Sharpness is estimated via Laplacian variance:
+      `val variance = MatOfDouble(); Imgproc.Laplacian(subMat, subMat, CvType.CV_64F); Core.meanStdDev(subMat, ...)`
+
+Step 3: State Machine Filtering & Smoothing
+  - The raw corner points are passed to ScannerStateMachine.kt (processFrame).
+  - Exponential Moving Average (EMA) is applied to prevent frame-to-frame jitter:
+    `old[i].x + EMA_ALPHA * (new[i].x - old[i].x)`
+  - Stability is validated by comparing the corner coordinates with the last frame (isStable).
+    Tolerance is dynamic: 5% of the quad's diagonal.
+  - If points are stable, stableFrameCount is incremented.
+  - When stableFrameCount >= 4 (REQUIRED_STABLE_FRAMES_FOR_OVERLAY), the state transitions to
+    `DOCUMENT_VISIBLE` and `heldQuadPoints` is set.
+
+Step 4: Coordinate Mapping to Screen Size
+  - CameraController.kt maps the processed points (from camera sensor coordinates)
+    to the active layout view coordinates using `mapPointsToPreviewView()`.
+
+Step 5: Overlay View Rendering
+  - CameraController.kt runs on the Main Thread and updates OverlayView:
+    `bindingObj.overlayView.visibility = View.VISIBLE`
+    `bindingObj.overlayView.updateCorners(mappedPoints)`
+  - OverlayView.kt triggers `invalidate()` and draws the green polygon using:
+    `canvas.drawPath(path, paint)`
+
+
+--------------------------------------------------------------------------------
+3. THE AUTO-CAPTURE (AUTOCAP) FLOW (STEP-BY-STEP)
+--------------------------------------------------------------------------------
+
+Step 1: Trigger Criteria Check
+  - Inside ScannerStateMachine.kt (processFrame), after stable points are recorded:
+  - The state machine evaluates if auto-capture is enabled and checks:
+    1. Stable Frame Count is >= 8 (STABLE_FRAME_THRESHOLD).
+    2. Sharpness of the document area is > 25.0 (MIN_SHARPNESS_THRESHOLD).
+    3. The device motion detector reports that the phone is held stable (isDeviceMotionStable == true).
+  - If all 3 criteria are met, the trigger fires:
+    * `isFocusing` is marked as true.
+    * State transitions to `AUTO_CAPTURING`.
+    * `onAutoCaptureTriggered()` callback fires.
+
+Step 2: State Flow Emission
+  - `onAutoCaptureTriggered()` is hooked to `fragment.viewModel.triggerAutoCapture()` in CameraController.kt.
+  - In ScannerViewModel.kt, `triggerAutoCapture()` emits a Unit signal to `_autoCaptureEvent` SharedFlow.
+
+Step 3: UI Observer Interception
+  - In ScannerObservers.kt (setupObservers), the viewLifecycleOwner collects `viewModel.autoCaptureEvent`.
+  - It intercepts the event and routes the call to the UI:
+    `fragment.focusAndTakePhoto(isAutoCapture = true)`
+
+Step 4: Autofocusing & Target Centering
+  - In ScannerCaptureManager.kt (focusAndTakePhoto):
+    * The center of the detected green polygon is computed to focus directly on the document.
+    * A CameraX `FocusMeteringAction` is configured centered at (centerX, centerY).
+    * AF (Autofocus) is executed using `cameraControl?.startFocusAndMetering(...)`.
+
+Step 5: Image Capture & File Handoff
+  - When the autofocus completes (success or fallback timeout), `takePhoto()` is called.
+  - CameraX `imageCapture?.takePicture(...)` captures the high-resolution frame.
+  - The image is saved/processed offline and passed to the Document Scanner engine.
+================================================================================

@@ -94,6 +94,15 @@ class ScannerFragment : Fragment() {
     override fun onPause() {
         super.onPause()
         cameraController.unbindAll()
+        _binding?.overlayView?.visibility = View.GONE
+        _binding?.overlayView?.updateCorners(null)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        cameraController.unbindAll()
+        _binding?.overlayView?.visibility = View.GONE
+        _binding?.overlayView?.updateCorners(null)
     }
 
     private val requestPermissionLauncher = registerForActivityResult(
@@ -344,6 +353,9 @@ class ScannerFragment : Fragment() {
         // Disable touch forwarding listener when exiting scanner view to save battery and resources
         if (mode != FragmentViewMode.SCANNER) {
             binding.composeView.setOnTouchListener(null)
+            cameraController.unbindAll()
+            binding.overlayView.visibility = View.GONE
+            binding.overlayView.updateCorners(null)
         }
 
         if (mode == FragmentViewMode.LIBRARY) {
@@ -537,6 +549,7 @@ class ScannerFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        cameraController.destroy()
         // FIX: FINAL LEAK
         try {
             context?.let { ctx ->

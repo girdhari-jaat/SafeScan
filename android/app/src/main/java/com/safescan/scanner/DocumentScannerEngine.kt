@@ -85,29 +85,39 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
                     srcMat = Mat()
                     Utils.bitmapToMat(bitmap, srcMat)
                     
-                    srcMatOfPoint2f = MatOfPoint2f()
-                    srcMatOfPoint2f.put(0, 0, floatArrayOf(
-                        tl.x.toFloat(), tl.y.toFloat(),
-                        tr.x.toFloat(), tr.y.toFloat(),
-                        br.x.toFloat(), br.y.toFloat(),
-                        bl.x.toFloat(), bl.y.toFloat()
-                    ))
+                    srcMatOfPoint2f = MatOfPoint2f(
+                        org.opencv.core.Point(tl.x, tl.y),
+                        org.opencv.core.Point(tr.x, tr.y),
+                        org.opencv.core.Point(br.x, br.y),
+                        org.opencv.core.Point(bl.x, bl.y)
+                    )
 
-                    dstMatOfPoint2f = MatOfPoint2f()
-                    dstMatOfPoint2f.put(0, 0, floatArrayOf(
-                        0f, 0f,
-                        maxWidth.toFloat() - 1f, 0f,
-                        maxWidth.toFloat() - 1f, maxHeight.toFloat() - 1f,
-                        0f, maxHeight.toFloat() - 1f
-                    ))
+                    dstMatOfPoint2f = MatOfPoint2f(
+                        org.opencv.core.Point(0.0, 0.0),
+                        org.opencv.core.Point(maxWidth.toDouble() - 1.0, 0.0),
+                        org.opencv.core.Point(maxWidth.toDouble() - 1.0, maxHeight.toDouble() - 1.0),
+                        org.opencv.core.Point(0.0, maxHeight.toDouble() - 1.0)
+                    )
 
+                    Log.d("DocumentScannerEngine", "getPerspectiveTransform: srcMatOfPoint2f type = ${srcMatOfPoint2f.type()}, dstMatOfPoint2f type = ${dstMatOfPoint2f.type()}")
                     transformMatrix = Imgproc.getPerspectiveTransform(srcMatOfPoint2f, dstMatOfPoint2f)
 
                     dstMat = Mat()
+                    Log.d("DocumentScannerEngine", "warpPerspective: srcMat type = ${srcMat.type()}, transformMatrix type = ${transformMatrix.type()}")
                     Imgproc.warpPerspective(srcMat, dstMat, transformMatrix, Size(maxWidth.toDouble(), maxHeight.toDouble()))
 
                     val outBitmap = Bitmap.createBitmap(maxWidth, maxHeight, Bitmap.Config.ARGB_8888)
-                    Utils.matToBitmap(dstMat, outBitmap)
+                    val finalDstMat = if (dstMat.type() == CvType.CV_8UC1) {
+                        val temp = Mat()
+                        Imgproc.cvtColor(dstMat, temp, Imgproc.COLOR_GRAY2RGBA)
+                        temp
+                    } else {
+                        dstMat
+                    }
+                    Utils.matToBitmap(finalDstMat, outBitmap)
+                    if (finalDstMat != dstMat) {
+                        finalDstMat.release()
+                    }
                     
                     return@withContext AppResult.Success(ScannedDocument(outBitmap, orderedCorners))
                 } finally {
@@ -157,6 +167,7 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
             kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(3.0, 3.0))
             Imgproc.dilate(edges, edges, kernel)
             
+            Log.d("DocumentScannerEngine", "findContours: edges type = ${edges.type()}")
             hierarchy = Mat()
             Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
             
