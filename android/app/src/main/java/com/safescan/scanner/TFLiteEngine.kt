@@ -37,6 +37,7 @@ class TFLiteEngine(private val context: Context) {
     private val outputBuffer: ByteBuffer = ByteBuffer.allocateDirect(4 * inputSize * inputSize * 1).apply {
         order(ByteOrder.nativeOrder())
     }
+    private val outputFloatBuffer = outputBuffer.asFloatBuffer()
     private val intValues = IntArray(inputSize * inputSize)
     private val maskData = FloatArray(inputSize * inputSize)
 
@@ -77,13 +78,20 @@ class TFLiteEngine(private val context: Context) {
                     val tfliteModel = fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
 
                     try {
-                        // Try initializing with GPU Delegate
+                        // Try initializing with GPU Delegate using CompatibilityList for device-specific tuning
                         val options = Interpreter.Options()
-                        gpuDelegate = GpuDelegate()
-                        options.addDelegate(gpuDelegate)
-                        interpreter = Interpreter(tfliteModel, options)
-                        Log.d("TFLiteEngine", "Native TFLite model loaded successfully with GPU acceleration")
-                        com.safescan.core.ScannerDebugLogger.logTFLiteInit("Model loaded successfully with GPU acceleration")
+                        val compatList = org.tensorflow.lite.gpu.CompatibilityList()
+                        
+                        if (compatList.isDelegateSupportedOnThisDevice) {
+                            val delegateOptions = compatList.bestOptionsForThisDevice
+                            gpuDelegate = GpuDelegate(delegateOptions)
+                            options.addDelegate(gpuDelegate)
+                            interpreter = Interpreter(tfliteModel, options)
+                            Log.d("TFLiteEngine", "Native TFLite model loaded successfully with GPU acceleration")
+                            com.safescan.core.ScannerDebugLogger.logTFLiteInit("Model loaded successfully with GPU acceleration")
+                        } else {
+                            throw UnsupportedOperationException("GPU not supported on this device according to CompatibilityList")
+                        }
                     } catch (gpuEx: Throwable) {
                         Log.w("TFLiteEngine", "GPU acceleration not supported or failed to initialize. Falling back to CPU safely.", gpuEx)
                         com.safescan.core.ScannerDebugLogger.logTFLiteInit("GPU acceleration failed, falling back to CPU")
@@ -189,7 +197,8 @@ class TFLiteEngine(private val context: Context) {
                 outputBuffer.rewind()
                 
                 // Populate the pre-allocated float32 maskMat directly from output buffer
-                outputBuffer.asFloatBuffer().get(maskData)
+                outputFloatBuffer.rewind()
+                outputFloatBuffer.get(maskData)
                 maskMat.put(0, 0, maskData)
                 
                 // 1. Confidence & Mask Area Check (to avoid detecting false documents from a single noisy peak pixel)
@@ -276,9 +285,12 @@ class TFLiteEngine(private val context: Context) {
                                     else -> 0.0
                                 }
 
-                                if (area >= minArea256) {
-                                    // Zero-Allocation native-to-native contour conversion to prevent heavy JVM allocations
-                                    contour.convertTo(contour2f, CvType.CV_32F)
+                                if (area < minArea256) {
+                                    break // Subsequent contours are even smaller
+                                }
+
+                                // Zero-Allocation native-to-native contour conversion to prevent heavy JVM allocations
+                                contour.convertTo(contour2f, CvType.CV_32F)
                                     
                                     val peri = Imgproc.arcLength(contour2f, true)
                                     var approxPoints: List<Point>? = null
@@ -316,7 +328,6 @@ class TFLiteEngine(private val context: Context) {
                                             }
                                         }
                                     }
-                                }
                             }
                         }
                     } finally {

@@ -16,25 +16,14 @@ class OverlayView @JvmOverloads constructor(
         isAntiAlias = true
     }
 
-    private var targetRatio: Float = 1.4142f // Default A4
-    private val holeRect = RectF()
-
     private var corners: List<PointF>? = null
-
-    fun setAspectRatio(ratio: Float) {
-        if (targetRatio != ratio) {
-            targetRatio = ratio
-            invalidate()
-        }
-    }
-    
-    fun getHoleRect(): RectF {
-        return holeRect
-    }
+    private val edgePath = Path()
 
     fun clear() {
-        corners = null
-        invalidate()
+        if (corners != null) {
+            corners = null
+            invalidate()
+        }
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -43,7 +32,7 @@ class OverlayView @JvmOverloads constructor(
         // Draw live edge detection corners if available
         corners?.let { pts ->
             if (pts.size == 4) {
-                val edgePath = Path()
+                edgePath.reset()
                 edgePath.moveTo(pts[0].x, pts[0].y)
                 edgePath.lineTo(pts[1].x, pts[1].y)
                 edgePath.lineTo(pts[2].x, pts[2].y)
@@ -57,6 +46,7 @@ class OverlayView @JvmOverloads constructor(
     // Keep these to prevent compilation errors if called from Fragment
     fun getCorners(): List<PointF>? = corners
     fun updateCorners(newCorners: List<PointF>?) {
+        if (corners == newCorners) return
         corners = newCorners
         invalidate()
     }

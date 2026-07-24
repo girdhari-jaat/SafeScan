@@ -26,9 +26,9 @@ class ScannerStateMachine(
     private var missingFrameCount = 0
     private val MAX_MISSING_FRAMES = 10
     private val STABLE_FRAME_THRESHOLD = 8
-    private val MIN_SHARPNESS_THRESHOLD = 15.0
+    private val MIN_SHARPNESS_THRESHOLD = 25.0
     private val REQUIRED_STABLE_FRAMES_FOR_OVERLAY = 4
-    private val STABILITY_TOLERANCE = 80.0
+    private val EMA_ALPHA = 0.6f
 
     var isFocusing = false
         set(value) {
@@ -88,9 +88,9 @@ class ScannerStateMachine(
         // Valid document points received
         missingFrameCount = 0
 
-        // Smoothing: Average with last frame
+        // Smoothing: EMA with last frame
         if (lastQuadPoints != null) {
-            processedPoints = averageCorners(lastQuadPoints!!, processedPoints!!)
+            processedPoints = emaCorners(lastQuadPoints!!, processedPoints!!)
         }
 
         if (processedPoints.size == 4) {
@@ -102,13 +102,13 @@ class ScannerStateMachine(
             )
         }
 
-        // Stability Check with a graceful decay and high tolerance for hand tremor
+        // Stability Check with adaptive tolerance based on quad size
         val threshold = STABLE_FRAME_THRESHOLD
         if (lastQuadPoints != null) {
             if (isStable(lastQuadPoints!!, processedPoints)) {
                 stableFrameCount++
             } else {
-                stableFrameCount = (stableFrameCount - 1).coerceAtLeast(0)
+                stableFrameCount = 0 // Reset on instability to avoid false captures
             }
         } else {
             stableFrameCount = 1
@@ -139,12 +139,12 @@ class ScannerStateMachine(
         }
     }
 
-    private fun averageCorners(p1: List<Point>, p2: List<Point>): List<Point> {
+    private fun emaCorners(old: List<Point>, new: List<Point>): List<Point> {
         val result = mutableListOf<Point>()
         for (i in 0..3) {
             result.add(Point(
-                (p1[i].x + p2[i].x) / 2f,
-                (p1[i].y + p2[i].y) / 2f
+                old[i].x + EMA_ALPHA * (new[i].x - old[i].x),
+                old[i].y + EMA_ALPHA * (new[i].y - old[i].y)
             ))
         }
         return result
@@ -157,6 +157,15 @@ class ScannerStateMachine(
             val dy = p1[i].y - p2[i].y
             totalDist += sqrt((dx * dx + dy * dy).toDouble())
         }
-        return totalDist < STABILITY_TOLERANCE
+        
+        // Calculate dynamic tolerance based on diagonal size of the quad
+        val diagDx = p2[0].x - p2[2].x
+        val diagDy = p2[0].y - p2[2].y
+        val diagonal = sqrt((diagDx * diagDx + diagDy * diagDy).toDouble())
+        
+        // Allowed deviation is roughly 5% of the diagonal size for all 4 corners combined
+        val dynamicTolerance = (diagonal * 0.05).coerceAtLeast(30.0)
+        
+        return totalDist < dynamicTolerance
     }
 }

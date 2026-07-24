@@ -1578,6 +1578,18 @@ class ScannerViewModel @Inject constructor(
         super.onCleared()
         editingJob?.cancel()
 
+        // Clear temp_scans directory to free up phone storage cache
+        try {
+            val dir = java.io.File(context.cacheDir, "temp_scans")
+            if (dir.exists() && dir.isDirectory) {
+                dir.listFiles()?.forEach { file ->
+                    if (file.isFile) file.delete()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("ScannerViewModel", "Failed to clear temp_scans folder", e)
+        }
+
         // Clear and recycle all bitmaps in the highResCache to prevent native OOM
         try {
             val snapshot = highResCache.snapshot()

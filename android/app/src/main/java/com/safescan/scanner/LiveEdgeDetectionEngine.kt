@@ -163,6 +163,13 @@ class LiveEdgeDetectionEngine {
                         ScannerDebugLogger.logExit("LiveEdgeDetectionEngine.process")
                         return
                     }
+                    if (bitmap!!.config != android.graphics.Bitmap.Config.ARGB_8888 || !bitmap!!.isMutable) {
+                        val softwareBmp = bitmap!!.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
+                        if (softwareBmp != null && softwareBmp != bitmap) {
+                            bitmap!!.recycle()
+                            bitmap = softwareBmp
+                        }
+                    }
                     Utils.bitmapToMat(bitmap, src!!)
                     val resizeRatio = 400.0 / Math.max(src!!.width(), src!!.height())
                     if (resizeRatio < 1.0) {

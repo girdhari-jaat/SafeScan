@@ -116,7 +116,7 @@ class ScannerCaptureManager(
         val action = FocusMeteringAction.Builder(
             point,
             flags
-        ).build()
+        ).setAutoCancelDuration(2, java.util.concurrent.TimeUnit.SECONDS).build()
 
         val future = fragment.cameraControl?.startFocusAndMetering(action)
         if (future == null) {
@@ -151,7 +151,7 @@ class ScannerCaptureManager(
     fun runAccuracyTest(previewCorners: List<PointF>?) {
         Log.d("ScannerTest", "=== ACCURACY TEST START ===")
         DiagnosticsLogger.info("ScannerTest: === ACCURACY TEST START ===")
-        val cornersToLog = previewCorners ?: fragment.lastDetectedScreenCorners
+        val cornersToLog = previewCorners ?: fragment.binding.overlayView.getCorners()
         if (cornersToLog.isNullOrEmpty()) {
             Log.d("ScannerTest", "Corners: No document corners detected on overlay")
             DiagnosticsLogger.info("ScannerTest: Corners: No document corners detected on overlay")
@@ -229,44 +229,55 @@ class ScannerCaptureManager(
                         val rawBitmap = imageProxy.toBitmap()
                         val rotationDegrees = imageProxy.imageInfo.rotationDegrees
                         ScannerDebugLogger.logCameraRotation(rotationDegrees)
-                        val bitmap = if (rotationDegrees != 0) {
-                            val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-                            val rotated = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
-                            rawBitmap.recycle()
-                            rotated
-                        } else {
-                            rawBitmap
+                        
+                        var finalBitmap = rawBitmap
+                        if (finalBitmap.config != Bitmap.Config.ARGB_8888 || !finalBitmap.isMutable) {
+                            val softwareBmp = finalBitmap.copy(Bitmap.Config.ARGB_8888, true)
+                            if (softwareBmp != null && softwareBmp != finalBitmap) {
+                                finalBitmap.recycle()
+                                finalBitmap = softwareBmp
+                            }
                         }
 
-                        var finalBitmap = bitmap
+                        if (rotationDegrees != 0) {
+                            val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+                            val rotated = Bitmap.createBitmap(finalBitmap, 0, 0, finalBitmap.width, finalBitmap.height, matrix, true)
+                            if (rotated != finalBitmap) {
+                                finalBitmap.recycle()
+                                finalBitmap = rotated
+                            }
+                        }
 
                         if (viewModel.autoRotation.value || viewModel.currentMode.value == ScannerMode.CARD || viewModel.currentMode.value == ScannerMode.GRID) {
-                            finalBitmap = ScannerImageUtils.autoRotateForMode(finalBitmap, viewModel.currentMode.value)
+                            val autoRotated = ScannerImageUtils.autoRotateForMode(finalBitmap, viewModel.currentMode.value)
+                            if (autoRotated !== finalBitmap) {
+                                finalBitmap.recycle()
+                                finalBitmap = autoRotated
+                            }
                         }
 
                         viewModel.onCapture(finalBitmap)
-                        isCapturingPhoto = false
-                        if (viewModel.autoCapture.value) {
-                            fragment.viewLifecycleOwner.lifecycleScope.launch {
-                                delay(2500)
-                                fragment.cameraController.scannerStateMachine.isFocusing = false
-                            }
-                        } else {
-                            fragment.cameraController.scannerStateMachine.isFocusing = false
-                        }
+                    } catch (e: Exception) {
+                        Log.e("ScannerCaptureManager", "Failed to process photo capture", e)
                     } finally {
                         imageProxy.close()
+                        isCapturingPhoto = false
+                        fragment.binding.progressBar.visibility = View.GONE
+                        fragment.cameraController.scannerStateMachine.isFocusing = false
                     }
                 }
 
                 override fun onError(exception: ImageCaptureException) {
-                    fragment.cameraControl?.cancelFocusAndMetering()
-                    fragment.cameraController.scannerStateMachine.isFocusing = false
-                    isCapturingPhoto = false
-                    Log.e("ScannerCaptureManager", "Photo capture failed: ${exception.message}", exception)
-                    fragment.binding.progressBar.visibility = View.GONE
-                    fragment.context?.let { ctx ->
-                        Toast.makeText(ctx, "Capture failed: ${exception.localizedMessage}", Toast.LENGTH_SHORT).show()
+                    try {
+                        Log.e("ScannerCaptureManager", "Photo capture failed: ${exception.message}", exception)
+                        fragment.context?.let { ctx ->
+                            Toast.makeText(ctx, "Capture failed: ${exception.localizedMessage}", Toast.LENGTH_SHORT).show()
+                        }
+                    } finally {
+                        fragment.cameraControl?.cancelFocusAndMetering()
+                        fragment.cameraController.scannerStateMachine.isFocusing = false
+                        isCapturingPhoto = false
+                        fragment.binding.progressBar.visibility = View.GONE
                     }
                 }
             }

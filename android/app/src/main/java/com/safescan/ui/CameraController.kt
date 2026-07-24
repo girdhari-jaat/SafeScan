@@ -31,7 +31,6 @@ class CameraController(
     var lastBoundHdMode: String? = null
     var lastAnalysisTime = 0L
     var isTargetLocked = false
-    var lastDetectedScreenCorners: List<PointF>? = null
     var motionDetector: com.safescan.scanner.DeviceMotionDetector? = null
 
     val scannerStateMachine = com.safescan.scanner.ScannerStateMachine(
@@ -159,8 +158,6 @@ class CameraController(
         val mode = viewModel.currentMode.value
         val hdModeStr = viewModel.hdMode.value
         val currentRatio = com.safescan.scanner.CameraHardwareConfig.getTargetRatio(currentContext, mode)
-        binding.overlayView.setAspectRatio(currentRatio)
-
         val captureSettings = com.safescan.scanner.CameraHardwareConfig.getCaptureSettings(currentContext, mode, hdModeStr)
         Log.d("CameraController", "Negotiated CameraX: Mode=$mode, HD=$hdModeStr -> Target=${captureSettings.targetSize.width}x${captureSettings.targetSize.height}")
         com.safescan.core.ScannerDebugLogger.logCameraX("${captureSettings.targetSize.width}x${captureSettings.targetSize.height} (${captureSettings.megapixelsLabel})", mode.name)
@@ -233,17 +230,10 @@ class CameraController(
                         val isStable = motionDetector?.isDeviceStable ?: true
                         scannerStateMachine.processFrame(corners, sharpness, viewModel.autoCapture.value, isStable)
 
-                        val activeQuad = corners ?: scannerStateMachine.getHeldPoints()
+                        val activeQuad = scannerStateMachine.getHeldPoints()
                         val mappedPoints = if (activeQuad != null && activeQuad.isNotEmpty()) {
                             val mapped = mapPointsToPreviewView(activeQuad, width, height, rotationDegrees)
-                            if (mapped.size == 4) {
-                                lastDetectedScreenCorners = mapped
-                                mapped
-                            } else {
-                                lastDetectedScreenCorners
-                            }
-                        } else if (scannerStateMachine.detectionState == com.safescan.scanner.DetectionState.AUTO_CAPTURING && lastDetectedScreenCorners != null) {
-                            lastDetectedScreenCorners
+                            if (mapped.size == 4) mapped else null
                         } else {
                             null
                         }
@@ -361,10 +351,12 @@ class CameraController(
 
     fun unbindAll() {
         motionDetector?.stop()
+        motionDetector = null
         cameraProvider?.unbindAll()
         imageAnalysis?.clearAnalyzer()
         isCameraBound = false
         fragment.binding?.overlayView?.clear()
+        scannerStateMachine.resetDetection()
     }
 
     fun destroy() {

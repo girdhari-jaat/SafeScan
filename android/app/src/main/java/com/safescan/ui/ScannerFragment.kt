@@ -80,10 +80,6 @@ class ScannerFragment : Fragment() {
     var isTargetLocked: Boolean
         get() = cameraController.isTargetLocked
         set(value) { cameraController.isTargetLocked = value }
-    var lastDetectedScreenCorners: List<android.graphics.PointF>?
-        get() = cameraController.lastDetectedScreenCorners
-        set(value) { cameraController.lastDetectedScreenCorners = value }
-
     private var flashEnabled = false
 
     enum class FragmentViewMode {
