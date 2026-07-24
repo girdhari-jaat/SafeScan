@@ -60,6 +60,7 @@ class TFLiteEngine(private val context: Context) {
     private val hullMat = MatOfInt()
     private val hullPoints = MatOfPoint2f()
     private val contourMatOfPoint = MatOfPoint()
+    private val reusableHullPoints = ArrayList<org.opencv.core.Point>()
     private val contoursList = ArrayList<MatOfPoint>()
     private val tempFloat8 = FloatArray(8)
     private val ptBuf = DoubleArray(2)
@@ -314,13 +315,18 @@ class TFLiteEngine(private val context: Context) {
                                     Imgproc.convexHull(contour, hullMat)
                                     val hullIndices = hullMat.toArray()
                                     if (hullIndices.size >= 4) {
-                                        val hPts = ArrayList<Point>(hullIndices.size)
+                                        while (reusableHullPoints.size < hullIndices.size) {
+                                            reusableHullPoints.add(org.opencv.core.Point())
+                                        }
+                                        val activeHullPts = reusableHullPoints.subList(0, hullIndices.size)
                                         for (hIdx in 0 until hullIndices.size) {
                                             val idx = hullIndices[hIdx]
                                             contour.get(idx, 0, ptBuf)
-                                            hPts.add(Point(ptBuf[0], ptBuf[1]))
+                                            val pt = activeHullPts[hIdx]
+                                            pt.x = ptBuf[0]
+                                            pt.y = ptBuf[1]
                                         }
-                                        contourMatOfPoint.fromList(hPts)
+                                        contourMatOfPoint.fromList(activeHullPts)
                                         contourMatOfPoint.convertTo(hullPoints, CvType.CV_32F)
                                         val hPeri = Imgproc.arcLength(hullPoints, true)
 
