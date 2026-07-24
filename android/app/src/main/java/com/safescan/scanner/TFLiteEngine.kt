@@ -62,6 +62,7 @@ class TFLiteEngine(private val context: Context) {
     private val contourMatOfPoint = MatOfPoint()
     private val contoursList = ArrayList<MatOfPoint>()
     private val tempFloat8 = FloatArray(8)
+    private val ptBuf = DoubleArray(2)
     private var contourIntBuffer = IntArray(1024)
 
     // Pre-allocated thresholds to prevent object allocations during frames
@@ -311,10 +312,14 @@ class TFLiteEngine(private val context: Context) {
                                 // 2. Convex Hull pass: Smooths out mask boundary noise & prevents single corner from projecting outwards
                                 if (approxPoints == null && contour.total() >= 4) {
                                     Imgproc.convexHull(contour, hullMat)
-                                    val ptsList = contour.toList()
                                     val hullIndices = hullMat.toArray()
                                     if (hullIndices.size >= 4) {
-                                        val hPts = hullIndices.map { ptsList[it] }
+                                        val hPts = ArrayList<Point>(hullIndices.size)
+                                        for (hIdx in 0 until hullIndices.size) {
+                                            val idx = hullIndices[hIdx]
+                                            contour.get(idx, 0, ptBuf)
+                                            hPts.add(Point(ptBuf[0], ptBuf[1]))
+                                        }
                                         contourMatOfPoint.fromList(hPts)
                                         contourMatOfPoint.convertTo(hullPoints, CvType.CV_32F)
                                         val hPeri = Imgproc.arcLength(hullPoints, true)

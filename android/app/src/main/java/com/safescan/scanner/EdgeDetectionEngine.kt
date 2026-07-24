@@ -361,9 +361,14 @@ class EdgeDetectionEngine {
                     hullMat = org.opencv.core.MatOfInt()
                     Imgproc.convexHull(contour, hullMat)
 
-                    val ptsList = contour.toList()
-                    val hullIndices = hullMat.toList()
-                    val hPts = hullIndices.map { ptsList[it] }
+                    val hullIndices = hullMat.toArray()
+                    val ptBuf = DoubleArray(2)
+                    val hPts = ArrayList<org.opencv.core.Point>(hullIndices.size)
+                    for (hIdx in 0 until hullIndices.size) {
+                        val idx = hullIndices[hIdx]
+                        contour.get(idx, 0, ptBuf)
+                        hPts.add(org.opencv.core.Point(ptBuf[0], ptBuf[1]))
+                    }
                     val hullContour = org.opencv.core.MatOfPoint()
                     hullContour.fromList(hPts)
 
