@@ -21,9 +21,10 @@ object RansacHelper {
         var bestLine: Line? = null
         val earlyExitCount = points.size * 0.82
 
+        val rng = kotlin.random.Random(42)
         for (iter in 0 until iterations) {
-            val p1 = points[Random.nextInt(points.size)]
-            val p2 = points[Random.nextInt(points.size)]
+            val p1 = points[rng.nextInt(points.size)]
+            val p2 = points[rng.nextInt(points.size)]
             if (p1 == p2) continue
 
             var m = 0.0
@@ -187,32 +188,7 @@ object RansacHelper {
 
         if (a < w * h * minAreaRatio || a > w * h * maxAreaRatio) return emptyList()
 
-        if (isManualCrop) {
-            return c
-        }
-
-        val wLen = Math.hypot(c[1].x - c[0].x, c[1].y - c[0].y)
-        val hLen = Math.hypot(c[3].x - c[0].x, c[3].y - c[0].y)
-        
-        val maxSide = Math.max(wLen, hLen)
-        val minSide = Math.min(wLen, hLen)
-        val aspect = maxSide / Math.max(1e-3, minSide)
-
-        // Documents (A4, Letter, ID Cards, Receipts) are NOT square (choras). Block aspect ratio < 1.18
-        if (aspect < 1.18) {
-            return emptyList()
-        }
-
-        var isValid = false
-        if (isCardMode) {
-            // ID Cards: 1.586 nominal ratio (allow 1.30 to 1.85)
-            isValid = aspect in 1.30..1.85
-        } else {
-            // Documents: A4 (1.414), Letter (1.294), Legal (1.54), Books & Receipts (allow 1.18 to 2.50)
-            isValid = aspect in 1.18..2.50
-        }
-
-        return if (isValid) c else emptyList()
+        return c
     }
 
     fun validateAndRepairTier1Quad(

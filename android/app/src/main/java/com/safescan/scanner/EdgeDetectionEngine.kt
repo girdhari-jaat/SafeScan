@@ -402,10 +402,6 @@ class EdgeDetectionEngine {
                         val leftLen = Math.hypot(validQuad[3].x - validQuad[0].x, validQuad[3].y - validQuad[0].y)
                         val rightLen = Math.hypot(validQuad[2].x - validQuad[1].x, validQuad[2].y - validQuad[1].y)
 
-                        val avgW = (topLen + botLen) / 2.0
-                        val avgH = (leftLen + rightLen) / 2.0
-                        val aspect = Math.max(avgW, avgH) / Math.max(1e-3, Math.min(avgW, avgH))
-
                         // Check if candidate quad touches outer frame borders (false outer line in low light)
                         var borderTouchCount = 0
                         val marginX = sw * 0.025
@@ -416,14 +412,8 @@ class EdgeDetectionEngine {
                             }
                         }
 
-                        // Score calculation: Give penalty if quad is an outer border line, fills >92% of screen, or is square (choras)
+                        // Score calculation: Give penalty if quad is an outer border line or fills >92% of screen
                         var score = area
-                        
-                        if (aspect in 1.25..1.75) {
-                            score *= 1.35 // Boost ideal document ratio range (A4, Letter, ID Card)
-                        } else if (aspect < 1.18) {
-                            score *= 0.15 // Heavy penalty for near-square (choras) shapes
-                        }
 
                         if (borderTouchCount >= 3 || area > maxInnerArea) {
                             score *= 0.35 // Penalize outer background/frame lines

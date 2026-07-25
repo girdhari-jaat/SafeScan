@@ -207,7 +207,8 @@ class CameraController(
         this.imageAnalysis?.setAnalyzer(cameraExecutor) { imageProxy ->
             val isLiveDetectOn = viewModel.liveDetect.value
             val isBatterySaverOn = viewModel.batterySaver.value
-            val isOverlayActive = !viewModel.isEditing.value && !viewModel.isCropping.value && !viewModel.isSettingsOpen.value && !viewModel.isDocumentOpenedFromLibrary.value && !viewModel.isGridViewVisible.value
+            val isLoading = viewModel.uiState.value.isLoading
+            val isOverlayActive = !viewModel.isEditing.value && !viewModel.isCropping.value && !viewModel.isSettingsOpen.value && !viewModel.isDocumentOpenedFromLibrary.value && !viewModel.isGridViewVisible.value && !isLoading
             if (isLiveDetectOn && !isBatterySaverOn && isOverlayActive) {
                 try {
                     val currentTime = System.currentTimeMillis()

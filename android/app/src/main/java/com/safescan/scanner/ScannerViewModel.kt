@@ -457,49 +457,65 @@ class ScannerViewModel @Inject constructor(
         if (index != -1) {
             val existing = currentSlots[index]
 
-            // Save high-res processed bitmap to disk
-            val processedPath = saveHighResToDisk(bitmap, slotId, "processed")
+            // Instantly update RAM cache & generate lightweight thumbnail
             highResCache.put("${slotId}_processed", bitmap)
-            if (processedPath != null) {
-                ScannerDebugLogger.logSaveThumbnail(processedPath)
-            }
-
-            // Save high-res original bitmap to disk if it is a new capture, or reuse existing
-            var origPath = existing.originalBitmapPath
-            if (isCapture || origPath == null) {
-                val origToSave = originalBitmap ?: bitmap
-                origPath = saveHighResToDisk(origToSave, slotId, "original")
+            val origToSave = originalBitmap ?: bitmap
+            if (isCapture || existing.originalBitmapPath == null) {
                 highResCache.put("${slotId}_original", origToSave)
             }
 
-            // Generate lightweight thumbnail
             val thumbnail = generateThumbnail(bitmap, 360)
 
+            // Update UI slot immediately (<10ms) so user sees the new photo instantly
             currentSlots[index] = existing.copy(
                 bitmap = thumbnail,
                 originalBitmap = null, // No high-res original in RAM!
-                bitmapPath = processedPath,
-                originalBitmapPath = origPath,
                 corners = corners ?: existing.corners
             )
             slots.value = currentSlots
-            DiagnosticsLogger.info("Slot $slotId loaded with compressed thumbnail & disk paths.")
-            
-            // Sync with capturedJpgFiles if it exists
-            if (index < capturedJpgFiles.size) {
-                val file = capturedJpgFiles[index]
-                try {
-                    val out = java.io.FileOutputStream(file)
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, jpegQuality.value.toInt(), out)
-                    out.flush()
-                    out.close()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+            DiagnosticsLogger.info("Slot $slotId updated with thumbnail immediately.")
 
-            // Auto-save the document state offline immediately to ensure persistent metadata.json exists
-            saveDocumentStateOffline(docId)
+            // Save heavy disk files & metadata asynchronously in background IO thread
+            val qualityVal = jpegQuality.value.toInt()
+            viewModelScope.launch(Dispatchers.IO) {
+                val processedPath = saveHighResToDisk(bitmap, slotId, "processed")
+                if (processedPath != null) {
+                    ScannerDebugLogger.logSaveThumbnail(processedPath)
+                }
+
+                var origPath = existing.originalBitmapPath
+                if (isCapture || origPath == null) {
+                    origPath = saveHighResToDisk(origToSave, slotId, "original")
+                }
+
+                if (processedPath != null || origPath != null) {
+                    val updatedSlots = slots.value.toMutableList()
+                    val uIdx = updatedSlots.indexOfFirst { it.id == slotId }
+                    if (uIdx != -1) {
+                        updatedSlots[uIdx] = updatedSlots[uIdx].copy(
+                            bitmapPath = processedPath ?: updatedSlots[uIdx].bitmapPath,
+                            originalBitmapPath = origPath ?: updatedSlots[uIdx].originalBitmapPath
+                        )
+                        slots.value = updatedSlots
+                    }
+                }
+
+                // Sync with capturedJpgFiles if it exists
+                if (index < capturedJpgFiles.size) {
+                    val file = capturedJpgFiles[index]
+                    try {
+                        java.io.FileOutputStream(file).use { out ->
+                            bitmap.compress(Bitmap.CompressFormat.JPEG, qualityVal, out)
+                            out.flush()
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                // Auto-save the document state offline immediately
+                saveDocumentStateOffline(docId)
+            }
         }
     }
 
@@ -1362,11 +1378,14 @@ class ScannerViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             ScannerDebugLogger.logEnter("ScannerViewModel.onCapture")
 
-            // Save the raw captured JPG immediately to Scans folder if saveJpg is ON
+            // Save the raw captured JPG asynchronously in background to avoid blocking capture pipeline
             if (saveJpg.value) {
-                val savedFile = saveDocumentUseCase.saveJpgToScans(bitmap, jpegQuality.value.toInt())
-                if (savedFile != null) {
-                    DiagnosticsLogger.info("[Save] Raw captured JPG saved to Scans folder: ${savedFile.absolutePath}")
+                val quality = jpegQuality.value.toInt()
+                viewModelScope.launch(Dispatchers.IO) {
+                    val savedFile = saveDocumentUseCase.saveJpgToScans(bitmap, quality)
+                    if (savedFile != null) {
+                        DiagnosticsLogger.info("[Save] Raw captured JPG saved to Scans folder: ${savedFile.absolutePath}")
+                    }
                 }
             }
             
