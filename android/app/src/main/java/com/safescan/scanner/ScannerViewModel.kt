@@ -50,8 +50,6 @@ class ScannerViewModel @Inject constructor(
     val isDocumentDetected = MutableStateFlow(false)
     val detectionState = MutableStateFlow(com.safescan.scanner.DetectionState.IDLE)
 
-    private val captureMutex = kotlinx.coroutines.sync.Mutex()
-
     val currentMode: StateFlow<ScannerMode> = settingsRepository.scannerModeFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, ScannerMode.CARD)
         
@@ -1372,125 +1370,123 @@ class ScannerViewModel @Inject constructor(
                 }
             }
             
-            captureMutex.withLock {
-                // Dynamically scale the image based on our negotiated CameraHardwareConfig constraints (supporting Fast, Standard, High, and high-megapixel modes)
-                val currentModeVal = currentMode.value
-                val hdModeStr = hdMode.value
-                val captureSettings = com.safescan.scanner.CameraHardwareConfig.getCaptureSettings(null, currentModeVal, hdModeStr)
-                val maxResolution = kotlin.math.max(captureSettings.targetSize.width.toFloat(), captureSettings.targetSize.height.toFloat())
-                
-                val ratio = kotlin.math.min(maxResolution / bitmap.width, maxResolution / bitmap.height)
-                val resizedBitmap = if (ratio < 1) {
-                    android.graphics.Bitmap.createScaledBitmap(
-                        bitmap, 
-                        (bitmap.width * ratio).toInt(), 
-                        (bitmap.height * ratio).toInt(), 
-                        true
-                    )
-                } else bitmap
+            // Dynamically scale the image based on our negotiated CameraHardwareConfig constraints (supporting Fast, Standard, High, and high-megapixel modes)
+            val currentModeVal = currentMode.value
+            val hdModeStr = hdMode.value
+            val captureSettings = com.safescan.scanner.CameraHardwareConfig.getCaptureSettings(null, currentModeVal, hdModeStr)
+            val maxResolution = kotlin.math.max(captureSettings.targetSize.width.toFloat(), captureSettings.targetSize.height.toFloat())
+            
+            val ratio = kotlin.math.min(maxResolution / bitmap.width, maxResolution / bitmap.height)
+            val resizedBitmap = if (ratio < 1) {
+                android.graphics.Bitmap.createScaledBitmap(
+                    bitmap, 
+                    (bitmap.width * ratio).toInt(), 
+                    (bitmap.height * ratio).toInt(), 
+                    true
+                )
+            } else bitmap
 
-                val processedBitmap = if (shadowRemove.value) {
-                    try {
-                        com.safescan.domain.ImageProcessor.autoEnhance(resizedBitmap)
-                    } catch (e: Exception) {
-                        resizedBitmap
-                    }
-                } else {
+            val processedBitmap = if (shadowRemove.value) {
+                try {
+                    com.safescan.domain.ImageProcessor.autoEnhance(resizedBitmap)
+                } catch (e: Exception) {
                     resizedBitmap
                 }
+            } else {
+                resizedBitmap
+            }
 
-                val isAutoCropOff = !autoCrop.value
-                var slotId = selectedSlotId.value ?: slots.value.firstOrNull { it.bitmap == null }?.id
-                if (slotId == null && currentMode.value == ScannerMode.DOCUMENT) {
-                    val newId = "p${slots.value.size + 1}"
-                    slots.value = slots.value + Slot(newId, "Page ${slots.value.size + 1}")
-                    slotId = newId
+            val isAutoCropOff = !autoCrop.value
+            var slotId = selectedSlotId.value ?: slots.value.firstOrNull { it.bitmap == null }?.id
+            if (slotId == null && currentMode.value == ScannerMode.DOCUMENT) {
+                val newId = "p${slots.value.size + 1}"
+                slots.value = slots.value + Slot(newId, "Page ${slots.value.size + 1}")
+                slotId = newId
+            }
+
+            ScannerDebugLogger.logCapture(slotId ?: "unknown")
+            val ratioStr = "${processedBitmap.width}:${processedBitmap.height}"
+            ScannerDebugLogger.logOrientation(ratioStr, pageSize.value)
+
+            if (isNativeScanned || isAutoCropOff) {
+                if (slotId != null) {
+                    captureToSlot(processedBitmap, slotId, isCapture = true)
+                    selectedSlotId.value = null
+                }
+                
+                _uiState.update { 
+                    it.copy(
+                        isLoading = false,
+                        scannedBitmap = null,
+                        lastCapturedThumbnail = processedBitmap,
+                        capturedCount = it.capturedCount + 1,
+                        error = null
+                    )
                 }
 
-                ScannerDebugLogger.logCapture(slotId ?: "unknown")
-                val ratioStr = "${processedBitmap.width}:${processedBitmap.height}"
-                ScannerDebugLogger.logOrientation(ratioStr, pageSize.value)
-
-                if (isNativeScanned || isAutoCropOff) {
-                    if (slotId != null) {
-                        captureToSlot(processedBitmap, slotId, isCapture = true)
-                        selectedSlotId.value = null
+                if (!forceSkipEditor && !batchScan.value && slotId != null) {
+                    withContext(Dispatchers.Main) {
+                        openEditor(slotId)
                     }
-                    
-                    _uiState.update { 
-                        it.copy(
-                            isLoading = false,
-                            scannedBitmap = null,
-                            lastCapturedThumbnail = processedBitmap,
-                            capturedCount = it.capturedCount + 1,
-                            error = null
-                        )
-                    }
+                }
+            } else {
+                when (val result = scannerEngine.scanDocument(processedBitmap)) {
+                    is com.safescan.core.AppResult.Success -> {
+                        if (slotId != null) {
+                            captureToSlot(result.data.bitmap, slotId, isCapture = true, corners = result.data.corners, originalBitmap = processedBitmap)
+                            selectedSlotId.value = null
+                        }
+                        
+                        _uiState.update { 
+                            it.copy(
+                                isLoading = false,
+                                scannedBitmap = null,
+                                lastCapturedThumbnail = result.data.bitmap,
+                                capturedCount = it.capturedCount + 1,
+                                error = null
+                            )
+                        }
 
-                    if (!forceSkipEditor && !batchScan.value && slotId != null) {
-                        withContext(Dispatchers.Main) {
-                            openEditor(slotId)
+                        if (!forceSkipEditor && !batchScan.value && slotId != null) {
+                            withContext(Dispatchers.Main) {
+                                openEditor(slotId)
+                            }
                         }
                     }
-                } else {
-                    when (val result = scannerEngine.scanDocument(processedBitmap)) {
-                        is com.safescan.core.AppResult.Success -> {
+                    is com.safescan.core.AppResult.Error -> {
+                        if (result.message == "CORNERS_NOT_FOUND") {
+                            // Fallback to manual crop! Place uncropped image in the slot
                             if (slotId != null) {
-                                captureToSlot(result.data.bitmap, slotId, isCapture = true, corners = result.data.corners, originalBitmap = processedBitmap)
+                                captureToSlot(processedBitmap, slotId, isCapture = true)
                                 selectedSlotId.value = null
                             }
-                            
+
                             _uiState.update { 
                                 it.copy(
                                     isLoading = false,
                                     scannedBitmap = null,
-                                    lastCapturedThumbnail = result.data.bitmap,
+                                    lastCapturedThumbnail = processedBitmap,
                                     capturedCount = it.capturedCount + 1,
-                                    error = null
+                                    error = null // Clear error since we gracefully fall back to manual crop
                                 )
                             }
 
-                            if (!forceSkipEditor && !batchScan.value && slotId != null) {
+                            if (slotId != null) {
                                 withContext(Dispatchers.Main) {
-                                    openEditor(slotId)
-                                }
-                            }
-                        }
-                        is com.safescan.core.AppResult.Error -> {
-                            if (result.message == "CORNERS_NOT_FOUND") {
-                                // Fallback to manual crop! Place uncropped image in the slot
-                                if (slotId != null) {
-                                    captureToSlot(processedBitmap, slotId, isCapture = true)
-                                    selectedSlotId.value = null
-                                }
-
-                                _uiState.update { 
-                                    it.copy(
-                                        isLoading = false,
-                                        scannedBitmap = null,
-                                        lastCapturedThumbnail = processedBitmap,
-                                        capturedCount = it.capturedCount + 1,
-                                        error = null // Clear error since we gracefully fall back to manual crop
-                                    )
-                                }
-
-                                if (slotId != null) {
-                                    withContext(Dispatchers.Main) {
-                                        if (!forceSkipEditor && !batchScan.value) {
-                                            android.widget.Toast.makeText(context, "No document found. Opening manual crop.", android.widget.Toast.LENGTH_SHORT).show()
-                                            openCrop(slotId)
-                                        } else {
-                                            android.widget.Toast.makeText(context, "No document found on some pages.", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
+                                    if (!forceSkipEditor && !batchScan.value) {
+                                        android.widget.Toast.makeText(context, "No document found. Opening manual crop.", android.widget.Toast.LENGTH_SHORT).show()
+                                        openCrop(slotId)
+                                    } else {
+                                        android.widget.Toast.makeText(context, "No document found on some pages.", android.widget.Toast.LENGTH_SHORT).show()
                                     }
                                 }
-                            } else {
-                                _uiState.update {
-                                    it.copy(
-                                        isLoading = false,
-                                        error = result.message
-                                    )
-                                }
+                            }
+                        } else {
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false,
+                                    error = result.message
+                                )
                             }
                         }
                     }

@@ -118,34 +118,9 @@ class ScannerCaptureManager(
             flags
         ).setAutoCancelDuration(2, java.util.concurrent.TimeUnit.SECONDS).build()
 
-        val future = fragment.cameraControl?.startFocusAndMetering(action)
-        if (future == null) {
-            fragment.cameraController.scannerStateMachine.isFocusing = false
-            takePhoto()
-            return
-        }
-
-        val context = fragment.context ?: run {
-            fragment.cameraController.scannerStateMachine.isFocusing = false
-            takePhoto()
-            return
-        }
-
-        future.addListener({
-            try {
-                val result = future.get()
-                if (result.isFocusSuccessful) {
-                    Log.d("ScannerCaptureManager", "Focus locked and successful. Triggering photo capture.")
-                } else {
-                    Log.d("ScannerCaptureManager", "Focus lock failed or timed out. Proceeding to take photo as fallback.")
-                    fragment.cameraControl?.cancelFocusAndMetering()
-                }
-            } catch (e: Exception) {
-                Log.e("ScannerCaptureManager", "Focus metering listener exception", e)
-                fragment.cameraControl?.cancelFocusAndMetering()
-            }
-            takePhoto()
-        }, ContextCompat.getMainExecutor(context))
+        fragment.cameraControl?.startFocusAndMetering(action)
+        fragment.cameraController.scannerStateMachine.isFocusing = false
+        takePhoto()
     }
 
     fun runAccuracyTest(previewCorners: List<PointF>?) {
@@ -231,21 +206,26 @@ class ScannerCaptureManager(
                         ScannerDebugLogger.logCameraRotation(rotationDegrees)
                         
                         var finalBitmap = rawBitmap
-                        if (finalBitmap.config != Bitmap.Config.ARGB_8888 || !finalBitmap.isMutable) {
-                            val softwareBmp = finalBitmap.copy(Bitmap.Config.ARGB_8888, true)
-                            if (softwareBmp != null && softwareBmp != finalBitmap) {
-                                finalBitmap.recycle()
-                                finalBitmap = softwareBmp
-                            }
-                        }
+                        val needsRotation = rotationDegrees != 0
+                        val needsSoftware = finalBitmap.config != Bitmap.Config.ARGB_8888 || !finalBitmap.isMutable
 
-                        if (rotationDegrees != 0) {
+                        if (needsRotation) {
                             val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-                            val rotated = Bitmap.createBitmap(finalBitmap, 0, 0, finalBitmap.width, finalBitmap.height, matrix, true)
-                            if (rotated != finalBitmap) {
-                                finalBitmap.recycle()
-                                finalBitmap = rotated
+                            val rotated = Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true)
+                            if (rotated != rawBitmap) {
+                                rawBitmap.recycle()
                             }
+                            finalBitmap = if (rotated.config != Bitmap.Config.ARGB_8888 || !rotated.isMutable) {
+                                val soft = rotated.copy(Bitmap.Config.ARGB_8888, true)
+                                if (soft != rotated) rotated.recycle()
+                                soft
+                            } else {
+                                rotated
+                            }
+                        } else if (needsSoftware) {
+                            val soft = rawBitmap.copy(Bitmap.Config.ARGB_8888, true)
+                            if (soft != rawBitmap) rawBitmap.recycle()
+                            finalBitmap = soft
                         }
 
                         if (viewModel.autoRotation.value || viewModel.currentMode.value == ScannerMode.CARD || viewModel.currentMode.value == ScannerMode.GRID) {

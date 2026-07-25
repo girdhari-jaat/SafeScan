@@ -55,10 +55,8 @@ object ScannerDebugLogger {
         val msg = "[LiveEdge] Best contour points: [p1=$p1, p2=$p2, p3=$p3, p4=$p4]"
         Log.d(TAG, msg)
         
-        // Only log to DiagnosticsLogger on state change to avoid 30fps spam
         if (lastDocumentDetected != true) {
             lastDocumentDetected = true
-            DiagnosticsLogger.log("🟢 [Document] Document detected in live stream!")
         }
     }
 
@@ -81,7 +79,6 @@ object ScannerDebugLogger {
         if (stableCount == 0) {
             if (lastDocumentDetected == true) {
                 lastDocumentDetected = false
-                DiagnosticsLogger.log("⚪ [Document] Document lost / tracking reset.")
             }
             lastStableCount = 0
         } else if (stableCount != lastStableCount) {
