@@ -82,12 +82,32 @@ class ScannerCaptureManager(
         }
     }
 
+    var lastUserTapPoint: PointF? = null
+    var lastUserTapTime: Long = 0L
+
+    fun notifyUserTappedToFocus(x: Float, y: Float) {
+        lastUserTapPoint = PointF(x, y)
+        lastUserTapTime = System.currentTimeMillis()
+    }
+
     fun focusAndTakePhoto(isAutoCapture: Boolean = false) {
         if (isCapturingPhoto) return
         fragment.cameraController.scannerStateMachine.isFocusing = true
 
         val binding = fragment.binding
         if (binding == null) {
+            fragment.cameraController.scannerStateMachine.isFocusing = false
+            takePhoto()
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        val userTappedRecently = (now - lastUserTapTime) < 6000L && lastUserTapPoint != null
+
+        if (userTappedRecently) {
+            // User manually focused on a specific point recently (<6s).
+            // Preserve their focus point and do NOT force a center refocus that blurs the image!
+            DiagnosticsLogger.info("[Focus] Preserving user manual tap focus at ${lastUserTapPoint?.x}, ${lastUserTapPoint?.y}")
             fragment.cameraController.scannerStateMachine.isFocusing = false
             takePhoto()
             return

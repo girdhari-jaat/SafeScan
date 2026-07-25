@@ -56,6 +56,7 @@ class ScannerUiActions(
                 return@setOnTouchListener true
             }
             if (event.action == MotionEvent.ACTION_DOWN) {
+                fragment.captureManager.notifyUserTappedToFocus(event.x, event.y)
                 val factory = binding.previewView.meteringPointFactory
                 val point = factory.createPoint(event.x, event.y)
 

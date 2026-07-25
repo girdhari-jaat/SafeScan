@@ -195,31 +195,38 @@ fun CropScreen(viewModel: ScannerViewModel) {
             contentAlignment = Alignment.Center
         ) {
             croppingBitmap?.let { bmp ->
-                        var draggingHandle by remember { mutableStateOf<String?>(null) }
-                    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+                val imageBitmap = remember(bmp) { bmp.asImageBitmap() }
+                var draggingHandle by remember { mutableStateOf<String?>(null) }
+                var dragOffset by remember { mutableStateOf(Offset.Zero) }
 
-                    BoxWithConstraints(
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val screenRatio = maxWidth.value / maxHeight.value
+                    val imgRatio = bmp.width.toFloat() / bmp.height.toFloat()
+
+                    Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        contentAlignment = Alignment.Center
+                            .aspectRatio(imgRatio, matchHeightConstraintsFirst = imgRatio < screenRatio)
+                            .onGloballyPositioned { coordinates ->
+                                imageSize = coordinates.size
+                            }
                     ) {
-                        val screenRatio = maxWidth.value / maxHeight.value
-                        val imgRatio = bmp.width.toFloat() / bmp.height.toFloat()
+                        Image(
+                            bitmap = imageBitmap,
+                            contentDescription = "Crop Image",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.FillBounds
+                        )
 
-                        Box(
-                            modifier = Modifier
-                                .aspectRatio(imgRatio, matchHeightConstraintsFirst = imgRatio < screenRatio)
-                                .onGloballyPositioned { coordinates ->
-                                    imageSize = coordinates.size
-                                }
-                        ) {
-                            Image(
-                                bitmap = bmp.asImageBitmap(),
-                                contentDescription = "Crop Image",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.FillBounds
-                            )
+                        // Shared Midpoints for side handle logic and drawing
+                        val midTop = Offset((tl.x + tr.x) / 2, (tl.y + tr.y) / 2)
+                        val midRight = Offset((tr.x + br.x) / 2, (tr.y + br.y) / 2)
+                        val midBottom = Offset((br.x + bl.x) / 2, (br.y + bl.y) / 2)
+                        val midLeft = Offset((bl.x + tl.x) / 2, (bl.y + tl.y) / 2)
 
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             val path = Path().apply {
@@ -317,11 +324,6 @@ fun CropScreen(viewModel: ScannerViewModel) {
                             }
 
                             // Side handles (midpoints) with active dragging glow
-                            val midTop = Offset((tl.x + tr.x) / 2, (tl.y + tr.y) / 2)
-                            val midRight = Offset((tr.x + br.x) / 2, (tr.y + br.y) / 2)
-                            val midBottom = Offset((br.x + bl.x) / 2, (br.y + bl.y) / 2)
-                            val midLeft = Offset((bl.x + tl.x) / 2, (bl.y + tl.y) / 2)
-
                             listOf(
                                 Pair(midTop, "midTop"),
                                 Pair(midRight, "midRight"),
@@ -343,12 +345,6 @@ fun CropScreen(viewModel: ScannerViewModel) {
                                 drawCircle(activeColor, radius = sideHandleRadius * scaleFactor, center = center)
                             }
                         }
-
-                        // Midpoints for side handle logic
-                        val midTop = Offset((tl.x + tr.x) / 2, (tl.y + tr.y) / 2)
-                        val midRight = Offset((tr.x + br.x) / 2, (tr.y + br.y) / 2)
-                        val midBottom = Offset((br.x + bl.x) / 2, (br.y + bl.y) / 2)
-                        val midLeft = Offset((bl.x + tl.x) / 2, (bl.y + tl.y) / 2)
 
                         // Corner Handles
                         CornerHandle(
@@ -466,7 +462,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
                                         val zoom = 4f
                                         val density = androidx.compose.ui.platform.LocalDensity.current.density
                                         Image(
-                                            bitmap = bmp.asImageBitmap(),
+                                            bitmap = imageBitmap,
                                             contentDescription = null,
                                             modifier = Modifier
                                                 .size(width = (imageSize.width.toFloat() / density * zoom).dp, height = (imageSize.height.toFloat() / density * zoom).dp)
