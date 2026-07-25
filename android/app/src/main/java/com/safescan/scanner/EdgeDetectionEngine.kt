@@ -17,20 +17,18 @@ class EdgeDetectionEngine {
     }
 
     @Synchronized
-    fun detectEdgesSafe(bitmap: Bitmap, mode: com.safescan.data.ScannerMode? = null, isManualCrop: Boolean = false): List<Point> {
-        return detectEdges(bitmap, mode, isManualCrop) ?: getFallbackQuad(bitmap.width.toDouble(), bitmap.height.toDouble())
+    fun detectEdgesSafe(bitmap: Bitmap, mode: com.safescan.data.ScannerMode? = null): List<Point> {
+        return detectEdges(bitmap, mode) ?: getFallbackQuad(bitmap.width.toDouble(), bitmap.height.toDouble())
     }
 
     @Synchronized
-    fun detectEdges(bitmap: Bitmap, mode: com.safescan.data.ScannerMode? = null, isManualCrop: Boolean = false): List<Point>? {
+    fun detectEdges(bitmap: Bitmap, mode: com.safescan.data.ScannerMode? = null): List<Point>? {
         if (bitmap.isRecycled) return null
 
         Log.d(TAG, "Starting Offline modern RANSAC + Outside-In edge detection")
         var src: Mat? = null
         var resized: Mat? = null
         var gray: Mat? = null
-        var bgIllum: Mat? = null
-        var normalizedGray: Mat? = null
         var stretched: Mat? = null
         var blurred: Mat? = null
         var binary: Mat? = null
@@ -45,7 +43,7 @@ class EdgeDetectionEngine {
             val resizeRatio = MAX_RESIZE_DIM / Math.max(src.width(), src.height())
             resized = Mat()
             val scaleFactor = if (resizeRatio < 1.0) {
-                Imgproc.resize(src, resized, Size(src.width() * resizeRatio, src.height() * resizeRatio), 0.0, 0.0, Imgproc.INTER_AREA)
+                Imgproc.resize(src, resized, Size(src.width() * resizeRatio, src.height() * resizeRatio), 0.0, 0.0, Imgproc.INTER_CUBIC)
                 resizeRatio
             } else {
                 src.copyTo(resized)
@@ -58,39 +56,35 @@ class EdgeDetectionEngine {
             gray = Mat()
             Imgproc.cvtColor(resized, gray, Imgproc.COLOR_RGBA2GRAY)
 
-            // Super fast & scale-invariant shadow-flattening
-            bgIllum = Mat()
-            val smallGray = Mat()
-            val smallIllum = Mat()
-            val maxDim = Math.max(sw, sh).toDouble()
-            val shadowScale = if (maxDim > 300.0) 300.0 / maxDim else 1.0
-            val targetW = Math.max(1, (sw * shadowScale).toInt())
-            val targetH = Math.max(1, (sh * shadowScale).toInt())
+            // 1. Normalize Contrast (Min-Max Stretch) to make text bounds and physical edges pop
+            val minMax = Core.minMaxLoc(gray)
+            val minG = minMax.minVal
+            val maxG = minMax.maxVal
+            val range = if (maxG - minG > 0.0) maxG - minG else 1.0
+            val stretchFactor = if (mode == com.safescan.data.ScannerMode.CARD || mode == com.safescan.data.ScannerMode.GRID) 260.0 else 255.0
             
-            Imgproc.resize(gray, smallGray, Size(targetW.toDouble(), targetH.toDouble()), 0.0, 0.0, Imgproc.INTER_AREA)
-            val illumKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(15.0, 15.0))
-            Imgproc.morphologyEx(smallGray, smallIllum, Imgproc.MORPH_CLOSE, illumKernel)
-            illumKernel.release()
-            
-            Imgproc.resize(smallIllum, bgIllum, Size(sw.toDouble(), sh.toDouble()), 0.0, 0.0, Imgproc.INTER_LINEAR)
-            smallGray.release()
-            smallIllum.release()
-
-            normalizedGray = Mat()
-            Core.divide(gray, bgIllum, normalizedGray, 255.0)
-
-            // 1. CLAHE (Contrast Limited Adaptive Histogram Equalization) for low-light & high-contrast document edges
             stretched = Mat()
-            val clahe = Imgproc.createCLAHE(2.5, Size(8.0, 8.0))
-            clahe.apply(normalizedGray, stretched)
+            gray.convertTo(stretched, -1, stretchFactor / range, -minG * (stretchFactor / range))
 
-            // 2. High-speed Gaussian smoothing for edge detection
+            // 2. Adaptive bilateral smoothing parameters
+            var blurDiameter = 5
+            var blurSigmaI = 20.0
+            var blurSigmaS = 10.0
+            
+            if (mode == com.safescan.data.ScannerMode.CARD || mode == com.safescan.data.ScannerMode.GRID) {
+                blurDiameter = 5
+                blurSigmaI = 25.0
+            } else {
+                blurDiameter = 3
+                blurSigmaI = 15.0
+            }
+
             blurred = Mat()
-            Imgproc.GaussianBlur(stretched, blurred, Size(5.0, 5.0), 0.0)
+            Imgproc.bilateralFilter(stretched, blurred, blurDiameter, blurSigmaI, blurSigmaS)
 
             // 3. Otsu Dynamic Auto-Thresholding & Morphological Closing
             binary = Mat()
-            val otsuVal = Imgproc.threshold(blurred, binary, 0.0, 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
+            Imgproc.threshold(blurred, binary, 0.0, 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
 
             closed = Mat()
             val k = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
@@ -140,64 +134,49 @@ class EdgeDetectionEngine {
             }
 
             val meanBrightness = Core.mean(gray).`val`[0]
-            val isLowLight = meanBrightness < 95.0
+            val isLowLight = meanBrightness < 85.0
             if (isLowLight) {
                 thresholdX *= 0.70
                 thresholdY *= 0.70
             }
 
             // 6. Scanning strategies
-            val isManualCropActive = isManualCrop || mode?.name?.startsWith("MANUAL") == true
+            val isManualCrop = mode?.name?.startsWith("MANUAL") == true
             val isCardMode = mode == com.safescan.data.ScannerMode.CARD || mode == com.safescan.data.ScannerMode.GRID
 
             val borderY = Math.round(sh * 0.02f)
             val borderX = Math.round(sw * 0.02f)
 
+            var finalPts: List<Point>? = null
+
             val est = RansacHelper.estimateForegroundPercentages(closedData, sw, sh)
+            if (est != null) {
+                finalPts = RansacHelper.scanTarget(
+                    sw, sh,
+                    est.leftPct, est.rightPct, est.topPct, est.bottomPct,
+                    borderX, borderY,
+                    closedData,
+                    magnitudesX, magnitudesY,
+                    thresholdX, thresholdY,
+                    isManualCrop, isCardMode
+                )
 
-            var finalPts: List<Point>? = detectContourQuad(
-                stretched ?: resized,
-                closed,
-                otsuVal,
-                sw,
-                sh,
-                est,
-                isCardMode,
-                isManualCropActive
-            )
+                if (finalPts == null) {
+                    val paddingX = Math.min(0.06, (est.rightPct - est.leftPct) * 0.08)
+                    val paddingY = Math.min(0.06, (est.bottomPct - est.topPct) * 0.08)
 
-            if (finalPts != null) {
-                Log.d(TAG, "OpenCV Contour Quad successfully detected document edges")
-            } else {
-                Log.d(TAG, "Contour detection yielded no quad, trying RANSAC Outside-In Scan")
-                if (est != null) {
                     finalPts = RansacHelper.scanTarget(
                         sw, sh,
-                        est.leftPct, est.rightPct, est.topPct, est.bottomPct,
+                        Math.max(0.01, est.leftPct - paddingX),
+                        Math.min(0.99, est.rightPct + paddingX),
+                        Math.max(0.01, est.topPct - paddingY),
+                        Math.min(0.99, est.bottomPct + paddingY),
                         borderX, borderY,
                         closedData,
                         magnitudesX, magnitudesY,
                         thresholdX, thresholdY,
-                        isManualCropActive, isCardMode
+                        isManualCrop, isCardMode
                     )
-
-                    if (finalPts == null) {
-                        val paddingX = Math.min(0.06, (est.rightPct - est.leftPct) * 0.08)
-                        val paddingY = Math.min(0.06, (est.bottomPct - est.topPct) * 0.08)
-
-                        finalPts = RansacHelper.scanTarget(
-                            sw, sh,
-                            Math.max(0.01, est.leftPct - paddingX),
-                            Math.min(0.99, est.rightPct + paddingX),
-                            Math.max(0.01, est.topPct - paddingY),
-                            Math.min(0.99, est.bottomPct + paddingY),
-                            borderX, borderY,
-                            closedData,
-                            magnitudesX, magnitudesY,
-                            thresholdX, thresholdY,
-                            isManualCropActive, isCardMode
-                        )
-                    }
                 }
             }
 
@@ -217,7 +196,7 @@ class EdgeDetectionEngine {
                             closedData,
                             magnitudesX, magnitudesY,
                             thresholdX, thresholdY,
-                            isManualCropActive, isCardMode
+                            isManualCrop, isCardMode
                         )
                         if (finalPts != null) break
                     }
@@ -235,14 +214,14 @@ class EdgeDetectionEngine {
                             closedData,
                             magnitudesX, magnitudesY,
                             thresholdX, thresholdY,
-                            isManualCropActive, isCardMode
+                            isManualCrop, isCardMode
                         )
                         if (finalPts != null) break
                     }
                 }
             }
 
-            if (finalPts == null && isManualCropActive) {
+            if (finalPts == null && isManualCrop) {
                 finalPts = RansacHelper.findRobustForegroundBoundingBox(closedData, sw, sh)
             }
 
@@ -252,187 +231,10 @@ class EdgeDetectionEngine {
             return RansacHelper.orderPoints(originalPoints)
 
         } finally {
-            src?.release(); resized?.release(); gray?.release(); bgIllum?.release(); normalizedGray?.release()
+            src?.release(); resized?.release(); gray?.release()
             stretched?.release(); blurred?.release(); binary?.release(); closed?.release()
             gradX?.release(); gradY?.release()
         }
-    }
-
-    private fun detectContourQuad(
-        imageMat: Mat,
-        closedMat: Mat?,
-        otsuVal: Double,
-        sw: Int,
-        sh: Int,
-        est: ForecastPct?,
-        isCardMode: Boolean,
-        isManualCrop: Boolean
-    ): List<Point>? {
-        var gray: Mat? = null
-        var blurred: Mat? = null
-        var edges: Mat? = null
-        var hierarchy: Mat? = null
-        val contours = ArrayList<org.opencv.core.MatOfPoint>()
-        try {
-            gray = Mat()
-            if (imageMat.channels() > 1) {
-                Imgproc.cvtColor(imageMat, gray, Imgproc.COLOR_RGBA2GRAY)
-            } else {
-                imageMat.copyTo(gray)
-            }
-
-            blurred = Mat()
-            Imgproc.GaussianBlur(gray, blurred, Size(5.0, 5.0), 0.0)
-
-            // Dynamic Canny thresholds tied to Otsu auto-threshold
-            val lowThresh = Math.max(20.0, otsuVal * 0.35)
-            val highThresh = Math.max(60.0, otsuVal * 0.85)
-
-            edges = Mat()
-            Imgproc.Canny(blurred, edges, lowThresh, highThresh)
-
-            val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(3.0, 3.0))
-            Imgproc.dilate(edges, edges, kernel)
-            kernel.release()
-
-            hierarchy = Mat()
-            Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
-
-            var bestQuad = evaluateContoursForQuad(contours, sw, sh, est, isCardMode, isManualCrop)
-
-            // Fallback pass on closed binary mask if Canny yields no quad
-            if (bestQuad == null && closedMat != null) {
-                for (c in contours) c.release()
-                contours.clear()
-                hierarchy.release()
-                hierarchy = Mat()
-                
-                Imgproc.findContours(closedMat, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
-                bestQuad = evaluateContoursForQuad(contours, sw, sh, est, isCardMode, isManualCrop)
-            }
-
-            return bestQuad
-        } catch (e: Exception) {
-            Log.e(TAG, "Contour quad detection failed: ${e.message}")
-            return null
-        } finally {
-            gray?.release()
-            blurred?.release()
-            edges?.release()
-            hierarchy?.release()
-            for (c in contours) {
-                c.release()
-            }
-        }
-    }
-
-    private fun evaluateContoursForQuad(
-        contours: List<org.opencv.core.MatOfPoint>,
-        sw: Int,
-        sh: Int,
-        est: ForecastPct?,
-        isCardMode: Boolean,
-        isManualCrop: Boolean
-    ): List<Point>? {
-        var bestQuad: List<Point>? = null
-        var maxScore = -1.0
-        val imgArea = sw.toDouble() * sh.toDouble()
-        val minArea = imgArea * 0.04
-        val maxInnerArea = imgArea * 0.92
-
-        for (contour in contours) {
-            val cArea = Imgproc.contourArea(contour)
-            if (cArea < minArea) continue
-
-            var c2f: org.opencv.core.MatOfPoint2f? = null
-            var approx: org.opencv.core.MatOfPoint2f? = null
-            var hullMat: org.opencv.core.MatOfInt? = null
-            var hullPoints: org.opencv.core.MatOfPoint2f? = null
-            try {
-                c2f = org.opencv.core.MatOfPoint2f()
-                contour.convertTo(c2f, org.opencv.core.CvType.CV_32F)
-
-                val peri = Imgproc.arcLength(c2f, true)
-                approx = org.opencv.core.MatOfPoint2f()
-                Imgproc.approxPolyDP(c2f, approx, 0.02 * peri, true)
-
-                // If direct approx is not 4 points, attempt Convex Hull approx to smooth shadow/glare noise
-                if (approx.total() != 4L) {
-                    hullMat = org.opencv.core.MatOfInt()
-                    Imgproc.convexHull(contour, hullMat)
-
-                    val hullIndices = hullMat.toArray()
-                    val ptBuf = DoubleArray(2)
-                    val hPts = ArrayList<org.opencv.core.Point>(hullIndices.size)
-                    for (hIdx in 0 until hullIndices.size) {
-                        val idx = hullIndices[hIdx]
-                        contour.get(idx, 0, ptBuf)
-                        hPts.add(org.opencv.core.Point(ptBuf[0], ptBuf[1]))
-                    }
-                    val hullContour = org.opencv.core.MatOfPoint()
-                    hullContour.fromList(hPts)
-
-                    hullPoints = org.opencv.core.MatOfPoint2f()
-                    hullContour.convertTo(hullPoints, org.opencv.core.CvType.CV_32F)
-                    hullContour.release()
-
-                    val hPeri = Imgproc.arcLength(hullPoints, true)
-                    approx.release()
-                    approx = org.opencv.core.MatOfPoint2f()
-                    Imgproc.approxPolyDP(hullPoints, approx, 0.025 * hPeri, true)
-                }
-
-                if (approx.total() == 4L) {
-                    val floatBuff = FloatArray(8)
-                    approx.get(0, 0, floatBuff)
-                    val rawPts = listOf(
-                        Point(floatBuff[0].toDouble(), floatBuff[1].toDouble()),
-                        Point(floatBuff[2].toDouble(), floatBuff[3].toDouble()),
-                        Point(floatBuff[4].toDouble(), floatBuff[5].toDouble()),
-                        Point(floatBuff[6].toDouble(), floatBuff[7].toDouble())
-                    )
-                    val validQuad = RansacHelper.validateAndRepairTier1Quad(
-                        rawPts, sw.toDouble(), sh.toDouble(), est, isCardMode, isManualCrop
-                    )
-                    if (validQuad.size == 4) {
-                        val area = RansacHelper.polygonArea(validQuad)
-
-                        val topLen = Math.hypot(validQuad[1].x - validQuad[0].x, validQuad[1].y - validQuad[0].y)
-                        val botLen = Math.hypot(validQuad[2].x - validQuad[3].x, validQuad[2].y - validQuad[3].y)
-                        val leftLen = Math.hypot(validQuad[3].x - validQuad[0].x, validQuad[3].y - validQuad[0].y)
-                        val rightLen = Math.hypot(validQuad[2].x - validQuad[1].x, validQuad[2].y - validQuad[1].y)
-
-                        // Check if candidate quad touches outer frame borders (false outer line in low light)
-                        var borderTouchCount = 0
-                        val marginX = sw * 0.025
-                        val marginY = sh * 0.025
-                        for (p in validQuad) {
-                            if (p.x <= marginX || p.x >= sw - marginX || p.y <= marginY || p.y >= sh - marginY) {
-                                borderTouchCount++
-                            }
-                        }
-
-                        // Score calculation: Give penalty if quad is an outer border line or fills >92% of screen
-                        var score = area
-
-                        if (borderTouchCount >= 3 || area > maxInnerArea) {
-                            score *= 0.35 // Penalize outer background/frame lines
-                        }
-
-                        if (score > maxScore) {
-                            maxScore = score
-                            bestQuad = validQuad
-                        }
-                    }
-                }
-            } finally {
-                c2f?.release()
-                approx?.release()
-                hullMat?.release()
-                hullPoints?.release()
-            }
-        }
-        return bestQuad
     }
 
     fun getFallbackQuad(w: Double, h: Double): List<Point> {

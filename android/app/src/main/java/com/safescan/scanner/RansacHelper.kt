@@ -21,10 +21,9 @@ object RansacHelper {
         var bestLine: Line? = null
         val earlyExitCount = points.size * 0.82
 
-        val rng = kotlin.random.Random(42)
         for (iter in 0 until iterations) {
-            val p1 = points[rng.nextInt(points.size)]
-            val p2 = points[rng.nextInt(points.size)]
+            val p1 = points[Random.nextInt(points.size)]
+            val p2 = points[Random.nextInt(points.size)]
             if (p1 == p2) continue
 
             var m = 0.0
@@ -183,67 +182,30 @@ object RansacHelper {
         if (c.size != 4) return emptyList()
         val a = polygonArea(c)
 
-        val minAreaRatio = if (isManualCrop) 0.02 else 0.08
+        val minAreaRatio = if (isManualCrop) 0.03 else 0.08
         val maxAreaRatio = if (isManualCrop) 0.999 else (if (isCardMode) 0.94 else 0.99)
 
         if (a < w * h * minAreaRatio || a > w * h * maxAreaRatio) return emptyList()
 
-        return c
-    }
+        val wLen = Math.hypot(c[1].x - c[0].x, c[1].y - c[0].y)
+        val hLen = Math.hypot(c[3].x - c[0].x, c[3].y - c[0].y)
+        val r = wLen / hLen
 
-    fun validateAndRepairTier1Quad(
-        pts: List<Point>,
-        w: Double,
-        h: Double,
-        est: ForecastPct?,
-        isCardMode: Boolean,
-        isManualCrop: Boolean
-    ): List<Point> {
-        if (pts.size != 4) return emptyList()
+        val tolerance = if (isManualCrop) 0.45 else 0.25
 
-        val ordered = orderPoints(pts)
-
-        // 1. Check side parallelism / symmetry ratio (Anti-Flare)
-        val topLen = Math.hypot(ordered[1].x - ordered[0].x, ordered[1].y - ordered[0].y)
-        val botLen = Math.hypot(ordered[2].x - ordered[3].x, ordered[2].y - ordered[3].y)
-        val leftLen = Math.hypot(ordered[3].x - ordered[0].x, ordered[3].y - ordered[0].y)
-        val rightLen = Math.hypot(ordered[2].x - ordered[1].x, ordered[2].y - ordered[1].y)
-
-        val wRatio = Math.min(topLen, botLen) / Math.max(1e-3, Math.max(topLen, botLen))
-        val hRatio = Math.min(leftLen, rightLen) / Math.max(1e-3, Math.max(leftLen, rightLen))
-
-        // If one side is severely flared (> 2.5x difference with opposite side), reject severe distortion
-        if (wRatio < 0.40 || hRatio < 0.40) {
-            return emptyList()
+        var isValid = false
+        if (isCardMode) {
+            val cardRatio = 1.586
+            isValid = abs(r - cardRatio) < tolerance || abs(r - (1.0 / cardRatio)) < tolerance
+        } else {
+            val ratio34 = 0.75
+            val ratioA4 = 0.707
+            isValid = abs(r - ratio34) < tolerance || abs(r - (1.0 / ratio34)) < tolerance ||
+                    abs(r - ratioA4) < tolerance || abs(r - (1.0 / ratioA4)) < tolerance ||
+                    isManualCrop
         }
 
-        // 2. Refine single flared corner using angle deviation
-        var repaired = refineSkewedCorner(ordered)
-
-        // 3. Foreground bounds check if available
-        if (est != null) {
-            val minX = w * Math.max(0.0, est.leftPct - 0.08)
-            val maxX = w * Math.min(1.0, est.rightPct + 0.08)
-            val minY = h * Math.max(0.0, est.topPct - 0.08)
-            val maxY = h * Math.min(1.0, est.bottomPct + 0.08)
-
-            var outCount = 0
-            for (p in repaired) {
-                if (p.x < minX || p.x > maxX || p.y < minY || p.y > maxY) {
-                    outCount++
-                }
-            }
-
-            // If 1 corner flared outside foreground bounds due to shadow/reflection, pull it back/repair it
-            if (outCount == 1) {
-                repaired = refineSkewedCorner(repaired)
-            } else if (outCount >= 2) {
-                // If multiple corners are outside foreground prediction, reject Tier 1 candidate
-                return emptyList()
-            }
-        }
-
-        return filterBestQuad(repaired, w, h, isCardMode, isManualCrop)
+        return if (isValid) c else emptyList()
     }
 
     fun estimateForegroundPercentages(closedData: ByteArray, w: Int, h: Int): ForecastPct? {

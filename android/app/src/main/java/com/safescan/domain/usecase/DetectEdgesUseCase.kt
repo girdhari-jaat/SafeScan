@@ -20,7 +20,7 @@ class DetectEdgesUseCase @Inject constructor(
     ): List<Point>? {
         if (bitmap == null || bitmap.isRecycled) return null
         return try {
-            edgeDetectionEngine.detectEdges(bitmap, mode, isManualCrop)
+            edgeDetectionEngine.detectEdges(bitmap, mode)
         } catch (e: Exception) {
             null
         }
