@@ -144,9 +144,21 @@ class PdfExporter(private val context: Context) {
                                     Bitmap.createScaledBitmap(bmp, targetImgWidth, targetImgHeight, true)
                                 }
 
+                                // Flatten onto a solid White Canvas (#FFFFFF) to strip Alpha channel safely for clean 24-bit RGB JPEG
+                                val solidBmp = Bitmap.createBitmap(targetImgWidth, targetImgHeight, Bitmap.Config.ARGB_8888)
+                                val solidCanvas = android.graphics.Canvas(solidBmp)
+                                solidCanvas.drawColor(android.graphics.Color.WHITE)
+                                val drawPaint = Paint().apply {
+                                    isFilterBitmap = true
+                                    isAntiAlias = true
+                                }
+                                solidCanvas.drawBitmap(scaledBmp, null, android.graphics.RectF(0f, 0f, targetImgWidth.toFloat(), targetImgHeight.toFloat()), drawPaint)
+
                                 val tempOs = ByteArrayOutputStream()
-                                scaledBmp.compress(Bitmap.CompressFormat.JPEG, jpegQuality.toInt(), tempOs)
+                                solidBmp.compress(Bitmap.CompressFormat.JPEG, jpegQuality.toInt(), tempOs)
                                 val jpegBytes = tempOs.toByteArray()
+                                solidBmp.recycle()
+
                                 if (scaledBmp != bmp) {
                                     scaledBmp.recycle()
                                 }
