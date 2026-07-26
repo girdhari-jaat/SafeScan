@@ -151,47 +151,58 @@ object ImageFilterEngine {
                 Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
             }
             FilterType.BLACK_WHITE -> {
-                var gray: Mat? = null
+                var bgrChannels: ArrayList<Mat>? = null
+                var minBG: Mat? = null
+                var minBGR: Mat? = null
+                var standardGray: Mat? = null
+                var darkTextGray: Mat? = null
                 var cleanGray: Mat? = null
-                var smoothed: Mat? = null
-                var thresholded: Mat? = null
+                var blurred: Mat? = null
+                var sharp: Mat? = null
+                var bwResult: Mat? = null
                 try {
-                    gray = Mat()
-                    Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY)
+                    // Extract channels to preserve light-colored fonts (blue, red, green pen/stamps)
+                    bgrChannels = ArrayList()
+                    Core.split(src, bgrChannels)
                     
-                    cleanGray = removeShadowsGray(gray)
+                    minBG = Mat()
+                    Core.min(bgrChannels[0], bgrChannels[1], minBG)
+                    minBGR = Mat()
+                    Core.min(minBG, bgrChannels[2], minBGR)
                     
-                    smoothed = Mat()
-                    Imgproc.bilateralFilter(cleanGray, smoothed, 7, 35.0, 35.0)
-                    Imgproc.GaussianBlur(smoothed, smoothed, Size(3.0, 3.0), 0.0)
+                    standardGray = Mat()
+                    Imgproc.cvtColor(src, standardGray, Imgproc.COLOR_BGR2GRAY)
                     
-                    val maxDim = Math.max(smoothed.cols(), smoothed.rows())
-                    var blockSize = maxDim / 35
-                    if (blockSize % 2 == 0) {
-                        blockSize += 1
-                    }
-                    if (blockSize < 25) {
-                        blockSize = 25
-                    }
+                    // Blend minBGR with standard Gray so all ink colors (blue/red/pencil) become dark ink
+                    darkTextGray = Mat()
+                    Core.addWeighted(standardGray, 0.4, minBGR, 0.6, 0.0, darkTextGray)
                     
-                    thresholded = Mat()
-                    Imgproc.adaptiveThreshold(
-                        smoothed,
-                        thresholded,
-                        255.0,
-                        Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C,
-                        Imgproc.THRESH_BINARY,
-                        blockSize,
-                        9.5
-                    )
+                    // 1. Remove shadows and uneven background lighting
+                    cleanGray = removeShadowsGray(darkTextGray)
                     
-                    Core.addWeighted(thresholded, 0.85, smoothed, 0.15, 0.0, outMat)
-                    Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
+                    // 2. Unsharp Masking for sharpening blurred text & fine edges
+                    blurred = Mat()
+                    Imgproc.GaussianBlur(cleanGray, blurred, Size(0.0, 0.0), 2.5)
+                    sharp = Mat()
+                    Core.addWeighted(cleanGray, 1.4, blurred, -0.4, 0.0, sharp)
+                    
+                    // 3. Smooth Contrast Stretching (Adobe Scan / CamScanner Style B&W)
+                    // Maps background (> 200) to pure 255 paper white, and text (< 120) to deep dark black/gray
+                    bwResult = Mat()
+                    sharp.convertTo(bwResult, -1, 1.75, -110.0)
+                    
+                    // 4. Output RGBA
+                    Imgproc.cvtColor(bwResult, outMat, Imgproc.COLOR_GRAY2RGBA)
                 } finally {
-                    safeRelease(gray)
+                    bgrChannels?.forEach { safeRelease(it) }
+                    safeRelease(minBG)
+                    safeRelease(minBGR)
+                    safeRelease(standardGray)
+                    safeRelease(darkTextGray)
                     safeRelease(cleanGray)
-                    safeRelease(smoothed)
-                    safeRelease(thresholded)
+                    safeRelease(blurred)
+                    safeRelease(sharp)
+                    safeRelease(bwResult)
                 }
             }
             FilterType.CARD -> {

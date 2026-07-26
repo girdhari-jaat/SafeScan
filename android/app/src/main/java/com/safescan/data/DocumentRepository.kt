@@ -110,8 +110,12 @@ class DocumentRepository @Inject constructor(
             val origFile = File(pagesDir, "${page.id}.jpg")
             val prevFile = File(previewsDir, "${page.id}.jpg")
 
-            saveBitmapToFile(page.originalBitmap, origFile)
-            saveBitmapToFile(page.previewBitmap, prevFile)
+            if (!origFile.exists()) {
+                saveBitmapToFile(page.originalBitmap, origFile)
+            }
+            if (!prevFile.exists()) {
+                saveBitmapToFile(page.previewBitmap, prevFile)
+            }
 
             val existingPage = existingMeta?.pages?.find { it.id == page.id }
 

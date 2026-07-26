@@ -33,12 +33,10 @@ object RansacHelper {
                 if (abs(p2.y - p1.y) < 0.001) continue
                 m = (p2.x - p1.x) / (p2.y - p1.y)
                 c = p1.x - m * p1.y
-                if (abs(m) > 0.65) continue
             } else {
                 if (abs(p2.x - p1.x) < 0.001) continue
                 m = (p2.y - p1.y) / (p2.x - p1.x)
                 c = p1.y - m * p1.x
-                if (abs(m) > 0.65) continue
             }
 
             val inliers = mutableListOf<Point>()
@@ -83,23 +81,19 @@ object RansacHelper {
                 if (abs(denom) > 0.001) {
                     val m = (N * sumXY - sumX * sumY) / denom
                     val c = (sumX - m * sumY) / N
-                    if (abs(m) <= 0.65) {
-                        return Pair(Line(m, c), bestInliers.size)
-                    }
+                    return Pair(Line(m, c), bestInliers.size)
                 }
             } else {
                 val denom = N * sumXX - sumX * sumX
                 if (abs(denom) > 0.001) {
                     val m = (N * sumXY - sumX * sumY) / denom
                     val c = (sumY - m * sumX) / N
-                    if (abs(m) <= 0.65) {
-                        return Pair(Line(m, c), bestInliers.size)
-                    }
+                    return Pair(Line(m, c), bestInliers.size)
                 }
             }
         }
 
-        return bestLine?.takeIf { abs(it.m) <= 0.65 }?.let { Pair(it, bestInliers.size) }
+        return bestLine?.let { Pair(it, bestInliers.size) }
     }
 
     fun intersectLines(vertical: Line, horizontal: Line, defaultX: Double, defaultY: Double): Point {
@@ -412,9 +406,6 @@ object RansacHelper {
             var maxXL = -1
             for (x in searchLeftStart until searchLeftEnd) {
                 val valX = magnitudesX[y * sw + x].toDouble()
-                val valY = magnitudesY[y * sw + x].toDouble()
-                if (valY > valX * 1.5 && valX < thresholdX * 0.8) continue
-
                 val isTransition = x > 0 && x < sw - 1 && (
                     closedData[y * sw + x] != closedData[y * sw + (x - 1)] ||
                     closedData[y * sw + x] != closedData[y * sw + (x + 1)]
@@ -435,9 +426,6 @@ object RansacHelper {
             var maxXR = -1
             for (x in searchRightEnd - 1 downTo searchRightStart) {
                 val valX = magnitudesX[y * sw + x].toDouble()
-                val valY = magnitudesY[y * sw + x].toDouble()
-                if (valY > valX * 1.5 && valX < thresholdX * 0.8) continue
-
                 val isTransition = x > 0 && x < sw - 1 && (
                     closedData[y * sw + x] != closedData[y * sw + (x - 1)] ||
                     closedData[y * sw + x] != closedData[y * sw + (x + 1)]
@@ -465,9 +453,6 @@ object RansacHelper {
             var foundYT = -1
             for (y in searchTopStart until searchTopEnd) {
                 val valY = magnitudesY[y * sw + x].toDouble()
-                val valX = magnitudesX[y * sw + x].toDouble()
-                if (valX > valY * 1.5 && valY < thresholdY * 0.8) continue
-
                 val isTransition = y > 0 && y < sh - 1 && (
                     closedData[y * sw + x] != closedData[(y - 1) * sw + x] ||
                     closedData[y * sw + x] != closedData[(y + 1) * sw + x]
@@ -488,9 +473,6 @@ object RansacHelper {
             var foundYB = -1
             for (y in searchBottomEnd - 1 downTo searchBottomStart) {
                 val valY = magnitudesY[y * sw + x].toDouble()
-                val valX = magnitudesX[y * sw + x].toDouble()
-                if (valX > valY * 1.5 && valY < thresholdY * 0.8) continue
-
                 val isTransition = y > 0 && y < sh - 1 && (
                     closedData[y * sw + x] != closedData[(y - 1) * sw + x] ||
                     closedData[y * sw + x] != closedData[(y + 1) * sw + x]

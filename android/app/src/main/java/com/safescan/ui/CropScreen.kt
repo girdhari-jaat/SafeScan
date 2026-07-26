@@ -569,7 +569,7 @@ fun CropTopBar(
                 enabled = !isAutoRunning,
                 onClick = onFull
             ) {
-                Text(stringResource(id = R.string.full), color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Text(stringResource(id = R.string.full), color = MaterialTheme.colorScheme.onSurface)
             }
 
             // 3a. TF Auto (TFLite Model based detection)
@@ -585,7 +585,7 @@ fun CropTopBar(
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Text("AI", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text("AI", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -602,7 +602,7 @@ fun CropTopBar(
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Text(stringResource(id = R.string.auto), color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text(stringResource(id = R.string.auto), color = MaterialTheme.colorScheme.onSurface)
                 }
             }
 
@@ -622,7 +622,7 @@ fun CropTopBar(
                     enabled = !isAutoRunning,
                     onClick = onNext
                 ) {
-                    Text(stringResource(id = R.string.next), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
+                    Text(stringResource(id = R.string.next), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
             } else {
                 Spacer(modifier = Modifier.weight(1f))

@@ -54,7 +54,7 @@ class TFLiteEngine(private val context: Context) {
     private val probmapSmooth = Mat(inputSize, inputSize, CvType.CV_8UC1)
     private val bin = Mat(inputSize, inputSize, CvType.CV_8UC1)
     private val hierarchy = Mat()
-    private val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, Size(5.0, 5.0))
+    private val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, Size(3.0, 3.0))
     private val contour2f = MatOfPoint2f()
     private val approx = MatOfPoint2f()
     private val hullMat = MatOfInt()
@@ -66,9 +66,9 @@ class TFLiteEngine(private val context: Context) {
     private val ptBuf = DoubleArray(2)
     private var contourIntBuffer = IntArray(1024)
 
-    // Pre-allocated thresholds to prevent object allocations during frames
-    private val liveThresholds = doubleArrayOf(0.5, 0.7, 0.85)
-    private val batchThresholds = doubleArrayOf(0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95)
+    // Pre-allocated thresholds prioritized from tighter high-confidence boundaries to fallback levels
+    private val liveThresholds = doubleArrayOf(0.70, 0.80, 0.60)
+    private val batchThresholds = doubleArrayOf(0.70, 0.75, 0.80, 0.85, 0.60, 0.50)
 
     val isGpuAccelerated: Boolean
         get() = gpuDelegate != null
@@ -395,12 +395,24 @@ class TFLiteEngine(private val context: Context) {
                 var result: Quadrilateral? = null
                 
                 if (bestQuadPoints != null) {
+                    // Contract quad points by 0.5px towards centroid on 256x256 tensor space to eliminate outer edge protrusion
+                    val cx = (bestQuadPoints[0].x + bestQuadPoints[1].x + bestQuadPoints[2].x + bestQuadPoints[3].x) / 4.0
+                    val cy = (bestQuadPoints[0].y + bestQuadPoints[1].y + bestQuadPoints[2].y + bestQuadPoints[3].y) / 4.0
+                    val tightQuadPoints = bestQuadPoints.map { pt ->
+                        val vx = cx - pt.x
+                        val vy = cy - pt.y
+                        val dist = Math.hypot(vx, vy)
+                        if (dist > 1e-3) {
+                            Point(pt.x + (vx / dist) * 0.5, pt.y + (vy / dist) * 0.5)
+                        } else pt
+                    }
+
                     // Scale corners back to original bitmap dimensions reversing the letterbox translation and scale
                     val scaleD = Math.min(inputSize.toDouble() / bitmap.width.toDouble(), inputSize.toDouble() / bitmap.height.toDouble())
                     val dxD = (inputSize.toDouble() - bitmap.width.toDouble() * scaleD) / 2.0
                     val dyD = (inputSize.toDouble() - bitmap.height.toDouble() * scaleD) / 2.0
 
-                    val scaledPoints = bestQuadPoints.map {
+                    val scaledPoints = tightQuadPoints.map {
                         val originalX = ((it.x - dxD) / scaleD).coerceIn(0.0, bitmap.width.toDouble())
                         val originalY = ((it.y - dyD) / scaleD).coerceIn(0.0, bitmap.height.toDouble())
                         Point(originalX, originalY)
