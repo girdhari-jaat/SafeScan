@@ -151,243 +151,39 @@ class LiveEdgeDetectionEngine {
                 var foundCorners: List<Point>? = null
                 var sharpness = 0.0
 
-                if (engineType == ScannerEngineType.LOCAL_ML) {
-                    val processorType = if (documentScanner?.isGpuAccelerated == true) "TFLite (GPU)" else "TFLite (CPU)"
-                    if (processorType != lastLoggedProcessorType) {
-                        Log.i("LiveEdgeDetectionEngine", "Processing frame using: $processorType")
-                        com.safescan.core.DiagnosticsLogger.info("Live edge detection active: running on $processorType")
-                        lastLoggedProcessorType = processorType
+                bitmap = imageProxy.toBitmap()
+                if (bitmap == null) {
+                    ScannerDebugLogger.logExit("LiveEdgeDetectionEngine.process")
+                    imageProxy.close()
+                    return
+                }
+                if (bitmap!!.config != android.graphics.Bitmap.Config.ARGB_8888 || !bitmap!!.isMutable) {
+                    val softwareBmp = bitmap!!.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
+                    if (softwareBmp != null && softwareBmp != bitmap) {
+                        bitmap!!.recycle()
+                        bitmap = softwareBmp
                     }
-                    
-                    bitmap = imageProxy.toBitmap()
-                    if (bitmap == null) {
-                        ScannerDebugLogger.logExit("LiveEdgeDetectionEngine.process")
-                        imageProxy.close()
-                        return
-                    }
-                    if (bitmap!!.config != android.graphics.Bitmap.Config.ARGB_8888 || !bitmap!!.isMutable) {
-                        val softwareBmp = bitmap!!.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
-                        if (softwareBmp != null && softwareBmp != bitmap) {
-                            bitmap!!.recycle()
-                            bitmap = softwareBmp
-                        }
-                    }
-                    Utils.bitmapToMat(bitmap, src!!)
-                    val resizeRatio = 400.0 / Math.max(src!!.width(), src!!.height())
-                    if (resizeRatio < 1.0) {
-                        Imgproc.resize(src!!, resized!!, Size(src!!.width() * resizeRatio, src!!.height() * resizeRatio))
-                    } else {
-                        src!!.copyTo(resized!!)
-                    }
-                    Imgproc.cvtColor(resized!!, gray!!, Imgproc.COLOR_RGBA2GRAY)
-                    
-                    sharpness = calculateSharpness(gray!!)
-                    
-                    if (documentScanner != null) {
-                        try {
-                            val quad = documentScanner.detectDocument(bitmap, true)
-                            if (quad != null) {
-                                foundCorners = listOf(quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft)
-                                Log.d("LiveEdgeDetectionEngine", "Successfully detected document corners using TFLite ML on live feed")
-                            }
-                        } catch (e: Throwable) {
-                            Log.e("LiveEdgeDetectionEngine", "TFLite ML detection failed in live feed", e)
-                        }
-                    }
+                }
+                Utils.bitmapToMat(bitmap, src!!)
+                val resizeRatio = 400.0 / Math.max(src!!.width(), src!!.height())
+                if (resizeRatio < 1.0) {
+                    Imgproc.resize(src!!, resized!!, Size(src!!.width() * resizeRatio, src!!.height() * resizeRatio))
                 } else {
-                    val processorType = "OpenCV (Fallback)"
-                    if (processorType != lastLoggedProcessorType) {
-                        Log.i("LiveEdgeDetectionEngine", "Processing frame using: $processorType")
-                        lastLoggedProcessorType = processorType
-                    }
-                    // Extremely fast path: bypass Bitmap conversion completely for OpenCV Engine
-                    val yPlane = imageProxy.planes[0]
-                    val yBuffer = yPlane.buffer
-                    val yRowStride = yPlane.rowStride
-                    val width = imageProxy.width
-                    val height = imageProxy.height
+                    src!!.copyTo(resized!!)
+                }
+                Imgproc.cvtColor(resized!!, gray!!, Imgproc.COLOR_RGBA2GRAY)
+                sharpness = calculateSharpness(gray!!)
 
-                    if (src == null || src!!.rows() != height || src!!.cols() != yRowStride || src!!.type() != CvType.CV_8UC1) {
-                        src?.release()
-                        src = Mat(height, yRowStride, CvType.CV_8UC1)
-                    }
-
-                    val remaining = yBuffer.remaining()
-                    if (yData == null || yData!!.size != remaining) {
-                        yData = ByteArray(remaining)
-                    }
-                    yBuffer.get(yData!!)
-                    src!!.put(0, 0, yData!!)
-
-                    // Submat to crop out padding bytes if rowStride > width
-                    actualGray = if (yRowStride > width) {
-                        src!!.colRange(0, width)
-                    } else {
-                        src!!
-                    }
-
-                    val resizeRatio = 400.0 / Math.max(actualGray.width(), actualGray.height())
-                    if (resizeRatio < 1.0) {
-                        Imgproc.resize(actualGray, resized!!, Size(actualGray.width() * resizeRatio, actualGray.height() * resizeRatio))
-                    } else {
-                        actualGray.copyTo(resized!!)
-                    }
-
-                    sharpness = calculateSharpness(resized!!)
-
-                    // Gaussian blur is faster for live preview and provides good edge smoothing
-                    val blurSize = when (mode) {
-                        com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> Size(5.0, 5.0)
-                        else -> Size(5.0, 5.0)
-                    }
-                    Imgproc.GaussianBlur(resized!!, blurred!!, blurSize, 0.0)
-                    
-                    val (lowThresh, highThresh) = when (mode) {
-                        com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> Pair(50.0, 125.0)
-                        else -> Pair(40.0, 100.0)
-                    }
-                    
-                    Imgproc.Canny(blurred!!, edges!!, lowThresh, highThresh) 
-                    
-                    val morphKernel = when (mode) {
-                        com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> kernel7!!
-                        else -> kernel5!!
-                    }
-                    Imgproc.morphologyEx(edges!!, edges!!, Imgproc.MORPH_CLOSE, morphKernel)
-                    
-                    // RETR_EXTERNAL is faster and we only care about the outermost document contour
-                    Imgproc.findContours(edges!!, contours, hierarchy!!, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
-                    
-                    ScannerDebugLogger.logLiveEdge(contours.size)
-                    
-                    val maxArea = resized!!.width() * resized!!.height()
-                    val minArea = when (mode) {
-                        com.safescan.data.ScannerMode.CARD, com.safescan.data.ScannerMode.GRID -> maxArea * 0.06
-                        else -> maxArea * 0.12
-                    }
-                    
-                    var bestArea = 0.0
-                    var bestCorners: List<Point>? = null
-
-                    for (contour in contours) {
-                        val area = Imgproc.contourArea(contour)
-                        if (area < minArea || area < bestArea) continue
-                        
-                        try {
-                            tempContour2f?.let { contour.convertTo(it, CvType.CV_32F) }
-                            val peri = tempContour2f?.let { Imgproc.arcLength(it, true) } ?: 0.0
-                            
-                            var currentCorners: List<Point>? = null
-                            var approxSuccess = false
-
-                            // Try different epsilon approximations to get a clean quadrilateral
-                            val epsilons = doubleArrayOf(0.015, 0.02, 0.03, 0.04)
-                            for (epsFactor in epsilons) {
-                                if (tempContour2f != null && tempApprox != null) {
-                                    Imgproc.approxPolyDP(tempContour2f, tempApprox, epsFactor * peri, true)
-                                    if (tempApprox!!.total() == 4L) {
-                                        tempApprox!!.get(0, 0, tempFloatArray8)
-                                        reusableCvPoints[0].x = tempFloatArray8[0].toDouble(); reusableCvPoints[0].y = tempFloatArray8[1].toDouble()
-                                        reusableCvPoints[1].x = tempFloatArray8[2].toDouble(); reusableCvPoints[1].y = tempFloatArray8[3].toDouble()
-                                        reusableCvPoints[2].x = tempFloatArray8[4].toDouble(); reusableCvPoints[2].y = tempFloatArray8[5].toDouble()
-                                        reusableCvPoints[3].x = tempFloatArray8[6].toDouble(); reusableCvPoints[3].y = tempFloatArray8[7].toDouble()
-                                        if (isConvexPoints(reusableCvPoints) && getMaxCosinePoints(reusableCvPoints) < 0.4) {
-                                            reusablePointsArray[0] = Point(tempFloatArray8[0] / resizeRatio, tempFloatArray8[1] / resizeRatio)
-                                            reusablePointsArray[1] = Point(tempFloatArray8[2] / resizeRatio, tempFloatArray8[3] / resizeRatio)
-                                            reusablePointsArray[2] = Point(tempFloatArray8[4] / resizeRatio, tempFloatArray8[5] / resizeRatio)
-                                            reusablePointsArray[3] = Point(tempFloatArray8[6] / resizeRatio, tempFloatArray8[7] / resizeRatio)
-                                            currentCorners = orderPoints(reusablePointsArray)
-                                            approxSuccess = true
-                                            break
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            // FALLBACK 1: Extreme Projection Points
-                            if (!approxSuccess) {
-                                val extremePointsArray = getExtremePointsArray(contour)
-                                if (extremePointsArray != null && isConvexPoints(extremePointsArray) && getMaxCosinePoints(extremePointsArray) < 0.4) {
-                                    reusablePointsArray[0] = Point(extremePointsArray[0].x / resizeRatio, extremePointsArray[0].y / resizeRatio)
-                                    reusablePointsArray[1] = Point(extremePointsArray[1].x / resizeRatio, extremePointsArray[1].y / resizeRatio)
-                                    reusablePointsArray[2] = Point(extremePointsArray[2].x / resizeRatio, extremePointsArray[2].y / resizeRatio)
-                                    reusablePointsArray[3] = Point(extremePointsArray[3].x / resizeRatio, extremePointsArray[3].y / resizeRatio)
-                                    currentCorners = orderPoints(reusablePointsArray)
-                                    approxSuccess = true
-                                }
-                            }
-
-                            // FALLBACK 2: Convex Hull & Bounding Box fallback to prevent frame drops in low contrast
-                            if (!approxSuccess && currentCorners == null) {
-                                val hullInts = org.opencv.core.MatOfInt()
-                                val hullPointsMat = MatOfPoint()
-                                try {
-                                    Imgproc.convexHull(contour, hullInts)
-                                    val totalHull = hullInts.total().toInt()
-                                    if (totalHull > 0) {
-                                        val hullIndices = IntArray(totalHull)
-                                        hullInts.get(0, 0, hullIndices)
-                                        
-                                        val totalContour = contour.total().toInt()
-                                        val contourInts = IntArray(totalContour * 2)
-                                        contour.get(0, 0, contourInts)
-                                        
-                                        val hullPtsInts = IntArray(totalHull * 2)
-                                        for (idx in 0 until totalHull) {
-                                            val cIdx = hullIndices[idx]
-                                            hullPtsInts[idx * 2] = contourInts[cIdx * 2]
-                                            hullPtsInts[idx * 2 + 1] = contourInts[cIdx * 2 + 1]
-                                        }
-                                        hullPointsMat.put(0, 0, hullPtsInts)
-                                        
-                                        val hull32f = MatOfPoint2f()
-                                        val approxHull32f = MatOfPoint2f()
-                                        try {
-                                            hullPointsMat.convertTo(hull32f, CvType.CV_32F)
-                                            val hullPeri = Imgproc.arcLength(hull32f, true)
-                                            for (epsFactor in doubleArrayOf(0.015, 0.02, 0.03, 0.04)) {
-                                                Imgproc.approxPolyDP(hull32f, approxHull32f, epsFactor * hullPeri, true)
-                                                if (approxHull32f.total() == 4L) {
-                                                    val floatBuff = FloatArray(8)
-                                                    approxHull32f.get(0, 0, floatBuff)
-                                                    reusablePointsArray[0] = Point(floatBuff[0].toDouble() / resizeRatio, floatBuff[1].toDouble() / resizeRatio)
-                                                    reusablePointsArray[1] = Point(floatBuff[2].toDouble() / resizeRatio, floatBuff[3].toDouble() / resizeRatio)
-                                                    reusablePointsArray[2] = Point(floatBuff[4].toDouble() / resizeRatio, floatBuff[5].toDouble() / resizeRatio)
-                                                    reusablePointsArray[3] = Point(floatBuff[6].toDouble() / resizeRatio, floatBuff[7].toDouble() / resizeRatio)
-                                                    currentCorners = orderPoints(reusablePointsArray)
-                                                    approxSuccess = true
-                                                    break
-                                                }
-                                            }
-                                        } finally {
-                                            hull32f.release()
-                                            approxHull32f.release()
-                                        }
-                                    }
-                                } catch (hullEx: Throwable) {
-                                    Log.e("LiveEdgeDetectionEngine", "Hull fallback computation failed", hullEx)
-                                } finally {
-                                    hullInts.release()
-                                    hullPointsMat.release()
-                                }
-
-
-                            }
-
-                            if (currentCorners != null) {
-                                bestArea = area
-                                bestCorners = currentCorners
-                            }
-
-                        } catch (e: Throwable) {
-                            Log.e("LiveEdgeDetectionEngine", "Contour loop processing error", e)
-                        }
-                    }
-                    
-                    if (bestCorners != null) {
-                        foundCorners = bestCorners
-                        ScannerDebugLogger.logLiveEdgeArea(bestArea, (bestArea / maxArea.toDouble()) * 100.0)
-                    }
+                // Mandatory TFLite Mask Gate: Check if TFLite detects a valid document mask first
+                val quad = documentScanner?.detectDocument(bitmap!!, true)
+                if (quad != null) {
+                    // TFLite mask is valid: Pass 4 corners derived from the TFLite mask
+                    foundCorners = listOf(quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft)
+                    Log.d("LiveEdgeDetectionEngine", "Successfully detected document corners using TFLite mask on live feed")
+                } else {
+                    // TFLite mask is null/empty: Gate triggered! Skip OpenCV edge detection to prevent false positives on table/floor/wall
+                    Log.d("LiveEdgeDetectionEngine", "TFLite mask is null or empty. Gating frame: skipping frame and stability count.")
+                    foundCorners = null
                 }
                 
                 if (foundCorners != null) {

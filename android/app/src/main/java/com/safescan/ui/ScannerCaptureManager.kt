@@ -136,7 +136,7 @@ class ScannerCaptureManager(
         val action = FocusMeteringAction.Builder(
             point,
             flags
-        ).setAutoCancelDuration(2, java.util.concurrent.TimeUnit.SECONDS).build()
+        ).disableAutoCancel().build()
 
         fragment.cameraControl?.startFocusAndMetering(action)
         fragment.cameraController.scannerStateMachine.isFocusing = false
@@ -220,7 +220,6 @@ class ScannerCaptureManager(
             object : ImageCapture.OnImageCapturedCallback() {
                 override fun onCaptureSuccess(imageProxy: ImageProxy) {
                     try {
-                        fragment.cameraControl?.cancelFocusAndMetering()
                         val rawBitmap = imageProxy.toBitmap()
                         val rotationDegrees = imageProxy.imageInfo.rotationDegrees
                         ScannerDebugLogger.logCameraRotation(rotationDegrees)
@@ -274,7 +273,6 @@ class ScannerCaptureManager(
                             Toast.makeText(ctx, "Capture failed: ${exception.localizedMessage}", Toast.LENGTH_SHORT).show()
                         }
                     } finally {
-                        fragment.cameraControl?.cancelFocusAndMetering()
                         fragment.cameraController.scannerStateMachine.isFocusing = false
                         isCapturingPhoto = false
                         fragment.binding.progressBar.visibility = View.GONE

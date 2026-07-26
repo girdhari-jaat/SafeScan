@@ -25,6 +25,7 @@ class ScannerStateMachine(
         private set
 
     private var stableFrameCount = 0
+    private var unstableFrameCount = 0
     private var lastQuadPoints: List<Point>? = null
     private var heldQuadPoints: List<Point>? = null
     private var missingFrameCount = 0
@@ -70,6 +71,7 @@ class ScannerStateMachine(
 
     private fun startCooldown() {
         stableFrameCount = 0
+        unstableFrameCount = 0
         lastQuadPoints = null
         heldQuadPoints = null
         missingFrameCount = 0
@@ -86,6 +88,7 @@ class ScannerStateMachine(
             Log.d("Detection", "Resetting detection state. Reason: $reason | CurrentState=$detectionState")
         }
         stableFrameCount = 0
+        unstableFrameCount = 0
         lastQuadPoints = null
         heldQuadPoints = null
         missingFrameCount = 0
@@ -165,16 +168,24 @@ class ScannerStateMachine(
             )
         }
 
-        // 6. Stability Verification with dynamic tolerance
+        // 6. Stability Verification with dynamic 2-frame tolerance
         if (lastQuadPoints != null) {
             if (isStable(lastQuadPoints!!, processedPoints)) {
+                unstableFrameCount = 0
                 stableFrameCount++
             } else {
-                Log.d("Detection", "Frame unstable: Resetting stability counter (was $stableFrameCount).")
-                stableFrameCount = 0
+                unstableFrameCount++
+                if (unstableFrameCount >= 2) {
+                    Log.d("Detection", "Frame unstable (2 consecutive unstable frames): Resetting stability counter (was $stableFrameCount).")
+                    stableFrameCount = 0
+                    unstableFrameCount = 0
+                } else {
+                    Log.d("Detection", "Single frame unstable: Tolerating glitch (unstableCount=$unstableFrameCount, preserving stableFrameCount=$stableFrameCount).")
+                }
             }
         } else {
             stableFrameCount = 1
+            unstableFrameCount = 0
         }
 
         // 7. Clamping: clamp stable frame count to threshold to avoid infinite growth

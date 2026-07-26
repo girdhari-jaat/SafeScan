@@ -66,17 +66,17 @@ class ScannerUiActions(
                         val centerPoint = factory.createPoint(binding.previewView.width / 2f, binding.previewView.height / 2f)
                         FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
                             .addPoint(centerPoint, FocusMeteringAction.FLAG_AF)
-                            .setAutoCancelDuration(4, TimeUnit.SECONDS)
+                            .disableAutoCancel()
                             .build()
                     }
                     "Single" -> {
                         FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF)
-                            .setAutoCancelDuration(4, TimeUnit.SECONDS)
+                            .disableAutoCancel()
                             .build()
                     }
                     "Continuous" -> {
                         FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
-                            .setAutoCancelDuration(3, TimeUnit.SECONDS)
+                            .disableAutoCancel()
                             .build()
                     }
                     else -> null
