@@ -64,6 +64,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
     val pdfOrientation by viewModel.pdfOrientation.collectAsState()
     val jpegQuality by viewModel.jpegQuality.collectAsState()
     val autoPdf by viewModel.autoPdf.collectAsState()
+    val wizardWarp by viewModel.wizardWarp.collectAsState()
 
     // ------------------------------------------------------
     // Local UI States & Panel Controls
