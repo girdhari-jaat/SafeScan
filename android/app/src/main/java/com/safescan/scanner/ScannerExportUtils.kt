@@ -49,32 +49,82 @@ object ScannerExportUtils {
 
     fun savePdfToPublicDocuments(context: Context, sourceFile: File, scope: CoroutineScope) {
         scope.launch(Dispatchers.IO) {
-            val resolver = context.contentResolver
-            val contentValues = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, sourceFile.name)
-                put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
-                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + "/SafeScan")
-            }
-            val uri = resolver.insert(MediaStore.Files.getContentUri("external"), contentValues)
-            if (uri != null) {
+            val fileName = sourceFile.name
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                val resolver = context.contentResolver
+                val relativePath = Environment.DIRECTORY_DOCUMENTS + "/SafeScan/"
+                val collection = MediaStore.Files.getContentUri("external")
+
+                var existingUri: android.net.Uri? = null
                 try {
-                    resolver.openOutputStream(uri)?.use { out ->
-                        FileInputStream(sourceFile).use { input ->
-                            input.copyTo(out)
+                    val projection = arrayOf(MediaStore.MediaColumns._ID)
+                    val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND (${MediaStore.MediaColumns.RELATIVE_PATH} = ? OR ${MediaStore.MediaColumns.RELATIVE_PATH} = ?)"
+                    val selectionArgs = arrayOf(
+                        fileName,
+                        relativePath,
+                        Environment.DIRECTORY_DOCUMENTS + "/SafeScan"
+                    )
+                    resolver.query(collection, projection, selection, selectionArgs, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val idIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                            val id = cursor.getLong(idIndex)
+                            existingUri = android.content.ContentUris.withAppendedId(collection, id)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("ScannerExportUtils", "Error querying MediaStore for existing file", e)
+                }
+
+                val targetUri: android.net.Uri? = existingUri ?: run {
+                    val contentValues = ContentValues().apply {
+                        put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                        put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+                        put(MediaStore.MediaColumns.RELATIVE_PATH, relativePath)
+                    }
+                    resolver.insert(collection, contentValues)
+                }
+
+                if (targetUri != null) {
+                    try {
+                        resolver.openOutputStream(targetUri, "rwt")?.use { out ->
+                            FileInputStream(sourceFile).use { input ->
+                                input.copyTo(out)
+                            }
+                        }
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "PDF Saved", Toast.LENGTH_SHORT).show()
+                        }
+                    } catch (e: Exception) {
+                        Log.e("ScannerExportUtils", "Failed to save PDF", e)
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "Failed to save PDF", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Failed to save PDF", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } else {
+                try {
+                    val publicDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "SafeScan")
+                    if (!publicDir.exists()) {
+                        publicDir.mkdirs()
+                    }
+                    val targetFile = File(publicDir, fileName)
+                    FileInputStream(sourceFile).use { input ->
+                        java.io.FileOutputStream(targetFile).use { output ->
+                            input.copyTo(output)
                         }
                     }
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "PDF saved to Documents/SafeScan", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "PDF Saved", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
                     Log.e("ScannerExportUtils", "Failed to save PDF", e)
                     withContext(Dispatchers.Main) {
                         Toast.makeText(context, "Failed to save PDF", Toast.LENGTH_SHORT).show()
                     }
-                }
-            } else {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Failed to save PDF", Toast.LENGTH_SHORT).show()
                 }
             }
         }

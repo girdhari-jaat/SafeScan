@@ -145,6 +145,9 @@ fun DocumentGridView(
                     onDismiss = { showExportModal = false },
                     onConfirmExport = { options ->
                         showExportModal = false
+                        if (options.title.isNotBlank()) {
+                            viewModel.setPdfFilename(options.title)
+                        }
                         viewModel.setWizardWarp(options.warp)
                         viewModel.setJpegQuality(options.quality)
                         viewModel.setDefaultFilter(options.filter.name)
@@ -178,7 +181,6 @@ fun DocumentGridView(
                                     }
                                     ExportAction.SAVE -> {
                                         viewModel.savePdfToPublicDocuments(context, file)
-                                        android.widget.Toast.makeText(context, "PDF Saved to Documents", android.widget.Toast.LENGTH_SHORT).show()
                                     }
                                     ExportAction.PRINT -> {
                                         val printManager = context.getSystemService(android.content.Context.PRINT_SERVICE) as? android.print.PrintManager

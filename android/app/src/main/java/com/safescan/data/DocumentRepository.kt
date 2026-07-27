@@ -41,30 +41,10 @@ class DocumentRepository @Inject constructor(
         val fileName = "SafeScan_${System.currentTimeMillis()}.jpg"
         val file = File(scansDir, fileName)
         return@withContext try {
+            // Save JPG to private app storage
             FileOutputStream(file).use { out ->
                 bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
             }
-
-            // Stream-copy to public MediaStore Pictures/SafeScan (persist even after app uninstall)
-            try {
-                val resolver = context.contentResolver
-                val contentValues = android.content.ContentValues().apply {
-                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/SafeScan")
-                }
-                val uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-                if (uri != null) {
-                    resolver.openOutputStream(uri)?.use { out ->
-                        java.io.FileInputStream(file).use { input ->
-                            input.copyTo(out)
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to save copy to MediaStore Pictures", e)
-            }
-
             file
         } catch (e: IOException) {
             Log.e(TAG, "Error saving captured JPG to Scans", e)
