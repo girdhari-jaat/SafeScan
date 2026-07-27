@@ -452,7 +452,7 @@ class ScannerFragment : Fragment() {
                     val isSettingsOpen by viewModel.isSettingsOpen.collectAsState()
                     val isDocOpenFromLib by viewModel.isDocumentOpenedFromLibrary.collectAsState()
 
-                    val isDarkScreen = !isSettingsOpen && !isCropping && !isEditing && !isDocOpenFromLib
+                    val isDarkScreen = (!isSettingsOpen && !isEditing && !isDocOpenFromLib) || isCropping
                     val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
                     val forceDark = isDarkScreen || systemDark
 

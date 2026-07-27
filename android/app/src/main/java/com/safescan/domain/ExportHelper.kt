@@ -65,7 +65,7 @@ class NativePdfWriter(private val out: java.io.OutputStream) {
     private val objectOffsets = mutableListOf<Long>()
 
     fun write(str: String) {
-        val bytes = str.toByteArray(Charsets.US_ASCII)
+        val bytes = str.toByteArray(Charsets.ISO_8859_1)
         out.write(bytes)
         bytesWritten += bytes.size
     }
@@ -88,7 +88,8 @@ class NativePdfWriter(private val out: java.io.OutputStream) {
 
     fun startDocument() {
         write("%PDF-1.4\n")
-        write("%\u00E2\u00E3\u00CF\u00D3\n")
+        val binaryHeader = byteArrayOf('%'.code.toByte(), 0xE2.toByte(), 0xE3.toByte(), 0xCF.toByte(), 0xD3.toByte(), '\n'.code.toByte())
+        write(binaryHeader)
     }
 
     fun endDocument(catalogId: Int) {
