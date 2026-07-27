@@ -231,8 +231,6 @@ fun DocumentGridView(
                     }
                 )
             }
-                }
-            }
         }
     ) { paddingValues ->
         val uiState by viewModel.uiState.collectAsState()
