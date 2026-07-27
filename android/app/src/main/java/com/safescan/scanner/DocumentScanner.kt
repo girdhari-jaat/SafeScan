@@ -24,11 +24,21 @@ class DocumentScanner(
         return tfLiteEngine.detectCorners(bitmap, isLive)
     }
 
-    fun cropAndTransform(bitmap: Bitmap, quad: Quadrilateral, mode: String = "DOCUMENT"): Bitmap {
+    fun cropAndTransform(bitmap: Bitmap, quad: Quadrilateral, mode: String = "DOCUMENT", flatCrop: Boolean = false): Bitmap {
         val tl = quad.topLeft
         val tr = quad.topRight
         val br = quad.bottomRight
         val bl = quad.bottomLeft
+
+        if (flatCrop) {
+            val minX = maxOf(0, minOf(tl.x, tr.x, br.x, bl.x).toInt())
+            val minY = maxOf(0, minOf(tl.y, tr.y, br.y, bl.y).toInt())
+            val maxX = minOf(bitmap.width, maxOf(tl.x, tr.x, br.x, bl.x).toInt())
+            val maxY = minOf(bitmap.height, maxOf(tl.y, tr.y, br.y, bl.y).toInt())
+            val w = (maxX - minX).coerceIn(1, bitmap.width - minX)
+            val h = (maxY - minY).coerceIn(1, bitmap.height - minY)
+            return Bitmap.createBitmap(bitmap, minX, minY, w, h)
+        }
 
         val widthA = sqrt((br.x - bl.x).pow(2) + (br.y - bl.y).pow(2))
         val widthB = sqrt((tr.x - tl.x).pow(2) + (tr.y - tl.y).pow(2))

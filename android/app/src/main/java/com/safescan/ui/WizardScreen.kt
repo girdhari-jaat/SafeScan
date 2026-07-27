@@ -172,9 +172,9 @@ fun WizardScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                val warps = listOf("Perspective", "Flat", "None")
+                val warps = listOf("Perspective", "Flat")
                 warps.forEach { warpItem ->
-                    val selected = if (warpItem == "Flat") warp == "Flat Crop Only" else warp == warpItem
+                    val selected = if (warpItem == "Flat") (warp == "Flat Crop Only" || warp == "Flat") else warp == warpItem
                     WizardSelectionButton(
                         text = warpItem,
                         selected = selected,
@@ -200,7 +200,7 @@ fun WizardScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                val rotations = listOf("Auto", "0°", "90°", "180°")
+                val rotations = listOf("Auto", "0°")
                 rotations.forEach { rot ->
                     val selected = rotation == rot
                     WizardSelectionButton(
@@ -209,6 +209,11 @@ fun WizardScreen(
                         modifier = Modifier.weight(1f),
                         onClick = {
                             viewModel.setWizardRotation(rot)
+                            if (rot == "0°") {
+                                viewModel.toggleAutoRotation(false)
+                            } else if (rot == "Auto") {
+                                viewModel.toggleAutoRotation(true)
+                            }
                         }
                     )
                 }

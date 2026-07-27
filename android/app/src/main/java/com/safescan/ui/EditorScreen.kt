@@ -71,6 +71,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
     var activePanel by remember { mutableStateOf<String?>("filters") } // "filters", "adjustments", null
     var showExportPopover by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showExportModal by remember { mutableStateOf(false) }
     var exportFolderSelected by remember { mutableStateOf("Internal Storage / Documents / SafeScan") }
 
     Scaffold(
@@ -195,106 +196,118 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                     },
                     onOpenPdf = {
                         showExportPopover = false
-                        viewModel.exportPdf(context) { file ->
-                            if (file != null) {
-                                try {
-                                    val uri = androidx.core.content.FileProvider.getUriForFile(
-                                        context,
-                                        "${context.packageName}.fileprovider",
-                                        file
-                                    )
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                                        setDataAndType(uri, "application/pdf")
-                                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    }
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "No PDF viewer found", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        }
+                        showExportModal = true
                     },
                     onSharePdf = {
                         showExportPopover = false
-                        viewModel.exportPdf(context) { file ->
-                            if (file != null) {
-                                try {
-                                    val uri = androidx.core.content.FileProvider.getUriForFile(
-                                        context,
-                                        "${context.packageName}.fileprovider",
-                                        file
-                                    )
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                        type = "application/pdf"
-                                        putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    }
-                                    context.startActivity(
-                                        android.content.Intent.createChooser(intent, "Share Document PDF")
-                                    )
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "Error sharing file", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        }
+                        showExportModal = true
                     },
                     onExportPdf = {
                         showExportPopover = false
-                        viewModel.exportPdf(context) { file ->
-                            if (file != null) {
-                                viewModel.savePdfToPublicDocuments(context, file)
-                            } else {
-                                Toast.makeText(context, "Export Failed", Toast.LENGTH_SHORT).show()
-                            }
-                        }
+                        showExportModal = true
                     },
                     onPrintPdf = {
                         showExportPopover = false
-                        viewModel.exportPdf(context) { file ->
-                            if (file != null) {
-                                val printManager = context.getSystemService(android.content.Context.PRINT_SERVICE) as? android.print.PrintManager
-                                if (printManager != null) {
-                                    val jobName = "${file.name} Document"
-                                    val printAdapter = object : android.print.PrintDocumentAdapter() {
-                                        override fun onLayout(
-                                            oldAttributes: android.print.PrintAttributes?,
-                                            newAttributes: android.print.PrintAttributes,
-                                            cancellationSignal: android.os.CancellationSignal?,
-                                            callback: LayoutResultCallback,
-                                            extras: android.os.Bundle?
-                                        ) {
-                                            if (cancellationSignal?.isCanceled == true) {
-                                                callback.onLayoutCancelled()
-                                                return
-                                            }
-                                            val info = android.print.PrintDocumentInfo.Builder(jobName)
-                                                .setContentType(android.print.PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
-                                                .build()
-                                            callback.onLayoutFinished(info, true)
-                                        }
+                        showExportModal = true
+                    }
+                )
+            }
 
-                                        override fun onWrite(
-                                            pages: Array<out android.print.PageRange>?,
-                                            destination: android.os.ParcelFileDescriptor?,
-                                            cancellationSignal: android.os.CancellationSignal?,
-                                            callback: WriteResultCallback?
-                                        ) {
-                                            try {
-                                                java.io.FileInputStream(file).use { input ->
-                                                    java.io.FileOutputStream(destination?.fileDescriptor).use { output ->
-                                                        input.copyTo(output)
-                                                    }
-                                                }
-                                                callback?.onWriteFinished(arrayOf(android.print.PageRange.ALL_PAGES))
-                                            } catch (e: Exception) {
-                                                callback?.onWriteFailed(e.message)
+            if (showExportModal) {
+                ExportModalDialog(
+                    initialTitle = pdfFilename.ifBlank { "Scan_${System.currentTimeMillis()}" },
+                    initialPageSize = pageSize,
+                    initialOrientation = pdfOrientation,
+                    initialQuality = jpegQuality,
+                    initialWarp = wizardWarp,
+                    initialFilter = editorState.filter,
+                    onDismiss = { showExportModal = false },
+                    onConfirmExport = { options ->
+                        showExportModal = false
+                        viewModel.setWizardWarp(options.warp)
+                        viewModel.setJpegQuality(options.quality)
+                        viewModel.updateEditorState(editorState.copy(filter = options.filter))
+                        viewModel.setDefaultFilter(options.filter.name)
+                        viewModel.exportPdf(
+                            context = context,
+                            customTitle = options.title,
+                            customPageSize = options.pageSize,
+                            customOrientation = options.orientation,
+                            customQuality = options.quality
+                        ) { file ->
+                            if (file != null) {
+                                when (options.action) {
+                                    ExportAction.SHARE -> {
+                                        try {
+                                            val uri = androidx.core.content.FileProvider.getUriForFile(
+                                                context,
+                                                "${context.packageName}.fileprovider",
+                                                file
+                                            )
+                                            val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                type = "application/pdf"
+                                                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                             }
+                                            context.startActivity(
+                                                android.content.Intent.createChooser(intent, "Share Document PDF")
+                                            )
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Error sharing file", Toast.LENGTH_SHORT).show()
                                         }
                                     }
-                                    printManager.print(jobName, printAdapter, null)
-                                } else {
-                                    Toast.makeText(context, "Print service not available", Toast.LENGTH_SHORT).show()
+                                    ExportAction.SAVE -> {
+                                        viewModel.savePdfToPublicDocuments(context, file)
+                                        Toast.makeText(context, "PDF Saved to Documents", Toast.LENGTH_SHORT).show()
+                                    }
+                                    ExportAction.PRINT -> {
+                                        val printManager = context.getSystemService(android.content.Context.PRINT_SERVICE) as? android.print.PrintManager
+                                        if (printManager != null) {
+                                            val jobName = "${file.name} Document"
+                                            val printAdapter = object : android.print.PrintDocumentAdapter() {
+                                                override fun onLayout(
+                                                    oldAttributes: android.print.PrintAttributes?,
+                                                    newAttributes: android.print.PrintAttributes,
+                                                    cancellationSignal: android.os.CancellationSignal?,
+                                                    callback: LayoutResultCallback,
+                                                    extras: android.os.Bundle?
+                                                ) {
+                                                    if (cancellationSignal?.isCanceled == true) {
+                                                        callback.onLayoutCancelled()
+                                                        return
+                                                    }
+                                                    val info = android.print.PrintDocumentInfo.Builder(jobName)
+                                                        .setContentType(android.print.PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                                                        .build()
+                                                    callback.onLayoutFinished(info, true)
+                                                }
+
+                                                override fun onWrite(
+                                                    pages: Array<out android.print.PageRange>?,
+                                                    destination: android.os.ParcelFileDescriptor?,
+                                                    cancellationSignal: android.os.CancellationSignal?,
+                                                    callback: WriteResultCallback?
+                                                ) {
+                                                    try {
+                                                        java.io.FileInputStream(file).use { input ->
+                                                            java.io.FileOutputStream(destination?.fileDescriptor).use { output ->
+                                                                input.copyTo(output)
+                                                            }
+                                                        }
+                                                        callback?.onWriteFinished(arrayOf(android.print.PageRange.ALL_PAGES))
+                                                    } catch (e: Exception) {
+                                                        callback?.onWriteFailed(e.message)
+                                                    }
+                                                }
+                                            }
+                                            printManager.print(jobName, printAdapter, null)
+                                        } else {
+                                            Toast.makeText(context, "Print service not available", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
                                 }
+                            } else {
+                                Toast.makeText(context, "Export Failed", Toast.LENGTH_SHORT).show()
                             }
                         }
                     }

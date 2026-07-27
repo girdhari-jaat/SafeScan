@@ -30,18 +30,41 @@ class DocumentRepository @Inject constructor(
     }
 
     /**
-     * Saves a captured bitmap to /Android/data/com.safescan/files/Scans/timestamp.jpg
+     * Saves a captured bitmap to app storage and MediaStore Pictures/SafeScan
+     * so photos persist publicly even if the app is uninstalled.
      */
     suspend fun saveJpgToScans(bitmap: Bitmap, quality: Int): File? = withContext(Dispatchers.IO) {
         val scansDir = context.getExternalFilesDir("Scans") ?: return@withContext null
         if (!scansDir.exists()) {
             scansDir.mkdirs()
         }
-        val file = File(scansDir, "${System.currentTimeMillis()}.jpg")
+        val fileName = "SafeScan_${System.currentTimeMillis()}.jpg"
+        val file = File(scansDir, fileName)
         return@withContext try {
             FileOutputStream(file).use { out ->
                 bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
             }
+
+            // Stream-copy to public MediaStore Pictures/SafeScan (persist even after app uninstall)
+            try {
+                val resolver = context.contentResolver
+                val contentValues = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/SafeScan")
+                }
+                val uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                if (uri != null) {
+                    resolver.openOutputStream(uri)?.use { out ->
+                        java.io.FileInputStream(file).use { input ->
+                            input.copyTo(out)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to save copy to MediaStore Pictures", e)
+            }
+
             file
         } catch (e: IOException) {
             Log.e(TAG, "Error saving captured JPG to Scans", e)

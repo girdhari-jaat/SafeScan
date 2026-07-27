@@ -485,7 +485,17 @@ class ScannerViewModel @Inject constructor(
 
                 var origPath = existing.originalBitmapPath
                 if (isCapture || origPath == null) {
-                    origPath = saveHighResToDisk(origToSave, slotId, "original")
+                    if (origToSave === bitmap && processedPath != null) {
+                        val origFile = java.io.File(context.cacheDir, "temp_scans/${slotId}_original.jpg")
+                        try {
+                            java.io.File(processedPath).copyTo(origFile, overwrite = true)
+                            origPath = origFile.absolutePath
+                        } catch (e: Exception) {
+                            origPath = saveHighResToDisk(origToSave, slotId, "original")
+                        }
+                    } else {
+                        origPath = saveHighResToDisk(origToSave, slotId, "original")
+                    }
                 }
 
                 if (processedPath != null || origPath != null) {
@@ -817,7 +827,8 @@ class ScannerViewModel @Inject constructor(
         val currentJpgIndex = croppingJpgIndex.value
         viewModelScope.launch(Dispatchers.IO) {
             croppingBitmap.value?.let { bmp ->
-                val cropped = documentScanner.cropAndTransform(bmp, quad, currentMode.value.name)
+                val isFlat = wizardWarp.value == "Flat" || wizardWarp.value == "Flat Crop Only"
+                val cropped = documentScanner.cropAndTransform(bmp, quad, currentMode.value.name, flatCrop = isFlat)
                 val cornersList = listOf(quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft)
 
                 croppingSlotId.value?.let { slotId ->
@@ -1097,7 +1108,15 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    fun exportPdf(context: android.content.Context, clearSession: Boolean = false, onResult: (java.io.File?) -> Unit) {
+    fun exportPdf(
+        context: android.content.Context,
+        clearSession: Boolean = false,
+        customTitle: String? = null,
+        customPageSize: String? = null,
+        customOrientation: String? = null,
+        customQuality: Float? = null,
+        onResult: (java.io.File?) -> Unit
+    ) {
         if (isEditing.value) {
             commitActiveEditorChanges()
         }
@@ -1111,7 +1130,7 @@ class ScannerViewModel @Inject constructor(
                 if (openedDocumentId == null) {
                     openedDocumentId = docId
                 }
-                val title = getOrGenerateDocumentTitle(docId)
+                val title = customTitle ?: getOrGenerateDocumentTitle(docId)
                 val pagesData = if (capturedJpgFiles.isNotEmpty()) {
                     capturedJpgFiles.mapIndexed { idx, file ->
                         val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
@@ -1163,15 +1182,18 @@ class ScannerViewModel @Inject constructor(
                             slot.copy(bitmap = fullResProcessed)
                         }
                     }
-                    DiagnosticsLogger.info("Exporting document to PDF at ${pageSize.value} layout off-thread...")
+                    val targetPageSize = customPageSize ?: pageSize.value
+                    val targetOrientation = customOrientation ?: pdfOrientation.value
+                    val targetQuality = customQuality ?: jpegQuality.value
+                    DiagnosticsLogger.info("Exporting document to PDF at $targetPageSize layout off-thread...")
                     val result = exportPdfUseCase.exportCardsToPdf(
                         slotsToExport,
                         title,
                         currentMode.value,
-                        pageSize.value,
-                        pdfOrientation.value,
+                        targetPageSize,
+                        targetOrientation,
                         dpi = dpi.value,
-                        jpegQuality = jpegQuality.value
+                        jpegQuality = targetQuality
                     )
                     withContext(Dispatchers.Main) {
                         if (clearSession) {
@@ -1304,7 +1326,17 @@ class ScannerViewModel @Inject constructor(
                     highResCache.put("${page.id}_original", originalBmp)
                 }
                 if (previewBmp != null) {
-                    processedPath = saveHighResToDisk(previewBmp, page.id, "processed")
+                    if (previewBmp === originalBmp && originalPath != null) {
+                        val procFile = java.io.File(context.cacheDir, "temp_scans/${page.id}_processed.jpg")
+                        try {
+                            java.io.File(originalPath).copyTo(procFile, overwrite = true)
+                            processedPath = procFile.absolutePath
+                        } catch (e: Exception) {
+                            processedPath = saveHighResToDisk(previewBmp, page.id, "processed")
+                        }
+                    } else {
+                        processedPath = saveHighResToDisk(previewBmp, page.id, "processed")
+                    }
                     highResCache.put("${page.id}_processed", previewBmp)
                 }
 
@@ -1449,7 +1481,8 @@ class ScannerViewModel @Inject constructor(
                     }
                 }
             } else {
-                when (val result = scannerEngine.scanDocument(processedBitmap)) {
+                val isFlat = wizardWarp.value == "Flat" || wizardWarp.value == "Flat Crop Only"
+                when (val result = scannerEngine.scanDocument(processedBitmap, flatCrop = isFlat)) {
                     is com.safescan.core.AppResult.Success -> {
                         if (slotId != null) {
                             captureToSlot(result.data.bitmap, slotId, isCapture = true, corners = result.data.corners, originalBitmap = processedBitmap)
