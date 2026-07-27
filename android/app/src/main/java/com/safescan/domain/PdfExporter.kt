@@ -13,6 +13,7 @@ import com.safescan.data.ScannerMode
 import com.safescan.data.Slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.BufferedOutputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
