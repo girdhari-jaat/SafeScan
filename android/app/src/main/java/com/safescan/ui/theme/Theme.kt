@@ -96,16 +96,21 @@ fun SafeScanTheme(
         SideEffect {
             val window = (view.context as? Activity)?.window
             if (window != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    window.isNavigationBarContrastEnforced = false
+                    window.isStatusBarContrastEnforced = false
+                }
+
                 val effectiveStatusBarColor = statusBarColor ?: colorScheme.background
                 val effectiveNavBarColor = navigationBarColor ?: colorScheme.background
 
                 window.statusBarColor = effectiveStatusBarColor.toArgb()
                 window.navigationBarColor = effectiveNavBarColor.toArgb()
 
-                val insetsController = WindowCompat.getInsetsController(window, view)
+                val insetsController = WindowCompat.getInsetsController(window, window.decorView)
                 // If effective status bar color is dark or transparent on dark screen, use light icons (!isLightBackground)
                 val isLightStatusBar = !darkTheme && effectiveStatusBarColor != Color.Transparent
-                val isLightNavBar = !darkTheme && effectiveNavBarColor != Color.Transparent
+                val isLightNavBar = !darkTheme && effectiveNavBarColor != Color.Transparent && effectiveNavBarColor != Color.Black
 
                 insetsController.isAppearanceLightStatusBars = isLightStatusBar
                 insetsController.isAppearanceLightNavigationBars = isLightNavBar
