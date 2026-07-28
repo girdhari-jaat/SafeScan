@@ -1,6 +1,8 @@
 package com.safescan.ui.theme
 
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -74,12 +76,16 @@ private val AppTypography = Typography(
     )
 )
 
+tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
 @Composable
 fun SafeScanTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
-    statusBarColor: Color? = null,
-    navigationBarColor: Color? = null,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -94,18 +100,15 @@ fun SafeScanTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as? Activity)?.window
+            val window = view.context.findActivity()?.window
             if (window != null) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     window.isNavigationBarContrastEnforced = false
                     window.isStatusBarContrastEnforced = false
                 }
 
-                val effectiveStatusBarColor = statusBarColor ?: Color.Transparent
-                val effectiveNavBarColor = navigationBarColor ?: Color.Transparent
-
-                window.statusBarColor = effectiveStatusBarColor.toArgb()
-                window.navigationBarColor = effectiveNavBarColor.toArgb()
+                window.statusBarColor = Color.Transparent.toArgb()
+                window.navigationBarColor = Color.Transparent.toArgb()
 
                 val insetsController = WindowCompat.getInsetsController(window, window.decorView)
                 // In light mode, icons must be dark (isAppearanceLight = true)

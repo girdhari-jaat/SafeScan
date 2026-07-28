@@ -457,9 +457,7 @@ class ScannerFragment : Fragment() {
                     val forceDark = isCameraLiveScreen || systemDark
 
                     SafeScanTheme(
-                        darkTheme = forceDark,
-                        statusBarColor = if (isCameraLiveScreen) androidx.compose.ui.graphics.Color.Transparent else null,
-                        navigationBarColor = if (isCameraLiveScreen) androidx.compose.ui.graphics.Color.Transparent else null
+                        darkTheme = forceDark
                     ) {
                         val showOverlay = !isSettingsOpen && !isCropping && !isEditing && !isDocOpenFromLib
                         androidx.compose.runtime.LaunchedEffect(showOverlay) {

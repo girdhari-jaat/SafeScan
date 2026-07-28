@@ -107,8 +107,8 @@ fun LibraryScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
+                .padding(paddingValues)
         ) {
             // Tab Segment
             TabRow(selectedTabIndex = selectedTab) {

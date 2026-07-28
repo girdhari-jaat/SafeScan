@@ -190,8 +190,8 @@ fun CropScreen(viewModel: ScannerViewModel) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .background(MaterialTheme.colorScheme.background),
+                .background(MaterialTheme.colorScheme.background)
+                .padding(padding),
             contentAlignment = Alignment.Center
         ) {
             croppingBitmap?.let { bmp ->

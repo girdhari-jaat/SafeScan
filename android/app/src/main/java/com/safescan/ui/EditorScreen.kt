@@ -93,8 +93,8 @@ fun EditorScreen(viewModel: ScannerViewModel) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
                 .background(MaterialTheme.colorScheme.surface)
+                .padding(padding)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
 

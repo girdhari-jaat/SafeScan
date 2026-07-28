@@ -39,6 +39,7 @@ fun SettingsScreen(
     )
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             Column {
                 TopAppBar(
@@ -78,8 +79,7 @@ fun SettingsScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .background(MaterialTheme.colorScheme.surface),
+                .padding(padding),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
