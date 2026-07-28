@@ -545,7 +545,7 @@ class ScannerViewModel @Inject constructor(
                         }
                         val originalBmp = originalJpgBitmaps[idx] ?: bmp
                         val corners = jpgCorners[idx]
-                        com.safescan.data.PageSaveData("p$idx", originalBmp, bmp, corners)
+                        com.safescan.data.PageSaveData("p${idx + 1}", originalBmp, bmp, corners)
                     }
                 } else {
                     slots.value.filter { it.bitmap != null }.map { slot ->
@@ -1166,7 +1166,7 @@ class ScannerViewModel @Inject constructor(
                         }
                         val originalBmp = originalJpgBitmaps[idx] ?: bmp
                         val corners = jpgCorners[idx]
-                        com.safescan.data.PageSaveData("p$idx", originalBmp, bmp, corners)
+                        com.safescan.data.PageSaveData("p${idx + 1}", originalBmp, bmp, corners)
                     }
                 } else {
                     slots.value.filter { it.bitmap != null }.map { slot ->
@@ -1200,7 +1200,7 @@ class ScannerViewModel @Inject constructor(
                             if (bmp != null) {
                                 tempBitmapsToRecycle.add(bmp)
                             }
-                            Slot("p$idx", "Page ${idx + 1}", bmp)
+                            Slot("p${idx + 1}", "Page ${idx + 1}", bmp)
                         }
                     } else {
                         // For slots, we should pass slots with full resolution processed bitmaps!
@@ -1229,6 +1229,8 @@ class ScannerViewModel @Inject constructor(
                             jpgCorners.clear()
                             cachedPdfFile = null
                             lastExportPdfHash = 0
+                            openedDocumentId = null
+                            initialDocumentTitle = null
                         } else {
                             cachedPdfFile = result.getOrNull()
                             lastExportPdfHash = currentHash
@@ -1242,6 +1244,8 @@ class ScannerViewModel @Inject constructor(
                             capturedJpgFiles.clear()
                             originalJpgBitmaps.clear()
                             jpgCorners.clear()
+                            openedDocumentId = null
+                            initialDocumentTitle = null
                         }
                         onResult(null)
                     }
@@ -1273,9 +1277,6 @@ class ScannerViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val docId = openedDocumentId ?: ("doc_" + System.currentTimeMillis())
-                if (openedDocumentId == null) {
-                    openedDocumentId = docId
-                }
                 val title = getOrGenerateDocumentTitle(docId)
                 val pagesData = if (capturedJpgFiles.isNotEmpty()) {
                     capturedJpgFiles.mapIndexed { idx, file ->
@@ -1285,7 +1286,7 @@ class ScannerViewModel @Inject constructor(
                         }
                         val originalBmp = originalJpgBitmaps[idx] ?: bmp
                         val corners = jpgCorners[idx]
-                        com.safescan.data.PageSaveData("p$idx", originalBmp, bmp, corners)
+                        com.safescan.data.PageSaveData("p${idx + 1}", originalBmp, bmp, corners)
                     }
                 } else {
                     slots.value.filter { it.bitmap != null }.map { slot ->
@@ -1657,18 +1658,6 @@ class ScannerViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         editingJob?.cancel()
-
-        // Clear temp_scans directory to free up phone storage cache
-        try {
-            val dir = java.io.File(context.cacheDir, "temp_scans")
-            if (dir.exists() && dir.isDirectory) {
-                dir.listFiles()?.forEach { file ->
-                    if (file.isFile) file.delete()
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("ScannerViewModel", "Failed to clear temp_scans folder", e)
-        }
 
         // Clear and recycle all bitmaps in the highResCache to prevent native OOM
         try {

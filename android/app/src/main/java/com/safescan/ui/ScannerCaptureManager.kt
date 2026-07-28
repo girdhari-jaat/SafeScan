@@ -144,6 +144,10 @@ class ScannerCaptureManager(
     }
 
     fun runAccuracyTest(previewCorners: List<PointF>?) {
+        val viewModel = fragment.viewModel
+        if (!viewModel.liveDetect.value && !viewModel.autoCrop.value) {
+            return
+        }
         Log.d("ScannerTest", "=== ACCURACY TEST START ===")
         DiagnosticsLogger.info("ScannerTest: === ACCURACY TEST START ===")
         val cornersToLog = previewCorners ?: fragment.binding.overlayView.getCorners()
@@ -213,7 +217,9 @@ class ScannerCaptureManager(
             com.safescan.utils.HapticFeedbackHelper.triggerHaptic(binding.root, currentContext)
         }
 
-        runAccuracyTest(fragment.binding.overlayView.getCorners())
+        if (viewModel.liveDetect.value || viewModel.autoCrop.value) {
+            runAccuracyTest(fragment.binding.overlayView.getCorners())
+        }
 
         imageCapture.takePicture(
             ContextCompat.getMainExecutor(currentContext),

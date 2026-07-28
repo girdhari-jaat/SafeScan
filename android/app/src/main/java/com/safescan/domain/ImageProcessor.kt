@@ -16,6 +16,10 @@ import org.opencv.core.MatOfPoint2f
 import org.opencv.core.Point as CvPoint
 import com.safescan.domain.model.Quadrilateral
 import com.safescan.core.ScannerDebugLogger
+import org.opencv.core.MatOfDouble
+import org.opencv.core.Scalar
+import org.opencv.imgproc.CLAHE
+import kotlin.math.pow
 
 object ImageProcessor {
 
@@ -211,143 +215,356 @@ object ImageProcessor {
 
     suspend fun autoEnhance(bitmap: Bitmap): Bitmap = withContext(Dispatchers.Default) {
         if (bitmap.isRecycled) return@withContext bitmap
-        var src: Mat? = null
-        var lab: Mat? = null
-        var labChannels: ArrayList<Mat>? = null
+
+        var srcRgba: Mat? = null
+        var srcBgr: Mat? = null
+        var grayMat: Mat? = null
+        var laplacianMat: Mat? = null
+        var labMat: Mat? = null
         var processL: Mat? = null
         var dilated: Mat? = null
         var kernel: Mat? = null
         var bgIllumSmall: Mat? = null
         var bgIllum: Mat? = null
-        var diff: Mat? = null
-        var ones: Mat? = null
-        var bgrChannels: ArrayList<Mat>? = null
-        var outMat: Mat? = null
-        try {
-            src = Mat()
-            Utils.bitmapToMat(bitmap, src)
-            
-            Imgproc.cvtColor(src, src, Imgproc.COLOR_RGBA2BGR)
+        var lFloat: Mat? = null
+        var bgFloat: Mat? = null
+        var blurredSrc: Mat? = null
+        var outRgba: Mat? = null
+        var clahe: CLAHE? = null
 
-            // 1. Shadow Removal Logic
-            lab = Mat()
-            Imgproc.cvtColor(src, lab, Imgproc.COLOR_BGR2Lab)
-            labChannels = ArrayList()
-            Core.split(lab, labChannels)
-            
+        var meanStdDevMean: MatOfDouble? = null
+        var meanStdDevStd: MatOfDouble? = null
+
+        val labChannels = ArrayList<Mat>(3)
+
+        fun safeRelease(mat: Mat?) {
+            try {
+                mat?.release()
+            } catch (_: Exception) {
+            }
+        }
+
+        try {
+            // ----------------------------------------------------
+            // 1. Bitmap -> BGR
+            // ----------------------------------------------------
+            srcRgba = Mat()
+            srcBgr = Mat()
+
+            Utils.bitmapToMat(bitmap, srcRgba)
+            Imgproc.cvtColor(srcRgba, srcBgr, Imgproc.COLOR_RGBA2BGR)
+
+            safeRelease(srcRgba)
+            srcRgba = null
+
+            // ----------------------------------------------------
+            // 2. Blur Detection
+            // ----------------------------------------------------
+            grayMat = Mat()
+            laplacianMat = Mat()
+            meanStdDevMean = MatOfDouble()
+            meanStdDevStd = MatOfDouble()
+
+            Imgproc.cvtColor(
+                srcBgr,
+                grayMat,
+                Imgproc.COLOR_BGR2GRAY
+            )
+
+            Imgproc.Laplacian(
+                grayMat,
+                laplacianMat,
+                CvType.CV_64F
+            )
+
+            Core.meanStdDev(
+                laplacianMat,
+                meanStdDevMean,
+                meanStdDevStd
+            )
+
+            val stdDev = meanStdDevStd.get(0, 0)[0]
+            val blurScore = stdDev * stdDev
+
+            // ----------------------------------------------------
+            // 3. LAB Conversion
+            // ----------------------------------------------------
+            labMat = Mat()
+
+            Imgproc.cvtColor(
+                srcBgr,
+                labMat,
+                Imgproc.COLOR_BGR2Lab
+            )
+
+            Core.split(
+                labMat,
+                labChannels
+            )
+
             val lChannel = labChannels[0]
-            
-            // 1. Calculate image dimensions and megapixels
-            val width = src.cols()
-            val height = src.rows()
-            val megapixels = (width.toDouble() * height.toDouble()) / 1_000_000.0
-            
-            // 2. Dynamic kernel sizing based on megapixels (2MP -> 15x15, 6MP -> ~27x27, 8MP -> ~31x31)
-            val scaleFactor = Math.sqrt(megapixels / 2.0).coerceAtLeast(0.5)
-            var targetKernelSize = Math.round(15.0 * scaleFactor).toInt()
-            if (targetKernelSize % 2 == 0) {
-                targetKernelSize += 1
+
+            // ----------------------------------------------------
+            // 4. Dynamic Parameters
+            // ----------------------------------------------------
+            val megapixels =
+                (srcBgr.cols().toDouble() * srcBgr.rows().toDouble()) /
+                        1_000_000.0
+
+            val scaleFactor =
+                sqrt(megapixels / 2.0)
+                    .coerceAtLeast(0.5)
+
+            var kernelSize =
+                round(15.0 * scaleFactor).toInt()
+
+            if (kernelSize % 2 == 0) kernelSize++
+
+            kernelSize = kernelSize.coerceIn(11, 41)
+
+            var blurSize =
+                round(kernelSize * 1.4).toInt()
+
+            if (blurSize % 2 == 0) blurSize++
+
+            blurSize = blurSize.coerceIn(15, 51)
+
+            val downscaleFactor = when {
+                megapixels > 6.0 -> 0.25
+                megapixels > 1.5 -> 0.4
+                else -> 1.0
             }
-            val dynamicKernelSize = targetKernelSize.coerceIn(11, 65)
-            
-            var targetBlurSize = Math.round(dynamicKernelSize * 1.4).toInt()
-            if (targetBlurSize % 2 == 0) {
-                targetBlurSize += 1
-            }
-            val dynamicBlurSize = targetBlurSize.coerceIn(15, 91)
-            
-            // 3. For ultra-fast performance, estimate the shadow map using a downscaled version.
-            // This guarantees high performance (sub-50ms) even on high resolution (6MP - 8MP+) images.
-            val downscaleFactor = if (megapixels > 1.5) {
-                if (megapixels > 6.0) 0.25 else 0.4
-            } else {
-                1.0
-            }
-            
-            processL = if (downscaleFactor < 1.0) {
-                val resizedL = Mat()
-                Imgproc.resize(lChannel, resizedL, Size(), downscaleFactor, downscaleFactor, Imgproc.INTER_LINEAR)
-                resizedL
-            } else {
-                null
-            }
-            val targetL = processL ?: lChannel
-            
-            // Scale the dynamic kernel sizes to match the downscaled image
-            var scaledKernel = Math.round(dynamicKernelSize * downscaleFactor).toInt()
-            if (scaledKernel % 2 == 0) {
-                scaledKernel += 1
-            }
-            scaledKernel = scaledKernel.coerceAtLeast(3)
-            
-            var scaledBlur = Math.round(dynamicBlurSize * downscaleFactor).toInt()
-            if (scaledBlur % 2 == 0) {
-                scaledBlur += 1
-            }
-            scaledBlur = scaledBlur.coerceAtLeast(5)
-            
+
+            val targetL =
+                if (downscaleFactor < 1.0) {
+                    processL = Mat()
+                    Imgproc.resize(
+                        lChannel,
+                        processL,
+                        Size(),
+                        downscaleFactor,
+                        downscaleFactor,
+                        Imgproc.INTER_AREA
+                    )
+                    processL
+                } else {
+                    lChannel
+                }
+
+            var scaledKernel =
+                round(kernelSize * downscaleFactor).toInt()
+
+            if (scaledKernel % 2 == 0) scaledKernel++
+
+            scaledKernel =
+                scaledKernel.coerceAtLeast(3)
+
+            var scaledBlur =
+                round(blurSize * downscaleFactor).toInt()
+
+            if (scaledBlur % 2 == 0) scaledBlur++
+
+            scaledBlur =
+                scaledBlur.coerceAtLeast(5)
+
+            // ----------------------------------------------------
+            // 5. Shadow Removal
+            // ----------------------------------------------------
+            kernel =
+                Imgproc.getStructuringElement(
+                    Imgproc.MORPH_RECT,
+                    Size(
+                        scaledKernel.toDouble(),
+                        scaledKernel.toDouble()
+                    )
+                )
+
             dilated = Mat()
-            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(scaledKernel.toDouble(), scaledKernel.toDouble()))
-            Imgproc.dilate(targetL, dilated, kernel)
-            
+
+            Imgproc.dilate(
+                targetL,
+                dilated,
+                kernel
+            )
+
             bgIllumSmall = Mat()
-            Imgproc.medianBlur(dilated, bgIllumSmall, scaledBlur)
-            
+
+            Imgproc.medianBlur(
+                dilated,
+                bgIllumSmall,
+                scaledBlur
+            )
+
             bgIllum = Mat()
+
             if (downscaleFactor < 1.0) {
-                Imgproc.resize(bgIllumSmall, bgIllum, lChannel.size(), 0.0, 0.0, Imgproc.INTER_LINEAR)
+                Imgproc.resize(
+                    bgIllumSmall,
+                    bgIllum,
+                    lChannel.size(),
+                    0.0,
+                    0.0,
+                    Imgproc.INTER_LINEAR
+                )
             } else {
                 bgIllumSmall.copyTo(bgIllum)
             }
-            
-            diff = Mat()
-            Core.absdiff(lChannel, bgIllum, diff)
-            ones = Mat.ones(lChannel.size(), lChannel.type()).apply { setTo(org.opencv.core.Scalar(255.0)) }
-            Core.subtract(ones, diff, lChannel)
-            
-            Core.merge(labChannels, lab)
-            Imgproc.cvtColor(lab, src, Imgproc.COLOR_Lab2BGR)
 
-            // 2. Auto-level / contrast stretching
-            bgrChannels = ArrayList()
-            Core.split(src, bgrChannels)
-            for (i in bgrChannels.indices) {
-                Core.normalize(bgrChannels[i], bgrChannels[i], 0.0, 255.0, Core.NORM_MINMAX)
-            }
-            Core.merge(bgrChannels, src)
+            // ----------------------------------------------------
+            // 6. Illumination Normalization
+            // ----------------------------------------------------
+            lFloat = Mat()
+            bgFloat = Mat()
 
-            outMat = Mat()
-            Imgproc.cvtColor(src, outMat, Imgproc.COLOR_BGR2RGBA)
+            lChannel.convertTo(
+                lFloat,
+                CvType.CV_32F
+            )
 
-            val resultBitmap = Bitmap.createBitmap(outMat.cols(), outMat.rows(), Bitmap.Config.ARGB_8888)
-            val finalOutMat = if (outMat.type() == org.opencv.core.CvType.CV_8UC1) {
-                val temp = Mat()
-                Imgproc.cvtColor(outMat, temp, Imgproc.COLOR_GRAY2RGBA)
-                temp
-            } else {
-                outMat
+            bgIllum.convertTo(
+                bgFloat,
+                CvType.CV_32F
+            )
+
+            val meanBg =
+                Core.mean(bgIllum)
+                    .`val`[0]
+                    .coerceIn(80.0, 220.0)
+
+            Core.add(
+                bgFloat,
+                Scalar(1.0),
+                bgFloat
+            )
+
+            Core.divide(
+                lFloat,
+                bgFloat,
+                lFloat,
+                meanBg
+            )
+
+            lFloat.convertTo(
+                lChannel,
+                CvType.CV_8U
+            )
+
+            // ----------------------------------------------------
+            // 7. CLAHE
+            // ----------------------------------------------------
+            if (meanBg < 180.0) {
+                clahe =
+                    Imgproc.createCLAHE(
+                        if (megapixels > 8) 1.8 else 2.0,
+                        Size(8.0, 8.0)
+                    )
+
+                clahe!!.apply(
+                    lChannel,
+                    lChannel
+                )
             }
-            Utils.matToBitmap(finalOutMat, resultBitmap)
-            if (finalOutMat != outMat) {
-                finalOutMat.release()
+
+            Core.merge(
+                labChannels,
+                labMat
+            )
+
+            Imgproc.cvtColor(
+                labMat,
+                srcBgr,
+                Imgproc.COLOR_Lab2BGR
+            )
+
+            // ----------------------------------------------------
+            // 8. Adaptive Sharpen
+            // ----------------------------------------------------
+            if (blurScore < 150.0) {
+                val (alpha, beta) =
+                    when {
+                        blurScore < 60.0 ->
+                            Pair(1.60, -0.60)
+
+                        blurScore < 100.0 ->
+                            Pair(1.40, -0.40)
+
+                        else ->
+                            Pair(1.20, -0.20)
+                    }
+
+                blurredSrc = Mat()
+
+                Imgproc.GaussianBlur(
+                    srcBgr,
+                    blurredSrc,
+                    Size(),
+                    2.0
+                )
+
+                Core.addWeighted(
+                    srcBgr,
+                    alpha,
+                    blurredSrc,
+                    beta,
+                    0.0,
+                    srcBgr
+                )
             }
-            resultBitmap
+
+            // ----------------------------------------------------
+            // 9. Output
+            // ----------------------------------------------------
+            outRgba = Mat()
+
+            Imgproc.cvtColor(
+                srcBgr,
+                outRgba,
+                Imgproc.COLOR_BGR2RGBA
+            )
+
+            val result =
+                Bitmap.createBitmap(
+                    outRgba.cols(),
+                    outRgba.rows(),
+                    Bitmap.Config.ARGB_8888
+                )
+
+            Utils.matToBitmap(
+                outRgba,
+                result
+            )
+
+            result
+
         } catch (e: Exception) {
             e.printStackTrace()
             bitmap
         } finally {
-            safeRelease(src)
-            safeRelease(lab)
-            labChannels?.forEach { safeRelease(it) }
+            labChannels.forEach(::safeRelease)
+            labChannels.clear()
+
+            safeRelease(srcRgba)
+            safeRelease(srcBgr)
+            safeRelease(grayMat)
+            safeRelease(laplacianMat)
+            safeRelease(labMat)
             safeRelease(processL)
             safeRelease(dilated)
             safeRelease(kernel)
             safeRelease(bgIllumSmall)
             safeRelease(bgIllum)
-            safeRelease(diff)
-            safeRelease(ones)
-            bgrChannels?.forEach { safeRelease(it) }
-            safeRelease(outMat)
+            safeRelease(lFloat)
+            safeRelease(bgFloat)
+            safeRelease(blurredSrc)
+            safeRelease(outRgba)
+
+            meanStdDevMean?.release()
+            meanStdDevStd?.release()
+
+            try {
+                clahe?.collectGarbage()
+            } catch (_: Exception) {
+            }
         }
     }
 }

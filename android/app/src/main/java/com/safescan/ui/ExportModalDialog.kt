@@ -112,136 +112,146 @@ fun ExportModalDialog(
                     )
                 }
 
-                // 2. Page Size (Dropdown Selector)
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "Page Size",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    val pageSizes = com.safescan.utils.PageConfig.ALL_PAGE_SIZES
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                .border(
-                                    width = 1.dp,
-                                    color = MaterialTheme.colorScheme.outlineVariant,
-                                    shape = RoundedCornerShape(10.dp)
+                // 2. Page Size & Document Filter (Dropdown Selectors in one Row)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Page Size",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        val pageSizes = com.safescan.utils.PageConfig.ALL_PAGE_SIZES
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    .border(
+                                        width = 1.dp,
+                                        color = MaterialTheme.colorScheme.outlineVariant,
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable { expandedPageSize = true }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = pageSize,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
-                                .clickable { expandedPageSize = true }
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = pageSize,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
 
-                        DropdownMenu(
-                            expanded = expandedPageSize,
-                            onDismissRequest = { expandedPageSize = false },
-                            modifier = Modifier.background(MaterialTheme.colorScheme.surface)
-                        ) {
-                            pageSizes.forEach { size ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = size,
-                                            fontSize = 13.sp,
-                                            fontWeight = if (size.equals(pageSize, ignoreCase = true)) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (size.equals(pageSize, ignoreCase = true)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                        )
-                                    },
-                                    onClick = {
-                                        pageSize = size
-                                        expandedPageSize = false
-                                    }
-                                )
+                            DropdownMenu(
+                                expanded = expandedPageSize,
+                                onDismissRequest = { expandedPageSize = false },
+                                modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+                            ) {
+                                pageSizes.forEach { size ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = size,
+                                                fontSize = 13.sp,
+                                                fontWeight = if (size.equals(pageSize, ignoreCase = true)) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (size.equals(pageSize, ignoreCase = true)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        },
+                                        onClick = {
+                                            pageSize = size
+                                            expandedPageSize = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
-                // 3. Document Filter (Dropdown Selector)
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "Document Filter",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    val filters = listOf(
-                        FilterType.COLOR to "Original",
-                        FilterType.MAGIC_COLOR to "Magic",
-                        FilterType.PAPER to "Paper",
-                        FilterType.CARD to "Card",
-                        FilterType.BLACK_WHITE to "B&W",
-                        FilterType.GRAYSCALE to "Gray"
-                    )
-                    val currentFilterLabel = filters.find { it.first == selectedFilter }?.second ?: "Original"
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Document Filter",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        val filters = listOf(
+                            FilterType.COLOR to "Original",
+                            FilterType.MAGIC_COLOR to "Magic",
+                            FilterType.PAPER to "Paper",
+                            FilterType.CARD to "Card",
+                            FilterType.BLACK_WHITE to "B&W",
+                            FilterType.GRAYSCALE to "Gray"
+                        )
+                        val currentFilterLabel = filters.find { it.first == selectedFilter }?.second ?: "Original"
 
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                .border(
-                                    width = 1.dp,
-                                    color = MaterialTheme.colorScheme.outlineVariant,
-                                    shape = RoundedCornerShape(10.dp)
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    .border(
+                                        width = 1.dp,
+                                        color = MaterialTheme.colorScheme.outlineVariant,
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable { expandedFilter = true }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = currentFilterLabel,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
-                                .clickable { expandedFilter = true }
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = currentFilterLabel,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = expandedFilter,
-                            onDismissRequest = { expandedFilter = false },
-                            modifier = Modifier.background(MaterialTheme.colorScheme.surface)
-                        ) {
-                            filters.forEach { (fType, label) ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = label,
-                                            fontSize = 13.sp,
-                                            fontWeight = if (selectedFilter == fType) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (selectedFilter == fType) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                        )
-                                    },
-                                    onClick = {
-                                        selectedFilter = fType
-                                        expandedFilter = false
-                                    }
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                            }
+
+                            DropdownMenu(
+                                expanded = expandedFilter,
+                                onDismissRequest = { expandedFilter = false },
+                                modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+                            ) {
+                                filters.forEach { (fType, label) ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = label,
+                                                fontSize = 13.sp,
+                                                fontWeight = if (selectedFilter == fType) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (selectedFilter == fType) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        },
+                                        onClick = {
+                                            selectedFilter = fType
+                                            expandedFilter = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
