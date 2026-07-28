@@ -244,7 +244,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                         showExportPopover = false
                         viewModel.exportPdf(context) { file ->
                             if (file != null) {
-                                viewModel.savePdfToPublicDocuments(context, file)
+                                Toast.makeText(context, "PDF saved to app documents", Toast.LENGTH_SHORT).show()
                             } else {
                                 Toast.makeText(context, "Export Failed", Toast.LENGTH_SHORT).show()
                             }
@@ -371,7 +371,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                                 }
                             }
                             ExportAction.SAVE -> {
-                                viewModel.savePdfToPublicDocuments(context, file)
+                                Toast.makeText(context, "PDF saved to app documents", Toast.LENGTH_SHORT).show()
                             }
                             ExportAction.PRINT -> {
                                 val printManager = context.getSystemService(android.content.Context.PRINT_SERVICE) as? android.print.PrintManager

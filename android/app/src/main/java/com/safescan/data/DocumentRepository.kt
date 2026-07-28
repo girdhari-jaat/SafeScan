@@ -187,7 +187,7 @@ class DocumentRepository @Inject constructor(
                         sharpness = sharpness,
                         saturation = saturation,
                         rotation = rotation,
-                        corners = corners
+                        corners = corners ?: page.corners
                     )
                 } else page
             }

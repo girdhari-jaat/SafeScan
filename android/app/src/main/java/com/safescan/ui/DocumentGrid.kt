@@ -180,7 +180,7 @@ fun DocumentGridView(
                                         }
                                     }
                                     ExportAction.SAVE -> {
-                                        viewModel.savePdfToPublicDocuments(context, file)
+                                        android.widget.Toast.makeText(context, "PDF saved to app documents", android.widget.Toast.LENGTH_SHORT).show()
                                     }
                                     ExportAction.PRINT -> {
                                         val printManager = context.getSystemService(android.content.Context.PRINT_SERVICE) as? android.print.PrintManager

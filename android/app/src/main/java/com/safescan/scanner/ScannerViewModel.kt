@@ -47,6 +47,9 @@ class ScannerViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ScannerUiState())
     val uiState: StateFlow<ScannerUiState> = _uiState.asStateFlow()
 
+    private var lastExportPdfHash: Int = 0
+    private var cachedPdfFile: java.io.File? = null
+
     val isDocumentDetected = MutableStateFlow(false)
     val detectionState = MutableStateFlow(com.safescan.scanner.DetectionState.IDLE)
 
@@ -1120,6 +1123,30 @@ class ScannerViewModel @Inject constructor(
         if (isEditing.value) {
             commitActiveEditorChanges()
         }
+
+        val docIdForHash = openedDocumentId ?: "new_doc"
+        val titleForHash = customTitle ?: getOrGenerateDocumentTitle(docIdForHash)
+        val targetPageSize = customPageSize ?: pageSize.value
+        val targetOrientation = customOrientation ?: pdfOrientation.value
+        val targetQuality = customQuality ?: jpegQuality.value
+        val targetDpi = dpi.value
+
+        val currentHash = java.util.Objects.hash(
+            slots.value.hashCode(),
+            capturedJpgFiles.toList().hashCode(),
+            titleForHash,
+            targetPageSize,
+            targetOrientation,
+            targetQuality,
+            targetDpi
+        )
+
+        if (!clearSession && cachedPdfFile != null && cachedPdfFile!!.exists() && lastExportPdfHash == currentHash) {
+            DiagnosticsLogger.info("Using cached PDF file: ${cachedPdfFile!!.name}")
+            onResult(cachedPdfFile)
+            return
+        }
+
         DiagnosticsLogger.info("Starting PDF/Document assembly pipeline...")
         // FIX: FINAL LEAK
         val tempBitmapsToRecycle = mutableListOf<Bitmap>()
@@ -1200,6 +1227,11 @@ class ScannerViewModel @Inject constructor(
                             capturedJpgFiles.clear()
                             originalJpgBitmaps.clear()
                             jpgCorners.clear()
+                            cachedPdfFile = null
+                            lastExportPdfHash = 0
+                        } else {
+                            cachedPdfFile = result.getOrNull()
+                            lastExportPdfHash = currentHash
                         }
                         DiagnosticsLogger.info("PDF document generated successfully.")
                         onResult(result.getOrNull())
