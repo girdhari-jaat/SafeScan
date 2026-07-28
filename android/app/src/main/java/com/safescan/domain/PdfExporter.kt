@@ -155,6 +155,9 @@ class PdfExporter(private val context: Context) {
 
                         // 2. Content Stream
                         val contentStr = "q\n" +
+                                "1 1 1 rg\n" +
+                                String.format(java.util.Locale.US, "0 0 %.2f %.2f re\n", finalWidth.toFloat(), finalHeight.toFloat()) +
+                                "f\n" +
                                 String.format(java.util.Locale.US, "%.2f 0 0 %.2f %.2f %.2f cm\n", drawnW, drawnH, left, yBottom) +
                                 "/Im1 Do\n" +
                                 "Q\n"
@@ -294,6 +297,9 @@ class PdfExporter(private val context: Context) {
 
                     // Content Stream
                     val contentStr = "q\n" +
+                            "1 1 1 rg\n" +
+                            String.format(java.util.Locale.US, "0 0 %d %d re\n", finalWidth, finalHeight) +
+                            "f\n" +
                             String.format(java.util.Locale.US, "%d 0 0 %d 0 0 cm\n", finalWidth, finalHeight) +
                             "/Im1 Do\n" +
                             "Q\n"
@@ -351,7 +357,7 @@ class PdfExporter(private val context: Context) {
         }
         return if (slot.bitmapPath != null && File(slot.bitmapPath).exists()) {
             try {
-                BitmapFactory.decodeFile(slot.bitmapPath, options)
+                BitmapFactory.decodeFile(slot.bitmapPath, options) ?: slot.bitmap
             } catch (e: Exception) {
                 slot.bitmap
             }
@@ -366,33 +372,22 @@ class PdfExporter(private val context: Context) {
         targetWidth: Int? = null,
         targetHeight: Int? = null
     ): ByteArray {
-        val rgbBmp = if (bmp.hasAlpha()) {
-            val result = Bitmap.createBitmap(bmp.width, bmp.height, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(result)
-            canvas.drawColor(Color.WHITE)
-            canvas.drawBitmap(bmp, 0f, 0f, null)
-            result
+        val scaledBmp = if (targetWidth != null && targetHeight != null && targetWidth > 0 && targetHeight > 0 && (targetWidth != bmp.width || targetHeight != bmp.height)) {
+            Bitmap.createScaledBitmap(bmp, targetWidth, targetHeight, true)
         } else {
-            bmp
-        }
-
-        val scaledBmp = if (targetWidth != null && targetHeight != null && targetWidth > 0 && targetHeight > 0 && (targetWidth != rgbBmp.width || targetHeight != rgbBmp.height)) {
-            Bitmap.createScaledBitmap(rgbBmp, targetWidth, targetHeight, true)
-        } else {
-            val maxDim = maxOf(rgbBmp.width, rgbBmp.height)
+            val maxDim = maxOf(bmp.width, bmp.height)
             if (maxDim > 2560) {
                 val scale = 2560f / maxDim
-                Bitmap.createScaledBitmap(rgbBmp, (rgbBmp.width * scale).toInt(), (rgbBmp.height * scale).toInt(), true)
+                Bitmap.createScaledBitmap(bmp, (bmp.width * scale).toInt(), (bmp.height * scale).toInt(), true)
             } else {
-                rgbBmp
+                bmp
             }
         }
 
         val baos = ByteArrayOutputStream()
         scaledBmp.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(10, 100), baos)
 
-        if (scaledBmp != rgbBmp && scaledBmp != bmp) scaledBmp.recycle()
-        if (rgbBmp != bmp) rgbBmp.recycle()
+        if (scaledBmp != bmp) scaledBmp.recycle()
 
         return baos.toByteArray()
     }

@@ -101,19 +101,16 @@ fun SafeScanTheme(
                     window.isStatusBarContrastEnforced = false
                 }
 
-                val effectiveStatusBarColor = statusBarColor ?: colorScheme.background
-                val effectiveNavBarColor = navigationBarColor ?: colorScheme.background
+                val effectiveStatusBarColor = statusBarColor ?: Color.Transparent
+                val effectiveNavBarColor = navigationBarColor ?: Color.Transparent
 
                 window.statusBarColor = effectiveStatusBarColor.toArgb()
                 window.navigationBarColor = effectiveNavBarColor.toArgb()
 
                 val insetsController = WindowCompat.getInsetsController(window, window.decorView)
-                // In light mode, icons must be dark (isAppearanceLight = true) unless background is explicitly dark/black
-                val isLightStatusBar = if (darkTheme) false else (effectiveStatusBarColor != Color.Black)
-                val isLightNavBar = if (darkTheme) false else (effectiveNavBarColor != Color.Black)
-
-                insetsController.isAppearanceLightStatusBars = isLightStatusBar
-                insetsController.isAppearanceLightNavigationBars = isLightNavBar
+                // In light mode, icons must be dark (isAppearanceLight = true)
+                insetsController.isAppearanceLightStatusBars = !darkTheme
+                insetsController.isAppearanceLightNavigationBars = !darkTheme
             }
         }
     }
