@@ -20,6 +20,8 @@ import org.opencv.core.MatOfDouble
 import org.opencv.core.Scalar
 import org.opencv.imgproc.CLAHE
 import kotlin.math.pow
+import kotlin.math.round
+import kotlin.math.sqrt
 
 object ImageProcessor {
 
