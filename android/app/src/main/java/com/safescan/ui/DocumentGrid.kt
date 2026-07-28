@@ -145,9 +145,6 @@ fun DocumentGridView(
                     onDismiss = { showExportModal = false },
                     onConfirmExport = { options ->
                         showExportModal = false
-                        if (options.title.isNotBlank()) {
-                            viewModel.setPdfFilename(options.title)
-                        }
                         viewModel.setWizardWarp(options.warp)
                         viewModel.setJpegQuality(options.quality)
                         viewModel.setDefaultFilter(options.filter.name)

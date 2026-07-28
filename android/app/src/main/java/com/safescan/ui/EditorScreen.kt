@@ -326,7 +326,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
 
     if (showExportModal) {
         ExportModalDialog(
-            initialTitle = pdfFilename.ifBlank { viewModel.getOrGenerateDocumentTitle(viewModel.openedDocumentId) },
+            initialTitle = viewModel.getOrGenerateDocumentTitle(viewModel.openedDocumentId),
             initialPageSize = pageSize,
             initialOrientation = pdfOrientation,
             initialQuality = jpegQuality,
@@ -335,9 +335,6 @@ fun EditorScreen(viewModel: ScannerViewModel) {
             onDismiss = { showExportModal = false },
             onConfirmExport = { options ->
                 showExportModal = false
-                if (options.title.isNotBlank()) {
-                    viewModel.setPdfFilename(options.title)
-                }
                 viewModel.setWizardWarp(options.warp)
                 viewModel.setJpegQuality(options.quality)
                 viewModel.updateEditorState(editorState.copy(filter = options.filter))
@@ -371,7 +368,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                                 }
                             }
                             ExportAction.SAVE -> {
-                                Toast.makeText(context, "PDF saved to app documents", Toast.LENGTH_SHORT).show()
+                                viewModel.savePdfToPublicDocuments(context, file)
                             }
                             ExportAction.PRINT -> {
                                 val printManager = context.getSystemService(android.content.Context.PRINT_SERVICE) as? android.print.PrintManager

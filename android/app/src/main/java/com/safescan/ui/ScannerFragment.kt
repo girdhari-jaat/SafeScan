@@ -480,12 +480,12 @@ class ScannerFragment : Fragment() {
                             com.safescan.ui.DocumentGridView(
                                 viewModel = viewModel,
                                 onDismiss = {
+                                    updateViewMode(FragmentViewMode.LIBRARY)
                                     viewModel.isDocumentOpenedFromLibrary.value = false
                                     // CRITICAL CLEANUP: Do not remove endSession()!
                                     // This resets and clears document slot states when closing the 
                                     // document view and returning to the Library screen.
                                     viewModel.endSession()
-                                    updateViewMode(FragmentViewMode.LIBRARY)
                                 },
                                 onScanPage = {
                                     viewModel.isDocumentOpenedFromLibrary.value = false

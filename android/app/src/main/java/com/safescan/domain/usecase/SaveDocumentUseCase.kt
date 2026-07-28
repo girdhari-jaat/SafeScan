@@ -47,6 +47,15 @@ class SaveDocumentUseCase @Inject constructor(
         )
     }
 
+    suspend fun updatePageCornersAndPreview(
+        docId: String,
+        pageId: String,
+        corners: List<Point>,
+        newPreview: Bitmap?
+    ) {
+        documentRepository.updatePageCornersAndPreview(docId, pageId, corners, newPreview)
+    }
+
     suspend fun saveJpgToScans(bitmap: Bitmap, quality: Int): File? {
         return documentRepository.saveJpgToScans(bitmap, quality)
     }

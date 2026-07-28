@@ -20,6 +20,7 @@ class ScannerNavigation(
                 val isCropping = viewModel.isCropping.value
                 val isSettingsOpen = viewModel.isSettingsOpen.value
                 val isGridViewVisible = viewModel.isGridViewVisible.value
+                val isDocOpenFromLib = viewModel.isDocumentOpenedFromLibrary.value
 
                 if (isGridViewVisible) {
                     viewModel.isGridViewVisible.value = false
@@ -29,6 +30,10 @@ class ScannerNavigation(
                     viewModel.isCropping.value = false
                 } else if (isEditing) {
                     viewModel.isEditing.value = false
+                } else if (isDocOpenFromLib && fragment.currentViewMode == ScannerFragment.FragmentViewMode.SCANNER) {
+                    fragment.updateViewMode(ScannerFragment.FragmentViewMode.LIBRARY)
+                    viewModel.isDocumentOpenedFromLibrary.value = false
+                    viewModel.endSession()
                 } else if (fragment.currentViewMode == ScannerFragment.FragmentViewMode.WIZARD) {
                     fragment.updateViewMode(ScannerFragment.FragmentViewMode.LIBRARY)
                 } else if (fragment.currentViewMode == ScannerFragment.FragmentViewMode.SCANNER) {

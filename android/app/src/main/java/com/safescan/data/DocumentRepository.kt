@@ -224,6 +224,38 @@ class DocumentRepository @Inject constructor(
         }
     }
 
+    suspend fun updatePageCornersAndPreview(
+        docId: String,
+        pageId: String,
+        corners: List<Point>,
+        newPreview: Bitmap?
+    ): Boolean = withContext(Dispatchers.IO) {
+        val root = baseDir ?: return@withContext false
+        val docFolder = File(root, docId)
+        val metaFile = File(docFolder, "metadata.json")
+        if (!metaFile.exists()) return@withContext false
+
+        try {
+            val jsonStr = metaFile.readText()
+            val doc = parseDocumentMetadata(jsonStr)
+            val updatedPages = doc.pages.map { page ->
+                if (page.id == pageId) {
+                    if (newPreview != null) {
+                        val previewsDir = File(docFolder, "previews")
+                        val prevFile = File(previewsDir, "${page.id}.jpg")
+                        saveBitmapToFile(newPreview, prevFile)
+                    }
+                    page.copy(corners = corners)
+                } else page
+            }
+            val updatedDoc = doc.copy(pages = updatedPages)
+            return@withContext writeMetaFile(docFolder, updatedDoc)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update page corners for doc: $docId, page: $pageId", e)
+            return@withContext false
+        }
+    }
+
     suspend fun deleteDocument(docId: String): Boolean = withContext(Dispatchers.IO) {
         val root = baseDir ?: return@withContext false
         val docFolder = File(root, docId)

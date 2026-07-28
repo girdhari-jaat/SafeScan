@@ -878,14 +878,9 @@ class ScannerViewModel @Inject constructor(
                     
                     // Sync to persistent library JSON if we are editing a saved document
                     openedDocumentId?.let { docId ->
-                        saveDocumentUseCase.updatePageEdits(
+                        saveDocumentUseCase.updatePageCornersAndPreview(
                             docId = docId,
                             pageId = slotId,
-                            filter = "original",
-                            brightness = 0f,
-                            contrast = 1.0f,
-                            sharpness = 0f,
-                            rotation = 0,
                             corners = cornersList,
                             newPreview = cropped
                         )

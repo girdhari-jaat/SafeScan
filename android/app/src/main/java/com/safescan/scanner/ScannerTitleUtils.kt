@@ -21,12 +21,15 @@ object ScannerTitleUtils {
         val timestamp = sdf.format(Date())
         
         val trimmed = pattern.trim()
+        val staticTimestampRegex = Regex("""^(Doc|Card|Scan)_\d{8}_\d{4}$""", RegexOption.IGNORE_CASE)
+
         if (trimmed.isEmpty() || 
             trimmed.equals("Doc+Date+Time", ignoreCase = true) || 
             trimmed.equals("Card+Date+Time", ignoreCase = true) || 
             trimmed.equals("Doc_yyyyMMdd_HHmm", ignoreCase = true) || 
             trimmed.equals("Card_yyyyMMdd_HHmm", ignoreCase = true) || 
-            trimmed.equals("Scan_Document", ignoreCase = true)) {
+            trimmed.equals("Scan_Document", ignoreCase = true) ||
+            trimmed.matches(staticTimestampRegex)) {
             return when (mode) {
                 ScannerMode.DOCUMENT -> "Doc_$timestamp"
                 ScannerMode.CARD, ScannerMode.GRID -> "Card_$timestamp"
