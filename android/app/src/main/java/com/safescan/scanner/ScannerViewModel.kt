@@ -1180,6 +1180,8 @@ class ScannerViewModel @Inject constructor(
         customPageSize: String? = null,
         customOrientation: String? = null,
         customQuality: Float? = null,
+        customWarp: String? = null,
+        customFilter: String? = null,
         onResult: (java.io.File?) -> Unit
     ) {
         if (isEditing.value) {
@@ -1200,7 +1202,9 @@ class ScannerViewModel @Inject constructor(
             targetPageSize,
             targetOrientation,
             targetQuality,
-            targetDpi
+            targetDpi,
+            customWarp,
+            customFilter
         )
 
         if (!clearSession && cachedPdfFile != null && cachedPdfFile!!.exists() && lastExportPdfHash == currentHash) {
@@ -1258,19 +1262,27 @@ class ScannerViewModel @Inject constructor(
                 // IMPROVEMENT: Using injected exportPdfUseCase to keep a clean architecture
                 if (autoPdf.value) {
                     val savedDoc = openedDocumentId?.let { saveDocumentUseCase.getDocument(it) }
+                    val effectiveWarp = customWarp ?: wizardWarp.value
+                    val isFlatWarp = effectiveWarp == "Flat" || effectiveWarp == "Flat Crop Only"
+                    val overrideFilterEnum = customFilter?.let {
+                        try { com.safescan.data.FilterType.valueOf(it) } catch (e: Exception) { null }
+                    }
+
                     val slotsToExport = if (capturedJpgFiles.isNotEmpty()) {
                         capturedJpgFiles.mapIndexed { idx, file ->
                             val rawBmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
                             val origBmp = originalJpgBitmaps[idx] ?: rawBmp
                             val corners = jpgCorners[idx]
-                            val finalBmp = if (origBmp != null && corners != null && corners.size == 4) {
-                                val isFlat = wizardWarp.value == "Flat" || wizardWarp.value == "Flat Crop Only"
+                            var finalBmp = if (origBmp != null && corners != null && corners.size == 4) {
                                 val quad = Quadrilateral(corners[0], corners[1], corners[2], corners[3])
                                 try {
-                                    documentScanner.cropAndTransform(origBmp, quad, currentMode.value.name, flatCrop = isFlat)
+                                    documentScanner.cropAndTransform(origBmp, quad, currentMode.value.name, flatCrop = isFlatWarp)
                                 } catch (e: Exception) { rawBmp ?: origBmp }
                             } else {
                                 rawBmp ?: origBmp
+                            }
+                            if (overrideFilterEnum != null && finalBmp != null) {
+                                finalBmp = com.safescan.domain.ImageProcessor.apply(finalBmp, com.safescan.data.EditorState(filter = overrideFilterEnum))
                             }
                             if (finalBmp != null) {
                                 tempBitmapsToRecycle.add(finalBmp)
@@ -1287,10 +1299,9 @@ class ScannerViewModel @Inject constructor(
                             val rotation = pageMeta?.rotation ?: 0
                             
                             var highResBmp: Bitmap? = if (originalRes != null && corners != null && corners.size == 4) {
-                                val isFlat = wizardWarp.value == "Flat" || wizardWarp.value == "Flat Crop Only"
                                 val quad = Quadrilateral(corners[0], corners[1], corners[2], corners[3])
                                 try {
-                                    documentScanner.cropAndTransform(originalRes, quad, currentMode.value.name, flatCrop = isFlat)
+                                    documentScanner.cropAndTransform(originalRes, quad, currentMode.value.name, flatCrop = isFlatWarp)
                                 } catch (e: Exception) { originalRes }
                             } else {
                                 originalRes ?: getFullResBitmap(slot.id, isOriginal = false) ?: slot.bitmap
@@ -1301,13 +1312,13 @@ class ScannerViewModel @Inject constructor(
                                 highResBmp = android.graphics.Bitmap.createBitmap(highResBmp, 0, 0, highResBmp.width, highResBmp.height, matrix, true)
                             }
 
-                            if (highResBmp != null && pageMeta != null) {
-                                val filterEnum = try { com.safescan.data.FilterType.valueOf(pageMeta.filter) } catch (e: Exception) { com.safescan.data.FilterType.COLOR }
+                            if (highResBmp != null) {
+                                val filterEnum = overrideFilterEnum ?: try { pageMeta?.filter?.let { com.safescan.data.FilterType.valueOf(it) } ?: com.safescan.data.FilterType.COLOR } catch (e: Exception) { com.safescan.data.FilterType.COLOR }
                                 val state = com.safescan.data.EditorState(
-                                    brightness = pageMeta.brightness,
-                                    contrast = pageMeta.contrast,
-                                    sharpness = pageMeta.sharpness,
-                                    saturation = pageMeta.saturation,
+                                    brightness = pageMeta?.brightness ?: 0f,
+                                    contrast = pageMeta?.contrast ?: 1f,
+                                    sharpness = pageMeta?.sharpness ?: 0f,
+                                    saturation = pageMeta?.saturation ?: 0f,
                                     filter = filterEnum
                                 )
                                 highResBmp = com.safescan.domain.ImageProcessor.apply(highResBmp, state)

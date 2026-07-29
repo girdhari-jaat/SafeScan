@@ -335,16 +335,15 @@ fun EditorScreen(viewModel: ScannerViewModel) {
             onDismiss = { showExportModal = false },
             onConfirmExport = { options ->
                 showExportModal = false
-                viewModel.setWizardWarp(options.warp)
-                viewModel.setJpegQuality(options.quality)
                 viewModel.updateEditorState(editorState.copy(filter = options.filter))
-                viewModel.setDefaultFilter(options.filter.name)
                 viewModel.exportPdf(
                     context = context,
                     customTitle = options.title,
                     customPageSize = options.pageSize,
                     customOrientation = options.orientation,
-                    customQuality = options.quality
+                    customQuality = options.quality,
+                    customWarp = options.warp,
+                    customFilter = options.filter.name
                 ) { file ->
                     if (file != null) {
                         when (options.action) {

@@ -145,15 +145,14 @@ fun DocumentGridView(
                     onDismiss = { showExportModal = false },
                     onConfirmExport = { options ->
                         showExportModal = false
-                        viewModel.setWizardWarp(options.warp)
-                        viewModel.setJpegQuality(options.quality)
-                        viewModel.setDefaultFilter(options.filter.name)
                         viewModel.exportPdf(
                             context = context,
                             customTitle = options.title,
                             customPageSize = options.pageSize,
                             customOrientation = options.orientation,
-                            customQuality = options.quality
+                            customQuality = options.quality,
+                            customWarp = options.warp,
+                            customFilter = options.filter.name
                         ) { file ->
                             viewModel.endSession()
                             onDismiss()
