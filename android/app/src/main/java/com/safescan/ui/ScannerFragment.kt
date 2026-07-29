@@ -389,6 +389,7 @@ class ScannerFragment : Fragment() {
                             },
                             onOpenDocument = { doc ->
                                 viewModel.loadDocumentIntoSlots(doc)
+                                updateViewMode(FragmentViewMode.SCANNER)
                             }
                         )
                     }

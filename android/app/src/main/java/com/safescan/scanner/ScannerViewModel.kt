@@ -171,8 +171,12 @@ class ScannerViewModel @Inject constructor(
 
     private val settingsHandler = ScannerSettingsHandler(settingsRepository, viewModelScope)
 
-    // High-Performance LRU (Least Recently Used) Cache for high-res Bitmaps in RAM to prevent OOM
-    private val highResCache = object : android.util.LruCache<String, Bitmap>(8) {
+    // High-Performance Memory-Aware LRU Cache for high-res Bitmaps in RAM (max 1/8th RAM, min 16MB)
+    private val maxCacheMemoryKb = (Runtime.getRuntime().maxMemory() / 1024 / 8).toInt().coerceAtLeast(16 * 1024)
+    private val highResCache = object : android.util.LruCache<String, Bitmap>(maxCacheMemoryKb) {
+        override fun sizeOf(key: String, value: Bitmap): Int {
+            return (value.allocationByteCount / 1024).coerceAtLeast(1)
+        }
         override fun entryRemoved(evicted: Boolean, key: String?, oldValue: Bitmap?, newValue: Bitmap?) {
             Log.d("ScannerViewModel", "Disk-Backed Hybrid LRU Cache evicted high-res bitmap for key: $key")
         }
@@ -763,6 +767,7 @@ class ScannerViewModel @Inject constructor(
         capturedJpgFiles.clear()
         originalJpgBitmaps.clear()
         jpgCorners.clear()
+        highResCache.evictAll()
         DiagnosticsLogger.info("Session ended. All slots and temporary images cleared for a new document.")
     }
 
@@ -943,40 +948,57 @@ class ScannerViewModel @Inject constructor(
             val fullRes = getFullResBitmap(slotId, isOriginal = false) ?: slot.bitmap
             val originalRes = getFullResBitmap(slotId, isOriginal = true) ?: fullRes
             if (fullRes != null) {
-                editingSlotId.value = slotId
-                editingJpgIndex.value = null
-                editingBitmapOriginal.value = originalRes
-                editingBitmapPreview.value = fullRes
+                val corners = slot.corners
+                val baseImage = if (originalRes != null && corners != null && corners.size == 4) {
+                    val isFlat = wizardWarp.value == "Flat" || wizardWarp.value == "Flat Crop Only"
+                    val quad = Quadrilateral(corners[0], corners[1], corners[2], corners[3])
+                    try {
+                        documentScanner.cropAndTransform(originalRes, quad, currentMode.value.name, flatCrop = isFlat)
+                    } catch (e: Exception) { originalRes }
+                } else {
+                    originalRes ?: fullRes
+                }
 
                 val docId = openedDocumentId
-                if (docId != null) {
-                    viewModelScope.launch(Dispatchers.IO) {
-                        val doc = saveDocumentUseCase.getDocument(docId)
-                        val page = doc?.pages?.find { it.id == slotId }
-                        val restoredState = if (page != null) {
-                            val filterEnum = try {
-                                com.safescan.data.FilterType.valueOf(page.filter)
-                            } catch (e: Exception) {
-                                com.safescan.data.FilterType.COLOR
-                            }
-                            com.safescan.data.EditorState(
-                                brightness = page.brightness,
-                                contrast = page.contrast,
-                                sharpness = page.sharpness,
-                                saturation = page.saturation,
-                                filter = filterEnum
-                            )
-                        } else {
-                            com.safescan.data.EditorState()
-                        }
-                        withContext(Dispatchers.Main) {
-                            editorState.value = restoredState
-                            isEditing.value = true
-                        }
+                viewModelScope.launch(Dispatchers.IO) {
+                    val doc = docId?.let { saveDocumentUseCase.getDocument(it) }
+                    val page = doc?.pages?.find { it.id == slotId }
+                    val storedRotation = page?.rotation ?: 0
+
+                    var rotatedBase = baseImage
+                    if (storedRotation != 0 && baseImage != null) {
+                        val matrix = android.graphics.Matrix().apply { postRotate(storedRotation.toFloat()) }
+                        rotatedBase = Bitmap.createBitmap(baseImage, 0, 0, baseImage.width, baseImage.height, matrix, true)
                     }
-                } else {
-                    editorState.value = com.safescan.data.EditorState()
-                    isEditing.value = true
+
+                    val restoredState = if (page != null) {
+                        val filterEnum = try {
+                            com.safescan.data.FilterType.valueOf(page.filter)
+                        } catch (e: Exception) {
+                            com.safescan.data.FilterType.COLOR
+                        }
+                        com.safescan.data.EditorState(
+                            brightness = page.brightness,
+                            contrast = page.contrast,
+                            sharpness = page.sharpness,
+                            saturation = page.saturation,
+                            filter = filterEnum,
+                            rotation = storedRotation
+                        )
+                    } else {
+                        com.safescan.data.EditorState(rotation = storedRotation)
+                    }
+
+                    val processedPreview = rotatedBase?.let { com.safescan.domain.ImageProcessor.apply(it, restoredState) } ?: fullRes
+
+                    withContext(Dispatchers.Main) {
+                        editingSlotId.value = slotId
+                        editingJpgIndex.value = null
+                        editingBitmapOriginal.value = rotatedBase
+                        editingBitmapPreview.value = processedPreview
+                        editorState.value = restoredState
+                        isEditing.value = true
+                    }
                 }
             }
         }
@@ -985,12 +1007,25 @@ class ScannerViewModel @Inject constructor(
     fun openEditorForJpg(index: Int) {
         val file = capturedJpgFiles.getOrNull(index) ?: return
         try {
-            val bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
-            if (bitmap != null) {
+            val originalBmp = originalJpgBitmaps[index] ?: android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+            if (originalBmp != null) {
+                if (!originalJpgBitmaps.containsKey(index)) {
+                    originalJpgBitmaps[index] = originalBmp
+                }
+                val corners = jpgCorners[index]
+                val baseImage = if (corners != null && corners.size == 4) {
+                    val isFlat = wizardWarp.value == "Flat" || wizardWarp.value == "Flat Crop Only"
+                    val quad = Quadrilateral(corners[0], corners[1], corners[2], corners[3])
+                    try {
+                        documentScanner.cropAndTransform(originalBmp, quad, currentMode.value.name, flatCrop = isFlat)
+                    } catch (e: Exception) { originalBmp }
+                } else {
+                    originalBmp
+                }
                 editingSlotId.value = null
                 editingJpgIndex.value = index
-                editingBitmapOriginal.value = bitmap
-                editingBitmapPreview.value = bitmap
+                editingBitmapOriginal.value = baseImage
+                editingBitmapPreview.value = baseImage
                 editorState.value = com.safescan.data.EditorState()
                 isEditing.value = true
             }
@@ -1007,6 +1042,7 @@ class ScannerViewModel @Inject constructor(
                 // Sync to persistent library JSON if we are editing a saved document
                 openedDocumentId?.let { docId ->
                     val currentState = editorState.value
+                    val slotCorners = slots.value.find { it.id == slotId }?.corners
                     viewModelScope.launch(Dispatchers.IO) {
                         saveDocumentUseCase.updatePageEdits(
                             docId = docId,
@@ -1016,8 +1052,8 @@ class ScannerViewModel @Inject constructor(
                             contrast = currentState.contrast,
                             sharpness = currentState.sharpness,
                             saturation = currentState.saturation,
-                            rotation = 0,
-                            corners = null,
+                            rotation = currentState.rotation,
+                            corners = slotCorners,
                             newPreview = processed
                         )
                     }
@@ -1221,19 +1257,67 @@ class ScannerViewModel @Inject constructor(
 
                 // IMPROVEMENT: Using injected exportPdfUseCase to keep a clean architecture
                 if (autoPdf.value) {
+                    val savedDoc = openedDocumentId?.let { saveDocumentUseCase.getDocument(it) }
                     val slotsToExport = if (capturedJpgFiles.isNotEmpty()) {
                         capturedJpgFiles.mapIndexed { idx, file ->
-                            val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
-                            if (bmp != null) {
-                                tempBitmapsToRecycle.add(bmp)
+                            val rawBmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                            val origBmp = originalJpgBitmaps[idx] ?: rawBmp
+                            val corners = jpgCorners[idx]
+                            val finalBmp = if (origBmp != null && corners != null && corners.size == 4) {
+                                val isFlat = wizardWarp.value == "Flat" || wizardWarp.value == "Flat Crop Only"
+                                val quad = Quadrilateral(corners[0], corners[1], corners[2], corners[3])
+                                try {
+                                    documentScanner.cropAndTransform(origBmp, quad, currentMode.value.name, flatCrop = isFlat)
+                                } catch (e: Exception) { rawBmp ?: origBmp }
+                            } else {
+                                rawBmp ?: origBmp
                             }
-                            Slot("p${idx + 1}", "Page ${idx + 1}", bmp)
+                            if (finalBmp != null) {
+                                tempBitmapsToRecycle.add(finalBmp)
+                            }
+                            Slot("p${idx + 1}", "Page ${idx + 1}", finalBmp)
                         }
                     } else {
-                        // For slots, we should pass slots with full resolution processed bitmaps!
                         slots.value.filter { it.bitmap != null }.map { slot ->
-                            val fullResProcessed = getFullResBitmap(slot.id, isOriginal = false) ?: slot.bitmap!!
-                            slot.copy(bitmap = fullResProcessed)
+                            val pageMeta = savedDoc?.pages?.find { it.id == slot.id }
+                            val originalRes = getFullResBitmap(slot.id, isOriginal = true)
+                                ?: (openedDocumentId?.let { saveDocumentUseCase.loadOriginalBitmap(it, slot.id) })
+                            
+                            val corners = slot.corners ?: pageMeta?.corners
+                            val rotation = pageMeta?.rotation ?: 0
+                            
+                            var highResBmp: Bitmap? = if (originalRes != null && corners != null && corners.size == 4) {
+                                val isFlat = wizardWarp.value == "Flat" || wizardWarp.value == "Flat Crop Only"
+                                val quad = Quadrilateral(corners[0], corners[1], corners[2], corners[3])
+                                try {
+                                    documentScanner.cropAndTransform(originalRes, quad, currentMode.value.name, flatCrop = isFlat)
+                                } catch (e: Exception) { originalRes }
+                            } else {
+                                originalRes ?: getFullResBitmap(slot.id, isOriginal = false) ?: slot.bitmap
+                            }
+                            
+                            if (highResBmp != null && rotation != 0) {
+                                val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
+                                highResBmp = android.graphics.Bitmap.createBitmap(highResBmp, 0, 0, highResBmp.width, highResBmp.height, matrix, true)
+                            }
+
+                            if (highResBmp != null && pageMeta != null) {
+                                val filterEnum = try { com.safescan.data.FilterType.valueOf(pageMeta.filter) } catch (e: Exception) { com.safescan.data.FilterType.COLOR }
+                                val state = com.safescan.data.EditorState(
+                                    brightness = pageMeta.brightness,
+                                    contrast = pageMeta.contrast,
+                                    sharpness = pageMeta.sharpness,
+                                    saturation = pageMeta.saturation,
+                                    filter = filterEnum
+                                )
+                                highResBmp = com.safescan.domain.ImageProcessor.apply(highResBmp, state)
+                            }
+
+                            if (highResBmp != null) {
+                                tempBitmapsToRecycle.add(highResBmp)
+                            }
+                            
+                            slot.copy(bitmap = highResBmp ?: slot.bitmap)
                         }
                     }
                     val targetPageSize = customPageSize ?: pageSize.value
@@ -1619,6 +1703,9 @@ class ScannerViewModel @Inject constructor(
         val matrix = android.graphics.Matrix().apply { postRotate(degrees) }
         val rotated = Bitmap.createBitmap(original, 0, 0, original.width, original.height, matrix, true)
         editingBitmapOriginal.value = rotated
+        val currentRot = editorState.value.rotation
+        val newRot = (currentRot + degrees.toInt()) % 360
+        editorState.value = editorState.value.copy(rotation = if (newRot < 0) newRot + 360 else newRot)
         applyEdits()
     }
 

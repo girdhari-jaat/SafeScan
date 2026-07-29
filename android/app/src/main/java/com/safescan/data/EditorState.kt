@@ -7,5 +7,6 @@ data class EditorState(
     val contrast: Float = 1.0f,
     val sharpness: Float = 0f,
     val saturation: Float = 0f,
-    val filter: FilterType = FilterType.COLOR
+    val filter: FilterType = FilterType.COLOR,
+    val rotation: Int = 0
 )

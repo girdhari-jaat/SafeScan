@@ -92,7 +92,7 @@ object ScannerExportUtils {
                             }
                         }
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "PDF Saved", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "PDF saved to Documents/SafeScan", Toast.LENGTH_SHORT).show()
                         }
                     } catch (e: Exception) {
                         Log.e("ScannerExportUtils", "Failed to save PDF", e)
@@ -118,7 +118,7 @@ object ScannerExportUtils {
                         }
                     }
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "PDF Saved", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "PDF saved to Documents/SafeScan", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
                     Log.e("ScannerExportUtils", "Failed to save PDF", e)

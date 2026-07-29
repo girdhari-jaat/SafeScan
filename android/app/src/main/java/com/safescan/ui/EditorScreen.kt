@@ -244,7 +244,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                         showExportPopover = false
                         viewModel.exportPdf(context) { file ->
                             if (file != null) {
-                                Toast.makeText(context, "PDF saved to app documents", Toast.LENGTH_SHORT).show()
+                                viewModel.savePdfToPublicDocuments(context, file)
                             } else {
                                 Toast.makeText(context, "Export Failed", Toast.LENGTH_SHORT).show()
                             }
