@@ -545,7 +545,8 @@ class ScannerViewModel @Inject constructor(
                         }
                         val originalBmp = originalJpgBitmaps[idx] ?: bmp
                         val corners = jpgCorners[idx]
-                        com.safescan.data.PageSaveData("p${idx + 1}", originalBmp, bmp, corners)
+                        val pageId = if (idx < slots.value.size) slots.value[idx].id else "p${idx + 1}"
+                        com.safescan.data.PageSaveData(pageId, originalBmp, bmp, corners)
                     }
                 } else {
                     slots.value.filter { it.bitmap != null }.map { slot ->
@@ -940,13 +941,43 @@ class ScannerViewModel @Inject constructor(
         val slot = slots.value.find { it.id == slotId }
         if (slot != null) {
             val fullRes = getFullResBitmap(slotId, isOriginal = false) ?: slot.bitmap
+            val originalRes = getFullResBitmap(slotId, isOriginal = true) ?: fullRes
             if (fullRes != null) {
                 editingSlotId.value = slotId
                 editingJpgIndex.value = null
-                editingBitmapOriginal.value = fullRes
+                editingBitmapOriginal.value = originalRes
                 editingBitmapPreview.value = fullRes
-                editorState.value = com.safescan.data.EditorState()
-                isEditing.value = true
+
+                val docId = openedDocumentId
+                if (docId != null) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        val doc = saveDocumentUseCase.getDocument(docId)
+                        val page = doc?.pages?.find { it.id == slotId }
+                        val restoredState = if (page != null) {
+                            val filterEnum = try {
+                                com.safescan.data.FilterType.valueOf(page.filter)
+                            } catch (e: Exception) {
+                                com.safescan.data.FilterType.COLOR
+                            }
+                            com.safescan.data.EditorState(
+                                brightness = page.brightness,
+                                contrast = page.contrast,
+                                sharpness = page.sharpness,
+                                saturation = page.saturation,
+                                filter = filterEnum
+                            )
+                        } else {
+                            com.safescan.data.EditorState()
+                        }
+                        withContext(Dispatchers.Main) {
+                            editorState.value = restoredState
+                            isEditing.value = true
+                        }
+                    }
+                } else {
+                    editorState.value = com.safescan.data.EditorState()
+                    isEditing.value = true
+                }
             }
         }
     }
@@ -1161,7 +1192,8 @@ class ScannerViewModel @Inject constructor(
                         }
                         val originalBmp = originalJpgBitmaps[idx] ?: bmp
                         val corners = jpgCorners[idx]
-                        com.safescan.data.PageSaveData("p${idx + 1}", originalBmp, bmp, corners)
+                        val pageId = if (idx < slots.value.size) slots.value[idx].id else "p${idx + 1}"
+                        com.safescan.data.PageSaveData(pageId, originalBmp, bmp, corners)
                     }
                 } else {
                     slots.value.filter { it.bitmap != null }.map { slot ->
@@ -1281,7 +1313,8 @@ class ScannerViewModel @Inject constructor(
                         }
                         val originalBmp = originalJpgBitmaps[idx] ?: bmp
                         val corners = jpgCorners[idx]
-                        com.safescan.data.PageSaveData("p${idx + 1}", originalBmp, bmp, corners)
+                        val pageId = if (idx < slots.value.size) slots.value[idx].id else "p${idx + 1}"
+                        com.safescan.data.PageSaveData(pageId, originalBmp, bmp, corners)
                     }
                 } else {
                     slots.value.filter { it.bitmap != null }.map { slot ->

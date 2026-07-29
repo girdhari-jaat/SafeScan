@@ -389,7 +389,6 @@ class ScannerFragment : Fragment() {
                             },
                             onOpenDocument = { doc ->
                                 viewModel.loadDocumentIntoSlots(doc)
-                                checkPermissionAndStartScanner()
                             }
                         )
                     }

@@ -45,15 +45,9 @@ class CameraController(
         }
     )
 
-    fun setupCamera() {
-        if (!fragment.isAdded) return
-        val currentContext = fragment.context ?: return
-        if (motionDetector == null) {
-            motionDetector = com.safescan.scanner.DeviceMotionDetector(currentContext)
-        }
-        val binding = fragment.binding ?: return
+    fun shouldCameraBeOn(): Boolean {
+        if (!fragment.isAdded) return false
         val viewModel = fragment.viewModel
-
         val isEditing = viewModel.isEditing.value
         val isCropping = viewModel.isCropping.value
         val isSettingsOpen = viewModel.isSettingsOpen.value
@@ -63,7 +57,7 @@ class CameraController(
         val usePhoneCam = viewModel.usePhoneCamera.value
         val useNativeScan = viewModel.useNativeScanner.value
 
-        val shouldCameraBeOn = isScannerMode &&
+        return isScannerMode &&
                 !isDocOpenFromLib &&
                 !isGridViewVisible &&
                 !isEditing &&
@@ -72,8 +66,18 @@ class CameraController(
                 !usePhoneCam &&
                 !useNativeScan &&
                 fragment.permissionManager.allPermissionsGranted()
+    }
 
-        if (shouldCameraBeOn) {
+    fun setupCamera() {
+        if (!fragment.isAdded) return
+        val currentContext = fragment.context ?: return
+        if (motionDetector == null) {
+            motionDetector = com.safescan.scanner.DeviceMotionDetector(currentContext)
+        }
+        val binding = fragment.binding ?: return
+        val viewModel = fragment.viewModel
+
+        if (shouldCameraBeOn()) {
             val mode = viewModel.currentMode.value
             val hdModeStr = viewModel.hdMode.value
             if (isCameraBound && lastBoundMode == mode && lastBoundHdMode == hdModeStr) {
@@ -129,10 +133,11 @@ class CameraController(
                 val provider: ProcessCameraProvider = cameraProviderFuture.get()
                 this.cameraProvider = provider
 
-                if (fragment.viewModel.useNativeScanner.value || fragment.viewModel.usePhoneCamera.value) {
+                if (!shouldCameraBeOn()) {
                     provider.unbindAll()
                     isCameraBound = false
-                    binding.previewView.visibility = View.INVISIBLE
+                    binding.previewView.visibility = View.GONE
+                    binding.overlayView.clear()
                     return@addListener
                 } else {
                     binding.previewView.visibility = View.VISIBLE
@@ -154,6 +159,14 @@ class CameraController(
         val currentContext = fragment.context ?: return
         val binding = fragment.binding ?: return
         val viewModel = fragment.viewModel
+
+        if (!shouldCameraBeOn()) {
+            cameraProvider.unbindAll()
+            isCameraBound = false
+            binding.previewView.visibility = View.GONE
+            binding.overlayView.clear()
+            return
+        }
 
         val mode = viewModel.currentMode.value
         val hdModeStr = viewModel.hdMode.value

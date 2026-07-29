@@ -75,6 +75,21 @@ class DocumentRepository @Inject constructor(
         return@withContext docsList.sortedByDescending { it.createdAt }
     }
 
+    suspend fun getDocument(docId: String): DocumentMetadata? = withContext(Dispatchers.IO) {
+        val root = baseDir ?: return@withContext null
+        val docFolder = File(root, docId)
+        val metaFile = File(docFolder, "metadata.json")
+        if (metaFile.exists()) {
+            try {
+                val jsonStr = metaFile.readText()
+                return@withContext parseDocumentMetadata(jsonStr)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error reading metadata.json for $docId", e)
+            }
+        }
+        return@withContext null
+    }
+
     /**
      * Saves a brand new document or updates an existing one on disk.
      * Pages is a list of Page ID to Pair(OriginalBitmap, PreviewBitmap).
@@ -120,7 +135,9 @@ class DocumentRepository @Inject constructor(
                 saveBitmapToFile(page.previewBitmap, prevFile)
             }
 
+            val pageIndex = pagesData.indexOf(page)
             val existingPage = existingMeta?.pages?.find { it.id == page.id }
+                ?: existingMeta?.pages?.getOrNull(pageIndex)
 
             pagesMetaList.add(
                 PageMetadata(
@@ -173,8 +190,9 @@ class DocumentRepository @Inject constructor(
         try {
             val jsonStr = metaFile.readText()
             val doc = parseDocumentMetadata(jsonStr)
-            val updatedPages = doc.pages.map { page ->
-                if (page.id == pageId) {
+            val updatedPages = doc.pages.mapIndexed { idx, page ->
+                val isMatch = page.id == pageId || (doc.pages.size == 1 && idx == 0)
+                if (isMatch) {
                     if (newPreview != null) {
                         val previewsDir = File(docFolder, "previews")
                         val prevFile = File(previewsDir, "${page.id}.jpg")
@@ -211,8 +229,8 @@ class DocumentRepository @Inject constructor(
         try {
             val jsonStr = metaFile.readText()
             val doc = parseDocumentMetadata(jsonStr)
-            val updatedPages = doc.pages.map { page ->
-                if (page.id == pageId) {
+            val updatedPages = doc.pages.mapIndexed { idx, page ->
+                if (page.id == pageId || (doc.pages.size == 1 && idx == 0)) {
                     page.copy(recognizedText = text)
                 } else page
             }
@@ -238,8 +256,8 @@ class DocumentRepository @Inject constructor(
         try {
             val jsonStr = metaFile.readText()
             val doc = parseDocumentMetadata(jsonStr)
-            val updatedPages = doc.pages.map { page ->
-                if (page.id == pageId) {
+            val updatedPages = doc.pages.mapIndexed { idx, page ->
+                if (page.id == pageId || (doc.pages.size == 1 && idx == 0)) {
                     if (newPreview != null) {
                         val previewsDir = File(docFolder, "previews")
                         val prevFile = File(previewsDir, "${page.id}.jpg")

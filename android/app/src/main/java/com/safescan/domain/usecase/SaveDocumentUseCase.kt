@@ -64,6 +64,10 @@ class SaveDocumentUseCase @Inject constructor(
         return documentRepository.getDocuments()
     }
 
+    suspend fun getDocument(docId: String): DocumentMetadata? {
+        return documentRepository.getDocument(docId)
+    }
+
     suspend fun loadOriginalBitmap(docId: String, pageId: String): Bitmap? {
         return documentRepository.loadOriginalBitmap(docId, pageId)
     }
