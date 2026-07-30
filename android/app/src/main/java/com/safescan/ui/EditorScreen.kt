@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.platform.LocalView
+import com.safescan.R
 import com.safescan.utils.HapticFeedbackHelper
 import com.safescan.data.FilterType
 import com.safescan.data.ScannerMode
