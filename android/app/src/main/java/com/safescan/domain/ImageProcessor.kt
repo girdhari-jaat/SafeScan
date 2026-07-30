@@ -37,20 +37,6 @@ object ImageProcessor {
 
     suspend fun cropDocument(bitmap: Bitmap, quad: Quadrilateral, flatCrop: Boolean = false): Bitmap = withContext(Dispatchers.Default) {
         if (bitmap.isRecycled) return@withContext bitmap
-        val tl = quad.topLeft
-        val tr = quad.topRight
-        val br = quad.bottomRight
-        val bl = quad.bottomLeft
-
-        if (flatCrop) {
-            val minX = maxOf(0, minOf(tl.x, tr.x, br.x, bl.x).toInt())
-            val minY = maxOf(0, minOf(tl.y, tr.y, br.y, bl.y).toInt())
-            val maxX = minOf(bitmap.width, maxOf(tl.x, tr.x, br.x, bl.x).toInt())
-            val maxY = minOf(bitmap.height, maxOf(tl.y, tr.y, br.y, bl.y).toInt())
-            val w = (maxX - minX).coerceIn(1, bitmap.width - minX)
-            val h = (maxY - minY).coerceIn(1, bitmap.height - minY)
-            return@withContext Bitmap.createBitmap(bitmap, minX, minY, w, h)
-        }
 
         ScannerDebugLogger.logEnter("ImageProcessor.cropDocument")
         var src: Mat? = null

@@ -68,17 +68,6 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
                 val br = orderedCorners[2]
                 val bl = orderedCorners[3]
 
-                if (flatCrop) {
-                    val minX = maxOf(0, minOf(tl.x, tr.x, br.x, bl.x).toInt())
-                    val minY = maxOf(0, minOf(tl.y, tr.y, br.y, bl.y).toInt())
-                    val maxX = minOf(bitmap.width, maxOf(tl.x, tr.x, br.x, bl.x).toInt())
-                    val maxY = minOf(bitmap.height, maxOf(tl.y, tr.y, br.y, bl.y).toInt())
-                    val w = (maxX - minX).coerceIn(1, bitmap.width - minX)
-                    val h = (maxY - minY).coerceIn(1, bitmap.height - minY)
-                    val outBitmap = Bitmap.createBitmap(bitmap, minX, minY, w, h)
-                    return@withContext AppResult.Success(ScannedDocument(outBitmap, orderedCorners))
-                }
-
                 val widthA = sqrt((br.x - bl.x).pow(2) + (br.y - bl.y).pow(2))
                 val widthB = sqrt((tr.x - tl.x).pow(2) + (tr.y - tl.y).pow(2))
                 val maxWidth = max(widthA, widthB).toInt().coerceAtLeast(1)

@@ -29,6 +29,7 @@ data class ExportOptions(
     val title: String,
     val pageSize: String,
     val orientation: String,
+    val dpi: Float = 200f,
     val quality: Float,
     val warp: String,
     val filter: FilterType,
@@ -40,6 +41,7 @@ fun ExportModalDialog(
     initialTitle: String,
     initialPageSize: String = "A4",
     initialOrientation: String = "Auto",
+    initialDpi: Float = 200f,
     initialQuality: Float = 90f,
     initialWarp: String = "Perspective",
     initialFilter: FilterType = FilterType.COLOR,
@@ -49,6 +51,7 @@ fun ExportModalDialog(
     var title by remember { mutableStateOf(initialTitle) }
     var pageSize by remember { mutableStateOf(initialPageSize) }
     var orientation by remember { mutableStateOf(initialOrientation) }
+    var dpi by remember { mutableFloatStateOf(initialDpi.coerceIn(150f, 300f)) }
     var quality by remember { mutableFloatStateOf(initialQuality.coerceIn(60f, 100f)) }
     var warp by remember { mutableStateOf(initialWarp) }
     var selectedFilter by remember { mutableStateOf(initialFilter) }
@@ -257,55 +260,96 @@ fun ExportModalDialog(
                     }
                 }
 
-                // 4. Page Orientation
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "Page Orientation",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                // 3. Warp & Page Orientation (Combined in a single compact row)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Warp Options (2 equal tabs)
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        listOf("Auto", "Portrait", "Landscape").forEach { orient ->
-                            val selected = orientation.equals(orient, ignoreCase = true)
-                            OptionChip(
-                                label = orient,
-                                selected = selected,
-                                modifier = Modifier.weight(1f),
-                                onClick = { orientation = orient }
-                            )
+                        Text(
+                            text = "Warp Mode",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            listOf("Perspective" to "Warp", "Flat" to "Flat").forEach { (modeKey, label) ->
+                                val selected = warp.equals(modeKey, ignoreCase = true)
+                                OptionChip(
+                                    label = label,
+                                    selected = selected,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { warp = modeKey }
+                                )
+                            }
+                        }
+                    }
+
+                    // Page Orientation Options (3 equal tabs)
+                    Column(
+                        modifier = Modifier.weight(1.3f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Orientation",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            listOf("Auto" to "Auto", "Portrait" to "Port", "Landscape" to "Land").forEach { (orientKey, label) ->
+                                val selected = orientation.equals(orientKey, ignoreCase = true)
+                                OptionChip(
+                                    label = label,
+                                    selected = selected,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { orientation = orientKey }
+                                )
+                            }
                         }
                     }
                 }
 
-                // 5. Perspective Warp / Crop Options
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "Perspective Warp / Crop",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                // 4. Resolution (DPI) Slider (150 DPI, 200 DPI, 250 DPI, 300 DPI)
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        listOf("Perspective", "Flat").forEach { mode ->
-                            val selected = warp.equals(mode, ignoreCase = true)
-                            OptionChip(
-                                label = mode,
-                                selected = selected,
-                                modifier = Modifier.weight(1f),
-                                onClick = { warp = mode }
-                            )
-                        }
+                        Text(
+                            text = "Resolution (DPI)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "${dpi.coerceIn(150f, 300f).toInt()} DPI",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
+                    Slider(
+                        value = dpi.coerceIn(150f, 300f),
+                        onValueChange = { dpi = it },
+                        valueRange = 150f..300f,
+                        steps = 2,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
 
-                // 6. JPEG Quality Slider (60%, 70%, 80%, 90%, 100%)
+                // 5. JPEG Quality Slider (60%, 70%, 80%, 90%, 100%)
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -346,6 +390,7 @@ fun ExportModalDialog(
                                     title = title,
                                     pageSize = pageSize,
                                     orientation = orientation,
+                                    dpi = dpi,
                                     quality = quality,
                                     warp = warp,
                                     filter = selectedFilter,
@@ -368,6 +413,7 @@ fun ExportModalDialog(
                                     title = title,
                                     pageSize = pageSize,
                                     orientation = orientation,
+                                    dpi = dpi,
                                     quality = quality,
                                     warp = warp,
                                     filter = selectedFilter,

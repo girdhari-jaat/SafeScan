@@ -37,9 +37,17 @@ object ImageFilterEngine {
 
         var hsv: Mat? = null
         var channels: MutableList<Mat>? = null
+        var smallV: Mat? = null
+        var bgSmall: Mat? = null
+        var kernel: Mat? = null
+        var bg: Mat? = null
+        var vFloat: Mat? = null
+        var bgFloat: Mat? = null
+        var div: Mat? = null
+        var cleanV: Mat? = null
         var clahe: org.opencv.imgproc.CLAHE? = null
-        var blurred: Mat? = null
         var enhanced: Mat? = null
+        var blurred: Mat? = null
 
         try {
             if (src.empty()) return out
@@ -52,92 +60,78 @@ object ImageFilterEngine {
             Core.split(hsv, channels)
 
             // -----------------------------
-            // Reduce Green/Overall Saturation
+            // 1. Light background shadow whitening
             // -----------------------------
-            // S channel = 65%
-            channels[1].convertTo(
-                channels[1],
-                -1,
-                0.65,
-                0.0
-            )
+            smallV = Mat()
+            Imgproc.resize(channels[2], smallV, Size(), 0.2, 0.2, Imgproc.INTER_LINEAR)
+
+            bgSmall = Mat()
+            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(11.0, 11.0))
+            Imgproc.dilate(smallV, bgSmall, kernel)
+            Imgproc.GaussianBlur(bgSmall, bgSmall, Size(21.0, 21.0), 0.0)
+
+            bg = Mat()
+            Imgproc.resize(bgSmall, bg, channels[2].size(), 0.0, 0.0, Imgproc.INTER_LINEAR)
+
+            vFloat = Mat()
+            bgFloat = Mat()
+            channels[2].convertTo(vFloat, CvType.CV_32F)
+            bg.convertTo(bgFloat, CvType.CV_32F)
+            Core.add(bgFloat, org.opencv.core.Scalar(1.0), bgFloat)
+
+            div = Mat()
+            Core.divide(vFloat, bgFloat, div)
+            Core.multiply(div, org.opencv.core.Scalar(255.0), div)
+
+            cleanV = Mat()
+            div.convertTo(cleanV, CvType.CV_8U)
+
+            // Blend 60% shadow-flattened background with 40% original background
+            Core.addWeighted(channels[2], 0.4, cleanV, 0.6, 0.0, channels[2])
 
             // -----------------------------
+            // 2. Adjust saturation & boost contrast slightly
+            // -----------------------------
+            channels[1].convertTo(channels[1], -1, 0.85, 0.0)
+            channels[2].convertTo(channels[2], -1, 1.12, -4.0)
+
             // Improve brightness consistency
-            // -----------------------------
-            clahe = Imgproc.createCLAHE(
-                1.5,
-                Size(8.0, 8.0)
-            )
-
-            clahe.apply(
-                channels[2],
-                channels[2]
-            )
+            clahe = Imgproc.createCLAHE(1.5, Size(8.0, 8.0))
+            clahe.apply(channels[2], channels[2])
 
             // Merge HSV
             Core.merge(channels, hsv)
 
             // HSV -> BGR
             enhanced = Mat()
-            Imgproc.cvtColor(
-                hsv,
-                enhanced,
-                Imgproc.COLOR_HSV2BGR
-            )
+            Imgproc.cvtColor(hsv, enhanced, Imgproc.COLOR_HSV2BGR)
 
-            // -----------------------------
             // Lightweight Unsharp Mask
-            // -----------------------------
             blurred = Mat()
-            Imgproc.GaussianBlur(
-                enhanced,
-                blurred,
-                Size(0.0, 0.0),
-                1.5
-            )
-
-            Core.addWeighted(
-                enhanced,
-                1.25,
-                blurred,
-                -0.25,
-                0.0,
-                out
-            )
+            Imgproc.GaussianBlur(enhanced, blurred, Size(0.0, 0.0), 1.5)
+            Core.addWeighted(enhanced, 1.3, blurred, -0.3, 0.0, out)
 
             // Final RGBA
-            Imgproc.cvtColor(
-                out,
-                out,
-                Imgproc.COLOR_BGR2RGBA
-            )
+            Imgproc.cvtColor(out, out, Imgproc.COLOR_BGR2RGBA)
 
         } catch (e: Exception) {
-
             if (!src.empty()) {
-                Imgproc.cvtColor(
-                    src,
-                    out,
-                    Imgproc.COLOR_BGR2RGBA
-                )
+                Imgproc.cvtColor(src, out, Imgproc.COLOR_BGR2RGBA)
             }
-
         } finally {
-
-            hsv?.release()
-
-            channels?.forEach {
-                it.release()
-            }
-
-            blurred?.release()
-            enhanced?.release()
-
-            try {
-                clahe?.collectGarbage()
-            } catch (_: Exception) {
-            }
+            safeRelease(hsv)
+            channels?.forEach { safeRelease(it) }
+            safeRelease(smallV)
+            safeRelease(bgSmall)
+            safeRelease(kernel)
+            safeRelease(bg)
+            safeRelease(vFloat)
+            safeRelease(bgFloat)
+            safeRelease(div)
+            safeRelease(cleanV)
+            safeRelease(enhanced)
+            safeRelease(blurred)
+            safeCollectGarbage(clahe)
         }
 
         return out
@@ -147,8 +141,31 @@ object ImageFilterEngine {
         val outMat = Mat()
         when (filterType) {
             FilterType.GRAYSCALE -> {
-                Imgproc.cvtColor(src, outMat, Imgproc.COLOR_BGR2GRAY)
-                Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_GRAY2RGBA)
+                var gray: Mat? = null
+                var sharpGray: Mat? = null
+                var kernel: Mat? = null
+                try {
+                    gray = Mat()
+                    Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY)
+                    
+                    // Fast 3x3 sharpening kernel on single-channel Grayscale for ultra-fast text sharpening
+                    kernel = Mat(3, 3, CvType.CV_32F)
+                    val kernelData = floatArrayOf(
+                        0f, -0.2f, 0f,
+                        -0.2f, 1.8f, -0.2f,
+                        0f, -0.2f, 0f
+                    )
+                    kernel.put(0, 0, kernelData)
+                    
+                    sharpGray = Mat()
+                    Imgproc.filter2D(gray, sharpGray, -1, kernel)
+                    
+                    Imgproc.cvtColor(sharpGray, outMat, Imgproc.COLOR_GRAY2RGBA)
+                } finally {
+                    safeRelease(gray)
+                    safeRelease(sharpGray)
+                    safeRelease(kernel)
+                }
             }
             FilterType.BLACK_WHITE -> {
                 var bgrChannels: ArrayList<Mat>? = null
@@ -214,6 +231,7 @@ object ImageFilterEngine {
                 var cleanColor: Mat? = null
                 var hsv: Mat? = null
                 var hsvChannels: ArrayList<Mat>? = null
+                var darkMask: Mat? = null
                 var enhanced: Mat? = null
                 var blurred: Mat? = null
                 try {
@@ -224,9 +242,14 @@ object ImageFilterEngine {
                     hsvChannels = ArrayList()
                     Core.split(hsv, hsvChannels)
                     
-                    // Boost saturation and contrast
-                    hsvChannels[1].convertTo(hsvChannels[1], -1, 1.5, 0.0)
-                    hsvChannels[2].convertTo(hsvChannels[2], -1, 1.2, -10.0)
+                    // Desaturate dark text regions (V < 95) so black text stays neutral black/gray without green/cyan tint
+                    darkMask = Mat()
+                    Imgproc.threshold(hsvChannels[2], darkMask, 95.0, 255.0, Imgproc.THRESH_BINARY_INV)
+                    hsvChannels[1].setTo(org.opencv.core.Scalar(0.0), darkMask)
+
+                    // Boost saturation and contrast gently for colorful regions
+                    hsvChannels[1].convertTo(hsvChannels[1], -1, 1.2, 0.0)
+                    hsvChannels[2].convertTo(hsvChannels[2], -1, 1.15, -5.0)
                     
                     Core.merge(hsvChannels, hsv)
                     
@@ -236,21 +259,24 @@ object ImageFilterEngine {
                     // Apply Unsharp Masking for crisp text
                     blurred = Mat()
                     Imgproc.GaussianBlur(enhanced, blurred, Size(0.0, 0.0), 3.0)
-                    Core.addWeighted(enhanced, 1.5, blurred, -0.5, 0.0, outMat)
+                    Core.addWeighted(enhanced, 1.4, blurred, -0.4, 0.0, outMat)
                     
                     Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_BGR2RGBA)
                 } finally {
-                    cleanColor?.release()
-                    hsv?.release()
-                    hsvChannels?.forEach { it.release() }
-                    enhanced?.release()
-                    blurred?.release()
+                    safeRelease(cleanColor)
+                    safeRelease(hsv)
+                    hsvChannels?.forEach { safeRelease(it) }
+                    safeRelease(darkMask)
+                    safeRelease(enhanced)
+                    safeRelease(blurred)
                 }
             }
             FilterType.PAPER -> {
-                var hsv: Mat? = null
-                var hsvChannels: ArrayList<Mat>? = null
-                var v: Mat? = null
+                var bgrChannels: ArrayList<Mat>? = null
+                var minBG: Mat? = null
+                var minBGR: Mat? = null
+                var standardGray: Mat? = null
+                var darkTextGray: Mat? = null
                 var smallV: Mat? = null
                 var bgSmall: Mat? = null
                 var kernel: Mat? = null
@@ -259,21 +285,31 @@ object ImageFilterEngine {
                 var bgFloat: Mat? = null
                 var div: Mat? = null
                 var cleanV: Mat? = null
+                var hsv: Mat? = null
+                var hsvChannels: ArrayList<Mat>? = null
                 var enhanced: Mat? = null
                 var blurred: Mat? = null
                 
                 try {
-                    hsv = Mat()
-                    Imgproc.cvtColor(src, hsv, Imgproc.COLOR_BGR2HSV)
-                    hsvChannels = ArrayList()
-                    Core.split(hsv, hsvChannels)
+                    // Extract dark text channel (combining minBGR with Grayscale) so blue/red pen ink is preserved as dark text
+                    bgrChannels = ArrayList()
+                    Core.split(src, bgrChannels)
                     
-                    v = hsvChannels[2]
+                    minBG = Mat()
+                    Core.min(bgrChannels[0], bgrChannels[1], minBG)
+                    minBGR = Mat()
+                    Core.min(minBG, bgrChannels[2], minBGR)
                     
-                    // 1. Adaptive method for Shadow removal (Fast background division)
+                    standardGray = Mat()
+                    Imgproc.cvtColor(src, standardGray, Imgproc.COLOR_BGR2GRAY)
+                    
+                    darkTextGray = Mat()
+                    Core.addWeighted(standardGray, 0.3, minBGR, 0.7, 0.0, darkTextGray)
+                    
+                    // 1. Adaptive method for Shadow removal on darkTextGray
                     smallV = Mat()
                     val scale = 0.2
-                    Imgproc.resize(v, smallV, Size(), scale, scale, Imgproc.INTER_LINEAR)
+                    Imgproc.resize(darkTextGray, smallV, Size(), scale, scale, Imgproc.INTER_LINEAR)
                     
                     bgSmall = Mat()
                     kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(9.0, 9.0))
@@ -281,11 +317,11 @@ object ImageFilterEngine {
                     Imgproc.GaussianBlur(bgSmall, bgSmall, Size(21.0, 21.0), 0.0)
                     
                     bg = Mat()
-                    Imgproc.resize(bgSmall, bg, v.size(), 0.0, 0.0, Imgproc.INTER_LINEAR)
+                    Imgproc.resize(bgSmall, bg, darkTextGray.size(), 0.0, 0.0, Imgproc.INTER_LINEAR)
                     
                     vFloat = Mat()
                     bgFloat = Mat()
-                    v.convertTo(vFloat, CvType.CV_32F)
+                    darkTextGray.convertTo(vFloat, CvType.CV_32F)
                     bg.convertTo(bgFloat, CvType.CV_32F)
                     Core.add(bgFloat, org.opencv.core.Scalar(1.0), bgFloat)
                     
@@ -300,10 +336,16 @@ object ImageFilterEngine {
                     Imgproc.threshold(cleanV, cleanV, 230.0, 255.0, Imgproc.THRESH_TRUNC)
                     Core.normalize(cleanV, cleanV, 0.0, 255.0, Core.NORM_MINMAX)
                     
+                    // 3. Convert clean BGR back to HSV to preserve blue/colored handwriting ink saturation
+                    hsv = Mat()
+                    Imgproc.cvtColor(src, hsv, Imgproc.COLOR_BGR2HSV)
+                    hsvChannels = ArrayList()
+                    Core.split(hsv, hsvChannels)
+                    
                     cleanV.copyTo(hsvChannels[2])
                     
-                    // 3. Saturation thodi kam rakho (Reduce to 40%)
-                    hsvChannels[1].convertTo(hsvChannels[1], -1, 0.4, 0.0)
+                    // Keep saturation natural for colored ink (blue pen) so it stays visible and clear
+                    hsvChannels[1].convertTo(hsvChannels[1], -1, 1.05, 0.0)
                     
                     Core.merge(hsvChannels, hsv)
                     
@@ -313,22 +355,27 @@ object ImageFilterEngine {
                     // 4. Text ko crisp/sharp karo
                     blurred = Mat()
                     Imgproc.GaussianBlur(enhanced, blurred, Size(0.0, 0.0), 2.5)
-                    Core.addWeighted(enhanced, 1.5, blurred, -0.5, 0.0, outMat)
+                    Core.addWeighted(enhanced, 1.4, blurred, -0.4, 0.0, outMat)
                     
                     Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_BGR2RGBA)
                 } finally {
-                    hsv?.release()
-                    hsvChannels?.forEach { it.release() }
-                    smallV?.release()
-                    bgSmall?.release()
-                    kernel?.release()
-                    bg?.release()
-                    vFloat?.release()
-                    bgFloat?.release()
-                    div?.release()
-                    cleanV?.release()
-                    enhanced?.release()
-                    blurred?.release()
+                    bgrChannels?.forEach { safeRelease(it) }
+                    safeRelease(minBG)
+                    safeRelease(minBGR)
+                    safeRelease(standardGray)
+                    safeRelease(darkTextGray)
+                    safeRelease(smallV)
+                    safeRelease(bgSmall)
+                    safeRelease(kernel)
+                    safeRelease(bg)
+                    safeRelease(vFloat)
+                    safeRelease(bgFloat)
+                    safeRelease(div)
+                    safeRelease(cleanV)
+                    safeRelease(hsv)
+                    hsvChannels?.forEach { safeRelease(it) }
+                    safeRelease(enhanced)
+                    safeRelease(blurred)
                 }
             }
             FilterType.COLOR -> {

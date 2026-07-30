@@ -736,7 +736,7 @@ fun ScannerSettingsPopover(
                             .background(Color.White.copy(alpha = 0.2f))
                     )
 
-                    // Tab 2: Wizard
+                    // Tab 2: 1 Tap
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -754,12 +754,12 @@ fun ScannerSettingsPopover(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.AutoFixHigh,
-                                contentDescription = "Wizard",
+                                contentDescription = "1 Tap",
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
-                                text = "Wizard",
+                                text = "1 Tap",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary

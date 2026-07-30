@@ -33,7 +33,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.safescan.R
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.platform.LocalView
+import com.safescan.utils.HapticFeedbackHelper
 import com.safescan.data.FilterType
 import com.safescan.data.ScannerMode
 import com.safescan.scanner.ScannerViewModel
@@ -63,6 +65,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
     val pdfFilename by viewModel.pdfFilename.collectAsState()
     val pdfOrientation by viewModel.pdfOrientation.collectAsState()
     val jpegQuality by viewModel.jpegQuality.collectAsState()
+    val dpi by viewModel.dpi.collectAsState()
     val autoPdf by viewModel.autoPdf.collectAsState()
     val wizardWarp by viewModel.wizardWarp.collectAsState()
 
@@ -70,6 +73,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
     // Local UI States & Panel Controls
     // ------------------------------------------------------
     var activePanel by remember { mutableStateOf<String?>("filters") } // "filters", "adjustments", null
+    var applyAllFilters by remember { mutableStateOf(false) }
     var showExportPopover by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showExportModal by remember { mutableStateOf(false) }
@@ -146,8 +150,18 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                     EditorEnhancementPanel(
                         activePanel = activePanel,
                         editorState = editorState,
+                        applyAllFilters = applyAllFilters,
+                        onApplyAllToggled = { enabled ->
+                            applyAllFilters = enabled
+                            if (enabled) {
+                                viewModel.applyFilterToAllPages(editorState.filter)
+                            }
+                        },
                         onFilterSelected = { filter ->
                             viewModel.updateEditorState(editorState.copy(filter = filter))
+                            if (applyAllFilters) {
+                                viewModel.applyFilterToAllPages(filter)
+                            }
                         },
                         onEditorStateUpdate = { newState ->
                             viewModel.updateEditorState(newState)
@@ -329,6 +343,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
             initialTitle = viewModel.getOrGenerateDocumentTitle(viewModel.openedDocumentId),
             initialPageSize = pageSize,
             initialOrientation = pdfOrientation,
+            initialDpi = dpi,
             initialQuality = jpegQuality,
             initialWarp = wizardWarp,
             initialFilter = editorState.filter,
@@ -342,6 +357,7 @@ fun EditorScreen(viewModel: ScannerViewModel) {
                     customPageSize = options.pageSize,
                     customOrientation = options.orientation,
                     customQuality = options.quality,
+                    customDpi = options.dpi,
                     customWarp = options.warp,
                     customFilter = options.filter.name
                 ) { file ->
@@ -518,6 +534,8 @@ fun EditorTopBar(
 fun EditorEnhancementPanel(
     activePanel: String?,
     editorState: com.safescan.data.EditorState,
+    applyAllFilters: Boolean = false,
+    onApplyAllToggled: (Boolean) -> Unit = {},
     onFilterSelected: (FilterType) -> Unit,
     onEditorStateUpdate: (com.safescan.data.EditorState) -> Unit
 ) {
@@ -532,12 +550,53 @@ fun EditorEnhancementPanel(
                 // ------------------------------------------------------
                 // Filters Section
                 // ------------------------------------------------------
-                Text(
-                    text = "Enhancement Filters",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Enhancement Filters",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    val view = LocalView.current
+                    Surface(
+                        onClick = {
+                            val newState = !applyAllFilters
+                            onApplyAllToggled(newState)
+                            HapticFeedbackHelper.triggerHaptic(view)
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (applyAllFilters) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = BorderStroke(
+                            1.dp,
+                            if (applyAllFilters) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (applyAllFilters) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                                contentDescription = "Apply All",
+                                tint = if (applyAllFilters) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Apply All",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (applyAllFilters) FontWeight.Bold else FontWeight.Medium,
+                                color = if (applyAllFilters) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
                 LazyRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)

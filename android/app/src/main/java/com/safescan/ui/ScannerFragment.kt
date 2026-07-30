@@ -489,6 +489,7 @@ class ScannerFragment : Fragment() {
                                 },
                                 onScanPage = {
                                     viewModel.isDocumentOpenedFromLibrary.value = false
+                                    viewModel.isGridViewVisible.value = false
                                     viewModel.selectedSlotId.value = null
                                 }
                             )

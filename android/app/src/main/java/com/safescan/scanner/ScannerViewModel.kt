@@ -1116,6 +1116,101 @@ class ScannerViewModel @Inject constructor(
         applyEdits()
     }
 
+    fun applyFilterToAllPages(filterType: com.safescan.data.FilterType) {
+        updateEditorState(editorState.value.copy(filter = filterType))
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val docId = openedDocumentId
+            val currentSlots = slots.value
+            val isFlat = wizardWarp.value == "Flat" || wizardWarp.value == "Flat Crop Only"
+
+            if (currentSlots.isNotEmpty()) {
+                val updatedSlots = currentSlots.map { slot ->
+                    val origBmp = getFullResBitmap(slot.id, isOriginal = true)
+                        ?: (docId?.let { saveDocumentUseCase.loadOriginalBitmap(it, slot.id) })
+                        ?: getFullResBitmap(slot.id, isOriginal = false)
+                        ?: slot.bitmap
+
+                    if (origBmp != null) {
+                        val corners = slot.corners
+                        val baseImage = if (corners != null && corners.size == 4) {
+                            val quad = Quadrilateral(corners[0], corners[1], corners[2], corners[3])
+                            try {
+                                documentScanner.cropAndTransform(origBmp, quad, currentMode.value.name, flatCrop = isFlat)
+                            } catch (e: Exception) { origBmp }
+                        } else {
+                            origBmp
+                        }
+
+                        val processed = com.safescan.domain.ImageProcessor.apply(
+                            baseImage,
+                            com.safescan.data.EditorState(filter = filterType)
+                        )
+
+                        highResCache.put("${slot.id}_processed", processed)
+                        val processedPath = saveHighResToDisk(processed, slot.id, "processed")
+                        val thumb = generateThumbnail(processed, 360)
+
+                        if (docId != null) {
+                            saveDocumentUseCase.updatePageEdits(
+                                docId = docId,
+                                pageId = slot.id,
+                                filter = filterType.name,
+                                brightness = 0f,
+                                contrast = 1.0f,
+                                sharpness = 0f,
+                                saturation = 0f,
+                                rotation = 0,
+                                corners = corners,
+                                newPreview = processed
+                            )
+                        }
+
+                        slot.copy(bitmap = thumb, bitmapPath = processedPath ?: slot.bitmapPath)
+                    } else {
+                        slot
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    slots.value = updatedSlots
+                }
+            }
+
+            if (capturedJpgFiles.isNotEmpty()) {
+                capturedJpgFiles.forEachIndexed { idx, file ->
+                    try {
+                        val rawBmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                        val origBmp = originalJpgBitmaps[idx] ?: rawBmp
+                        if (origBmp != null) {
+                            val corners = jpgCorners[idx]
+                            val baseBmp = if (corners != null && corners.size == 4) {
+                                val quad = Quadrilateral(corners[0], corners[1], corners[2], corners[3])
+                                try {
+                                    documentScanner.cropAndTransform(origBmp, quad, currentMode.value.name, flatCrop = isFlat)
+                                } catch (e: Exception) { rawBmp ?: origBmp }
+                            } else {
+                                rawBmp ?: origBmp
+                            }
+                            if (baseBmp != null) {
+                                val processed = com.safescan.domain.ImageProcessor.apply(
+                                    baseBmp,
+                                    com.safescan.data.EditorState(filter = filterType)
+                                )
+                                val out = java.io.FileOutputStream(file)
+                                processed.compress(Bitmap.CompressFormat.JPEG, jpegQuality.value.toInt(), out)
+                                out.flush()
+                                out.close()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        DiagnosticsLogger.error("Failed to apply filter to captured JPG $idx: ${e.message}")
+                    }
+                }
+            }
+        }
+    }
+
     fun applyAutoEnhance() {
         viewModelScope.launch(Dispatchers.IO) {
             editingBitmapOriginal.value?.let { bmp ->
@@ -1180,6 +1275,7 @@ class ScannerViewModel @Inject constructor(
         customPageSize: String? = null,
         customOrientation: String? = null,
         customQuality: Float? = null,
+        customDpi: Float? = null,
         customWarp: String? = null,
         customFilter: String? = null,
         onResult: (java.io.File?) -> Unit
@@ -1193,7 +1289,7 @@ class ScannerViewModel @Inject constructor(
         val targetPageSize = customPageSize ?: pageSize.value
         val targetOrientation = customOrientation ?: pdfOrientation.value
         val targetQuality = customQuality ?: jpegQuality.value
-        val targetDpi = dpi.value
+        val targetDpi = customDpi ?: dpi.value
 
         val currentHash = java.util.Objects.hash(
             slots.value.hashCode(),
@@ -1304,7 +1400,7 @@ class ScannerViewModel @Inject constructor(
                                     documentScanner.cropAndTransform(originalRes, quad, currentMode.value.name, flatCrop = isFlatWarp)
                                 } catch (e: Exception) { originalRes }
                             } else {
-                                originalRes ?: getFullResBitmap(slot.id, isOriginal = false) ?: slot.bitmap
+                                originalRes ?: getFullResBitmap(slot.id, isOriginal = true) ?: getFullResBitmap(slot.id, isOriginal = false) ?: slot.bitmap
                             }
                             
                             if (highResBmp != null && rotation != 0) {
@@ -1341,7 +1437,7 @@ class ScannerViewModel @Inject constructor(
                         currentMode.value,
                         targetPageSize,
                         targetOrientation,
-                        dpi = dpi.value,
+                        dpi = targetDpi,
                         jpegQuality = targetQuality
                     )
                     withContext(Dispatchers.Main) {
@@ -1605,10 +1701,15 @@ class ScannerViewModel @Inject constructor(
 
             val isAutoCropOff = !autoCrop.value
             var slotId = selectedSlotId.value ?: slots.value.firstOrNull { it.bitmap == null }?.id
-            if (slotId == null && currentMode.value == ScannerMode.DOCUMENT) {
-                val newId = "p${slots.value.size + 1}"
-                slots.value = slots.value + Slot(newId, "Page ${slots.value.size + 1}")
-                slotId = newId
+            if (slotId == null) {
+                var candidateIndex = slots.value.size + 1
+                var candidateId = "p$candidateIndex"
+                while (slots.value.any { it.id == candidateId }) {
+                    candidateIndex++
+                    candidateId = "p$candidateIndex"
+                }
+                slots.value = slots.value + Slot(candidateId, "Page $candidateIndex")
+                slotId = candidateId
             }
 
             ScannerDebugLogger.logCapture(slotId ?: "unknown")

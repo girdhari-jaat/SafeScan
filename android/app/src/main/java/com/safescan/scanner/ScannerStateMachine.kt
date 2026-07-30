@@ -5,6 +5,8 @@ import android.util.Log
 import com.safescan.core.ScannerDebugLogger
 import kotlin.math.sqrt
 
+private const val MIN_SHARPNESS = 600f
+
 enum class DetectionState {
     IDLE,          // No document detected
     DETECTED,      // Document is detected but not stable yet
@@ -36,7 +38,6 @@ class ScannerStateMachine(
 
     private val MAX_MISSING_FRAMES = 10
     private val STABLE_FRAME_THRESHOLD = 8
-    private val MIN_SHARPNESS_THRESHOLD = 35.0
     private val REQUIRED_STABLE_FRAMES_FOR_OVERLAY = 4
     private val EMA_ALPHA = 0.6f
 
@@ -214,7 +215,7 @@ class ScannerStateMachine(
         }
 
         // 9. Auto-Capture Trigger evaluation
-        val isSharp = sharpness > MIN_SHARPNESS_THRESHOLD
+        val isSharp = sharpness >= MIN_SHARPNESS
         val trigger = stableFrameCount >= STABLE_FRAME_THRESHOLD && isSharp && isDeviceMotionStable
         ScannerDebugLogger.logAutoCap(inBox = true, sharpness = sharpness, stable = stableFrameCount, trigger = trigger)
 

@@ -30,16 +30,6 @@ class DocumentScanner(
         val br = quad.bottomRight
         val bl = quad.bottomLeft
 
-        if (flatCrop) {
-            val minX = maxOf(0, minOf(tl.x, tr.x, br.x, bl.x).toInt())
-            val minY = maxOf(0, minOf(tl.y, tr.y, br.y, bl.y).toInt())
-            val maxX = minOf(bitmap.width, maxOf(tl.x, tr.x, br.x, bl.x).toInt())
-            val maxY = minOf(bitmap.height, maxOf(tl.y, tr.y, br.y, bl.y).toInt())
-            val w = (maxX - minX).coerceIn(1, bitmap.width - minX)
-            val h = (maxY - minY).coerceIn(1, bitmap.height - minY)
-            return Bitmap.createBitmap(bitmap, minX, minY, w, h)
-        }
-
         val widthA = sqrt((br.x - bl.x).pow(2) + (br.y - bl.y).pow(2))
         val widthB = sqrt((tr.x - tl.x).pow(2) + (tr.y - tl.y).pow(2))
         var maxWidth = max(widthA, widthB).toInt().coerceAtLeast(1)
@@ -48,18 +38,20 @@ class DocumentScanner(
         val heightB = sqrt((tl.x - bl.x).pow(2) + (tl.y - bl.y).pow(2))
         var maxHeight = max(heightA, heightB).toInt().coerceAtLeast(1)
 
-        val isA4 = CameraHardwareConfig.isA4Supported(context)
+        if (!flatCrop) {
+            val isA4 = CameraHardwareConfig.isA4Supported(context)
 
-        if (mode == "DOCUMENT") {
-            // Use the naturally detected dimensions. No need to force an artificial 4:3 ratio.
-            // If the user wants a specific format, they can crop later.
-        } else if (mode == "CARD" || mode == "GRID") {
-            // CARD/GRID use ID-1 Card aspect ratio (1.5857) in landscape
-            val targetRatio = 1.5857f
-            if (maxWidth > maxHeight) {
-                maxHeight = (maxWidth / targetRatio).toInt()
-            } else {
-                maxWidth = (maxHeight / targetRatio).toInt()
+            if (mode == "DOCUMENT") {
+                // Use the naturally detected dimensions. No need to force an artificial 4:3 ratio.
+                // If the user wants a specific format, they can crop later.
+            } else if (mode == "CARD" || mode == "GRID") {
+                // CARD/GRID use ID-1 Card aspect ratio (1.5857) in landscape
+                val targetRatio = 1.5857f
+                if (maxWidth > maxHeight) {
+                    maxHeight = (maxWidth / targetRatio).toInt()
+                } else {
+                    maxWidth = (maxHeight / targetRatio).toInt()
+                }
             }
         }
 

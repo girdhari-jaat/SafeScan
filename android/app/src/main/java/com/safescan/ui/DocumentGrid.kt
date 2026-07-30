@@ -42,6 +42,7 @@ fun DocumentGridView(
     val pageSize by viewModel.pageSize.collectAsState()
     val pdfOrientation by viewModel.pdfOrientation.collectAsState()
     val jpegQuality by viewModel.jpegQuality.collectAsState()
+    val dpi by viewModel.dpi.collectAsState()
     val wizardWarp by viewModel.wizardWarp.collectAsState()
     val defaultFilterStr by viewModel.defaultFilter.collectAsState()
     val initialFilter = try {
@@ -139,6 +140,7 @@ fun DocumentGridView(
                     initialTitle = documentTitle,
                     initialPageSize = pageSize,
                     initialOrientation = pdfOrientation,
+                    initialDpi = dpi,
                     initialQuality = jpegQuality,
                     initialWarp = wizardWarp,
                     initialFilter = initialFilter,
@@ -151,6 +153,7 @@ fun DocumentGridView(
                             customPageSize = options.pageSize,
                             customOrientation = options.orientation,
                             customQuality = options.quality,
+                            customDpi = options.dpi,
                             customWarp = options.warp,
                             customFilter = options.filter.name
                         ) { file ->
