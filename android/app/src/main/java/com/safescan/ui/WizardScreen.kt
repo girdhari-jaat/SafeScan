@@ -161,61 +161,69 @@ fun WizardScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // --- Warp Correction ---
-            Text(
-                text = "Warp Correction",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(bottom = 2.dp)
-            )
+            // --- Warp Correction & Rotation (Side by side to reduce height) ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val warps = listOf("Perspective", "Flat")
-                warps.forEach { warpItem ->
-                    val selected = if (warpItem == "Flat") (warp == "Flat Crop Only" || warp == "Flat") else warp == warpItem
-                    WizardSelectionButton(
-                        text = warpItem,
-                        selected = selected,
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            val actualWarpValue = if (warpItem == "Flat") "Flat Crop Only" else warpItem
-                            viewModel.setWizardWarp(actualWarpValue)
-                        }
+                // Left Column: Warp Correction
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Warp Correction",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(bottom = 2.dp)
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val warps = listOf("Perspective", "Flat")
+                        warps.forEach { warpItem ->
+                            val selected = if (warpItem == "Flat") (warp == "Flat Crop Only" || warp == "Flat") else warp == warpItem
+                            WizardSelectionButton(
+                                text = warpItem,
+                                selected = selected,
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    val actualWarpValue = if (warpItem == "Flat") "Flat Crop Only" else warpItem
+                                    viewModel.setWizardWarp(actualWarpValue)
+                                }
+                            )
+                        }
+                    }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // --- Rotation ---
-            Text(
-                text = "Rotation",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(bottom = 2.dp)
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                val rotations = listOf("Auto", "0°")
-                rotations.forEach { rot ->
-                    val selected = rotation == rot
-                    WizardSelectionButton(
-                        text = rot,
-                        selected = selected,
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            viewModel.setWizardRotation(rot)
-                            if (rot == "0°") {
-                                viewModel.toggleAutoRotation(false)
-                            } else if (rot == "Auto") {
-                                viewModel.toggleAutoRotation(true)
-                            }
-                        }
+                // Right Column: Rotation
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Rotation",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(bottom = 2.dp)
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val rotations = listOf("Auto", "0°")
+                        rotations.forEach { rot ->
+                            val selected = rotation == rot
+                            WizardSelectionButton(
+                                text = rot,
+                                selected = selected,
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    viewModel.setWizardRotation(rot)
+                                    if (rot == "0°") {
+                                        viewModel.toggleAutoRotation(false)
+                                    } else if (rot == "Auto") {
+                                        viewModel.toggleAutoRotation(true)
+                                    }
+                                }
+                            )
+                        }
+                    }
                 }
             }
 

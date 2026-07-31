@@ -267,12 +267,26 @@ fun ScannerCenterInstructions(
     val autoCapture by viewModel.autoCapture.collectAsState()
     val currentMode by viewModel.currentMode.collectAsState()
 
+    val slots by viewModel.slots.collectAsState()
+    val selectedSlotId by viewModel.selectedSlotId.collectAsState()
+
     // Determine instructional text based on document detection and scanning mode
     val guideText = if (isDocumentDetected) {
         if (autoCapture) "HOLD STILL... AUTO-CAPTURING" else "READY TO CAPTURE"
     } else {
         when (currentMode) {
-            ScannerMode.CARD -> "Align Card Inside Cutout"
+            ScannerMode.CARD -> {
+                val targetSlot = if (selectedSlotId != null) {
+                    slots.firstOrNull { it.id == selectedSlotId }
+                } else {
+                    slots.firstOrNull { it.bitmap == null }
+                }
+                if (targetSlot != null) {
+                    "Align ${targetSlot.label} Inside Cutout"
+                } else {
+                    "All 8 Slots Captured"
+                }
+            }
             ScannerMode.DOCUMENT -> "Align Document Inside Frame"
             ScannerMode.GRID -> "Utilize Grid for Centered Alignment"
         }

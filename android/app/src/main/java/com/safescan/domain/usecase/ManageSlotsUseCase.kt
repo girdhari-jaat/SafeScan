@@ -9,10 +9,11 @@ import javax.inject.Singleton
 @Singleton
 class ManageSlotsUseCase @Inject constructor() {
     fun createDefaultSlots(): List<Slot> {
-        return listOf(
-            Slot(id = "1", label = "Front Side"),
-            Slot(id = "2", label = "Back Side")
-        )
+        return (1..8).map { i ->
+            val pairNum = (i + 1) / 2
+            val side = if (i % 2 == 1) "Front" else "Back"
+            Slot(id = i.toString(), label = "$side $pairNum")
+        }
     }
 
     fun updateSlotCaptured(

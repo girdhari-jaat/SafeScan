@@ -7,11 +7,12 @@ import com.safescan.data.Slot
 object ExportHelper {
     /**
      * Get front and back slots for a specific row index (0..3) in the PDF/Image grid.
-     * For CARD mode, duplicate the same front (slot 0) and back (slot 1) slots 4 times.
-     * For other modes (like GRID), map them sequentially.
+     * For CARD mode: if 2 or fewer slots are filled, duplicate the same front (slot 0) and back (slot 1) across all 4 rows.
+     * If more than 2 slots are filled, map them sequentially (Grid mode flow).
      */
     fun getSlotsForGridRow(slots: List<Slot>, mode: ScannerMode, rowIndex: Int): Pair<Slot?, Slot?> {
-        if (mode == ScannerMode.CARD) {
+        val filledCount = slots.count { it.bitmap != null || it.bitmapPath != null }
+        if (mode == ScannerMode.CARD && filledCount <= 2) {
             val frontItem = slots.getOrNull(0)
             val backItem = slots.getOrNull(1)
             return Pair(frontItem, backItem)

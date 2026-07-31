@@ -183,7 +183,7 @@ class ScannerCaptureManager(
             fragment.cameraController.scannerStateMachine.isFocusing = false
             isCapturingPhoto = false
             val maxPages = when (viewModel.currentMode.value) {
-                ScannerMode.CARD -> 2
+                ScannerMode.CARD -> 8
                 ScannerMode.GRID -> 8
                 else -> 150
             }

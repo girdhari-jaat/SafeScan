@@ -303,10 +303,11 @@ class ScannerViewModel @Inject constructor(
             currentMode.collect { mode ->
                 if (!isDocumentOpenedFromLibrary.value) {
                     slots.value = when (mode) {
-                        ScannerMode.CARD -> listOf(
-                            Slot("front", "Front"),
-                            Slot("back", "Back")
-                        )
+                        ScannerMode.CARD -> (1..8).map { i ->
+                            val pairNum = (i + 1) / 2
+                            val side = if (i % 2 == 1) "Front" else "Back"
+                            Slot(i.toString(), "$side $pairNum")
+                        }
                         ScannerMode.DOCUMENT -> emptyList()
                         ScannerMode.GRID -> (1..8).map {
                             Slot(it.toString(), "Slot $it")
@@ -751,10 +752,11 @@ class ScannerViewModel @Inject constructor(
     fun endSession() {
         val mode = currentMode.value
         slots.value = when (mode) {
-            com.safescan.data.ScannerMode.CARD -> listOf(
-                com.safescan.data.Slot("front", "Front"),
-                com.safescan.data.Slot("back", "Back")
-            )
+            com.safescan.data.ScannerMode.CARD -> (1..8).map { i ->
+                val pairNum = (i + 1) / 2
+                val side = if (i % 2 == 1) "Front" else "Back"
+                com.safescan.data.Slot(i.toString(), "$side $pairNum")
+            }
             com.safescan.data.ScannerMode.DOCUMENT -> emptyList()
             com.safescan.data.ScannerMode.GRID -> (1..8).map {
                 com.safescan.data.Slot(it.toString(), "Slot $it")
@@ -1393,10 +1395,21 @@ class ScannerViewModel @Inject constructor(
                             } else {
                                 rawBmp ?: origBmp
                             }
-                            if (overrideFilterEnum != null && finalBmp != null) {
-                                finalBmp = com.safescan.domain.ImageProcessor.apply(finalBmp, com.safescan.data.EditorState(filter = overrideFilterEnum))
+                            if (finalBmp != null && editorState.value.rotation != 0) {
+                                val matrix = android.graphics.Matrix().apply { postRotate(editorState.value.rotation.toFloat()) }
+                                finalBmp = android.graphics.Bitmap.createBitmap(finalBmp, 0, 0, finalBmp.width, finalBmp.height, matrix, true)
                             }
+                            val activeFilter = overrideFilterEnum ?: editorState.value.filter
+                            val state = com.safescan.data.EditorState(
+                                brightness = editorState.value.brightness,
+                                contrast = editorState.value.contrast,
+                                sharpness = editorState.value.sharpness,
+                                saturation = editorState.value.saturation,
+                                rotation = editorState.value.rotation,
+                                filter = activeFilter
+                            )
                             if (finalBmp != null) {
+                                finalBmp = com.safescan.domain.ImageProcessor.apply(finalBmp, state)
                                 tempBitmapsToRecycle.add(finalBmp)
                             }
                             Slot("p${idx + 1}", "Page ${idx + 1}", finalBmp)
