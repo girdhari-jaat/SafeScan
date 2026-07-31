@@ -1290,6 +1290,7 @@ class ScannerViewModel @Inject constructor(
         customDpi: Float? = null,
         customWarp: String? = null,
         customFilter: String? = null,
+        customCardLayout: String? = null,
         onResult: (java.io.File?) -> Unit
     ) {
         if (isEditing.value) {
@@ -1302,6 +1303,7 @@ class ScannerViewModel @Inject constructor(
         val targetOrientation = customOrientation ?: pdfOrientation.value
         val targetQuality = customQuality ?: jpegQuality.value
         val targetDpi = customDpi ?: dpi.value
+        val targetCardLayout = customCardLayout ?: "2x4"
 
         val currentHash = java.util.Objects.hash(
             slots.value.hashCode(),
@@ -1312,7 +1314,8 @@ class ScannerViewModel @Inject constructor(
             targetQuality,
             targetDpi,
             customWarp,
-            customFilter
+            customFilter,
+            targetCardLayout
         )
 
         if (!clearSession && cachedPdfFile != null && cachedPdfFile!!.exists() && lastExportPdfHash == currentHash) {
@@ -1461,7 +1464,8 @@ class ScannerViewModel @Inject constructor(
                         targetPageSize,
                         targetOrientation,
                         dpi = targetDpi,
-                        jpegQuality = targetQuality
+                        jpegQuality = targetQuality,
+                        cardLayout = targetCardLayout
                     )
                     withContext(Dispatchers.Main) {
                         if (clearSession) {

@@ -33,6 +33,7 @@ data class ExportOptions(
     val quality: Float,
     val warp: String,
     val filter: FilterType,
+    val cardLayout: String = "2x4",
     val action: ExportAction
 )
 
@@ -45,6 +46,7 @@ fun ExportModalDialog(
     initialQuality: Float = 90f,
     initialWarp: String = "Perspective",
     initialFilter: FilterType = FilterType.COLOR,
+    initialCardLayout: String = "2x4",
     onDismiss: () -> Unit,
     onConfirmExport: (ExportOptions) -> Unit
 ) {
@@ -55,6 +57,7 @@ fun ExportModalDialog(
     var quality by remember { mutableFloatStateOf(initialQuality.coerceIn(60f, 100f)) }
     var warp by remember { mutableStateOf(initialWarp) }
     var selectedFilter by remember { mutableStateOf(initialFilter) }
+    var cardLayout by remember { mutableStateOf(initialCardLayout) }
 
     var expandedPageSize by remember { mutableStateOf(false) }
     var expandedFilter by remember { mutableStateOf(false) }
@@ -320,6 +323,30 @@ fun ExportModalDialog(
                     }
                 }
 
+                // Card Layout Options (3 equal buttons in 1 row: ID, 2x4, Grid)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Card Layout",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        listOf("ID" to "ID", "2x4" to "2x4", "Grid" to "Grid").forEach { (layoutKey, label) ->
+                            val selected = cardLayout.equals(layoutKey, ignoreCase = true)
+                            OptionChip(
+                                label = label,
+                                selected = selected,
+                                modifier = Modifier.weight(1f),
+                                onClick = { cardLayout = layoutKey }
+                            )
+                        }
+                    }
+                }
+
                 // 4. Resolution (DPI) Slider (150 DPI, 200 DPI, 250 DPI, 300 DPI)
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Row(
@@ -394,6 +421,7 @@ fun ExportModalDialog(
                                     quality = quality,
                                     warp = warp,
                                     filter = selectedFilter,
+                                    cardLayout = cardLayout,
                                     action = ExportAction.SHARE
                                 )
                             )
@@ -417,6 +445,7 @@ fun ExportModalDialog(
                                     quality = quality,
                                     warp = warp,
                                     filter = selectedFilter,
+                                    cardLayout = cardLayout,
                                     action = ExportAction.SAVE
                                 )
                             )

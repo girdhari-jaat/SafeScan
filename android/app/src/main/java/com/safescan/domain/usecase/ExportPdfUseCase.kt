@@ -20,7 +20,8 @@ class ExportPdfUseCase @Inject constructor(
         pageSizeStr: String = "A4",
         pdfOrientation: String = "Auto",
         dpi: Float = 300f,
-        jpegQuality: Float = 90f
+        jpegQuality: Float = 90f,
+        cardLayout: String = "2x4"
     ): Result<File> {
         return pdfExporter.exportCardsToPdf(
             slots = slots,
@@ -29,7 +30,8 @@ class ExportPdfUseCase @Inject constructor(
             pageSizeStr = pageSizeStr,
             pdfOrientation = pdfOrientation,
             dpi = dpi,
-            jpegQuality = jpegQuality
+            jpegQuality = jpegQuality,
+            cardLayout = cardLayout
         )
     }
 }

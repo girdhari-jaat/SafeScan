@@ -155,7 +155,8 @@ fun DocumentGridView(
                             customQuality = options.quality,
                             customDpi = options.dpi,
                             customWarp = options.warp,
-                            customFilter = options.filter.name
+                            customFilter = options.filter.name,
+                            customCardLayout = options.cardLayout
                         ) { file ->
                             viewModel.endSession()
                             onDismiss()

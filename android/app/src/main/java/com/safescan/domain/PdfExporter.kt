@@ -27,7 +27,8 @@ class PdfExporter(private val context: Context) {
         pageSizeStr: String = "A4",
         pdfOrientation: String = "Auto",
         dpi: Float = 300f,
-        jpegQuality: Float = 90f
+        jpegQuality: Float = 90f,
+        cardLayout: String = "2x4"
     ): Result<File> = withContext(Dispatchers.IO) {
         ScannerDebugLogger.logEnter("PdfExporter.exportCardsToPdf")
         val documentDir = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
@@ -221,30 +222,22 @@ class PdfExporter(private val context: Context) {
                     val H = 3508f
                     canvas.scale(canvasW / W, canvasH / H)
 
-                    val cardW = 1011f
-                    val cardH = 638f
-                    val gutterX = 120f
-                    val gridWidth = (cardW * 2) + gutterX
-                    val startX = (W - gridWidth) / 2f
+                    if (cardLayout.equals("ID", ignoreCase = true)) {
+                        // ID mode: Front 1 top, Back 1 bottom on A4 page
+                        val cardW = 1400f
+                        val cardH = 883f
+                        val startX = (W - cardW) / 2f
+                        val startY1 = 550f
+                        val startY2 = 1950f
 
-                    val gutterY = 100f
-                    val gridHeight = (cardH * 4) + (gutterY * 3)
-                    val startY = (H - gridHeight) / 2f
-
-                    val positions = mutableListOf<Pair<Float, Float>>()
-                    for (r in 0 until 4) {
-                        positions.add(Pair(startX, startY + (r * (cardH + gutterY))))
-                    }
-
-                    for (i in 0 until 4) {
-                        val (frontItem, backItem) = ExportHelper.getSlotsForGridRow(slots, mode, i)
-                        val (x, y) = positions[i]
+                        val frontItem = slots.getOrNull(0)
+                        val backItem = slots.getOrNull(1)
 
                         if (frontItem != null) {
                             val frontBmp = loadBitmap(frontItem)
                             if (frontBmp != null && !frontBmp.isRecycled) {
                                 val srcRect = Rect(0, 0, frontBmp.width, frontBmp.height)
-                                val dstRect = android.graphics.RectF(x, y, x + cardW, y + cardH)
+                                val dstRect = android.graphics.RectF(startX, startY1, startX + cardW, startY1 + cardH)
                                 canvas.drawBitmap(frontBmp, srcRect, dstRect, paint)
                                 if (frontItem.bitmapPath != null && frontBmp != frontItem.bitmap && !frontBmp.isRecycled) {
                                     frontBmp.recycle()
@@ -256,10 +249,55 @@ class PdfExporter(private val context: Context) {
                             val backBmp = loadBitmap(backItem)
                             if (backBmp != null && !backBmp.isRecycled) {
                                 val srcRect = Rect(0, 0, backBmp.width, backBmp.height)
-                                val dstRect = android.graphics.RectF(x + cardW + gutterX, y, x + cardW + gutterX + cardW, y + cardH)
+                                val dstRect = android.graphics.RectF(startX, startY2, startX + cardW, startY2 + cardH)
                                 canvas.drawBitmap(backBmp, srcRect, dstRect, paint)
                                 if (backItem.bitmapPath != null && backBmp != backItem.bitmap && !backBmp.isRecycled) {
                                     backBmp.recycle()
+                                }
+                            }
+                        }
+                    } else {
+                        // "2x4" or "Grid" mode
+                        val cardW = 1011f
+                        val cardH = 638f
+                        val gutterX = 120f
+                        val gridWidth = (cardW * 2) + gutterX
+                        val startX = (W - gridWidth) / 2f
+
+                        val gutterY = 100f
+                        val gridHeight = (cardH * 4) + (gutterY * 3)
+                        val startY = (H - gridHeight) / 2f
+
+                        val positions = mutableListOf<Pair<Float, Float>>()
+                        for (r in 0 until 4) {
+                            positions.add(Pair(startX, startY + (r * (cardH + gutterY))))
+                        }
+
+                        for (i in 0 until 4) {
+                            val (frontItem, backItem) = ExportHelper.getSlotsForGridRow(slots, mode, i, cardLayout)
+                            val (x, y) = positions[i]
+
+                            if (frontItem != null) {
+                                val frontBmp = loadBitmap(frontItem)
+                                if (frontBmp != null && !frontBmp.isRecycled) {
+                                    val srcRect = Rect(0, 0, frontBmp.width, frontBmp.height)
+                                    val dstRect = android.graphics.RectF(x, y, x + cardW, y + cardH)
+                                    canvas.drawBitmap(frontBmp, srcRect, dstRect, paint)
+                                    if (frontItem.bitmapPath != null && frontBmp != frontItem.bitmap && !frontBmp.isRecycled) {
+                                        frontBmp.recycle()
+                                    }
+                                }
+                            }
+
+                            if (backItem != null) {
+                                val backBmp = loadBitmap(backItem)
+                                if (backBmp != null && !backBmp.isRecycled) {
+                                    val srcRect = Rect(0, 0, backBmp.width, backBmp.height)
+                                    val dstRect = android.graphics.RectF(x + cardW + gutterX, y, x + cardW + gutterX + cardW, y + cardH)
+                                    canvas.drawBitmap(backBmp, srcRect, dstRect, paint)
+                                    if (backItem.bitmapPath != null && backBmp != backItem.bitmap && !backBmp.isRecycled) {
+                                        backBmp.recycle()
+                                    }
                                 }
                             }
                         }
