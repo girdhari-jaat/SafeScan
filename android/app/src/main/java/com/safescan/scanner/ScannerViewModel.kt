@@ -1446,9 +1446,11 @@ class ScannerViewModel @Inject constructor(
 
                     val slotsToExport = if (capturedJpgFiles.isNotEmpty()) {
                         capturedJpgFiles.mapIndexed { idx, file ->
+                            val pageId = if (idx < slots.value.size) slots.value[idx].id else "p${idx + 1}"
+                            val pageMeta = savedDoc?.pages?.find { it.id == pageId } ?: savedDoc?.pages?.getOrNull(idx)
                             val rawBmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
                             val origBmp = originalJpgBitmaps[idx] ?: rawBmp
-                            val corners = jpgCorners[idx]
+                            val corners = jpgCorners[idx] ?: pageMeta?.corners
                             var finalBmp = if (origBmp != null && corners != null && corners.size == 4) {
                                 val quad = Quadrilateral(corners[0], corners[1], corners[2], corners[3])
                                 try {
@@ -1457,24 +1459,25 @@ class ScannerViewModel @Inject constructor(
                             } else {
                                 rawBmp ?: origBmp
                             }
-                            if (finalBmp != null && editorState.value.rotation != 0) {
-                                val matrix = android.graphics.Matrix().apply { postRotate(editorState.value.rotation.toFloat()) }
+                            val rotation = pageMeta?.rotation ?: 0
+                            if (finalBmp != null && rotation != 0) {
+                                val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
                                 finalBmp = android.graphics.Bitmap.createBitmap(finalBmp, 0, 0, finalBmp.width, finalBmp.height, matrix, true)
                             }
-                            val activeFilter = overrideFilterEnum ?: editorState.value.filter
+                            val activeFilter = overrideFilterEnum ?: try { pageMeta?.filter?.let { com.safescan.data.FilterType.valueOf(it) } ?: com.safescan.data.FilterType.COLOR } catch (e: Exception) { com.safescan.data.FilterType.COLOR }
                             val state = com.safescan.data.EditorState(
-                                brightness = editorState.value.brightness,
-                                contrast = editorState.value.contrast,
-                                sharpness = editorState.value.sharpness,
-                                saturation = editorState.value.saturation,
-                                rotation = editorState.value.rotation,
+                                brightness = pageMeta?.brightness ?: 0f,
+                                contrast = pageMeta?.contrast ?: 1f,
+                                sharpness = pageMeta?.sharpness ?: 0f,
+                                saturation = pageMeta?.saturation ?: 0f,
+                                rotation = rotation,
                                 filter = activeFilter
                             )
                             if (finalBmp != null) {
                                 finalBmp = com.safescan.domain.ImageProcessor.apply(finalBmp, state)
                                 tempBitmapsToRecycle.add(finalBmp)
                             }
-                            Slot("p${idx + 1}", "Page ${idx + 1}", finalBmp)
+                            Slot(pageId, "Page ${idx + 1}", finalBmp)
                         }
                     } else {
                         slots.value.filter { it.bitmap != null }.map { slot ->
