@@ -131,12 +131,12 @@ object ScannerImageUtils {
         val isLandscape = bitmap.width > bitmap.height
         val needsRotation = when (mode) {
             ScannerMode.DOCUMENT -> isLandscape // DOCUMENT should be portrait
-            ScannerMode.CARD, ScannerMode.GRID -> !isLandscape // CARD/GRID should be landscape
+            ScannerMode.CARD -> !isLandscape // CARD should be landscape
         }
         return if (needsRotation) {
             val angle = when (mode) {
                 ScannerMode.DOCUMENT -> 90f
-                ScannerMode.CARD, ScannerMode.GRID -> -90f
+                ScannerMode.CARD -> -90f
             }
             ScannerDebugLogger.logAutoRotation(angle)
             val matrix = Matrix().apply { postRotate(angle) }

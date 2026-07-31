@@ -184,7 +184,6 @@ class ScannerCaptureManager(
             isCapturingPhoto = false
             val maxPages = when (viewModel.currentMode.value) {
                 ScannerMode.CARD -> 8
-                ScannerMode.GRID -> 8
                 else -> 150
             }
             fragment.openDocumentScanner(maxPages)
@@ -253,7 +252,7 @@ class ScannerCaptureManager(
                             finalBitmap = soft
                         }
 
-                        if (viewModel.autoRotation.value || viewModel.currentMode.value == ScannerMode.CARD || viewModel.currentMode.value == ScannerMode.GRID) {
+                        if (viewModel.autoRotation.value || viewModel.currentMode.value == ScannerMode.CARD) {
                             val autoRotated = ScannerImageUtils.autoRotateForMode(finalBitmap, viewModel.currentMode.value)
                             if (autoRotated !== finalBitmap) {
                                 finalBitmap.recycle()

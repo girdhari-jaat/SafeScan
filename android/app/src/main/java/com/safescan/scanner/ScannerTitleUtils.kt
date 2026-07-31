@@ -12,7 +12,7 @@ object ScannerTitleUtils {
         val timestamp = sdf.format(Date())
         return when (mode) {
             ScannerMode.DOCUMENT -> "Doc_$timestamp"
-            ScannerMode.CARD, ScannerMode.GRID -> "Card_$timestamp"
+            ScannerMode.CARD -> "Card_$timestamp"
         }
     }
 
@@ -32,7 +32,7 @@ object ScannerTitleUtils {
             trimmed.matches(staticTimestampRegex)) {
             return when (mode) {
                 ScannerMode.DOCUMENT -> "Doc_$timestamp"
-                ScannerMode.CARD, ScannerMode.GRID -> "Card_$timestamp"
+                ScannerMode.CARD -> "Card_$timestamp"
             }
         }
         

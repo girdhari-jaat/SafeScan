@@ -55,7 +55,6 @@ fun WizardScreen(
 
     val scanType = when (scanTypeMode) {
         ScannerMode.CARD -> "Card"
-        ScannerMode.GRID -> "Grid"
         else -> "Document"
     }
 
@@ -86,7 +85,7 @@ fun WizardScreen(
                     .padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                val types = listOf("Document", "Card", "Grid")
+                val types = listOf("Document", "Card")
                 types.forEach { type ->
                     val selected = scanType == type
                     WizardSelectionButton(
@@ -96,7 +95,6 @@ fun WizardScreen(
                         onClick = {
                             val modeObj = when (type) {
                                 "Card" -> ScannerMode.CARD
-                                "Grid" -> ScannerMode.GRID
                                 else -> ScannerMode.DOCUMENT
                             }
                             viewModel.switchMode(modeObj)

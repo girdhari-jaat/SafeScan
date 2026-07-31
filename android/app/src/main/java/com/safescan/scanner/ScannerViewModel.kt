@@ -309,9 +309,6 @@ class ScannerViewModel @Inject constructor(
                             Slot(i.toString(), "$side $pairNum")
                         }
                         ScannerMode.DOCUMENT -> emptyList()
-                        ScannerMode.GRID -> (1..8).map {
-                            Slot(it.toString(), "Slot $it")
-                        }
                     }
                     selectedSlotId.value = null
                     capturedJpgFiles.clear()
@@ -758,9 +755,6 @@ class ScannerViewModel @Inject constructor(
                 com.safescan.data.Slot(i.toString(), "$side $pairNum")
             }
             com.safescan.data.ScannerMode.DOCUMENT -> emptyList()
-            com.safescan.data.ScannerMode.GRID -> (1..8).map {
-                com.safescan.data.Slot(it.toString(), "Slot $it")
-            }
         }
         selectedSlotId.value = null
         openedDocumentId = null

@@ -88,7 +88,7 @@ object CameraHardwareConfig {
      */
     fun getTargetRatio(context: Context?, mode: ScannerMode): Float {
         return when (mode) {
-            ScannerMode.DOCUMENT, ScannerMode.CARD, ScannerMode.GRID -> {
+            ScannerMode.DOCUMENT, ScannerMode.CARD -> {
                 if (isA4Supported(context)) 1.4142f else 1.3333f // A4 (1.4142) vs 4:3 (1.3333) fallback
             }
         }

@@ -44,8 +44,8 @@ class DocumentScanner(
             if (mode == "DOCUMENT") {
                 // Use the naturally detected dimensions. No need to force an artificial 4:3 ratio.
                 // If the user wants a specific format, they can crop later.
-            } else if (mode == "CARD" || mode == "GRID") {
-                // CARD/GRID use ID-1 Card aspect ratio (1.5857) in landscape
+            } else if (mode == "CARD") {
+                // CARD uses ID-1 Card aspect ratio (1.5857) in landscape
                 val targetRatio = 1.5857f
                 if (maxWidth > maxHeight) {
                     maxHeight = (maxWidth / targetRatio).toInt()

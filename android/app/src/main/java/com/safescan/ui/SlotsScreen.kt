@@ -46,6 +46,7 @@ import com.safescan.R
 import com.safescan.data.ScannerMode
 import com.safescan.data.Slot
 import com.safescan.scanner.ScannerViewModel
+import kotlinx.coroutines.delay
 
 // ======================================================
 // Main Screen Entry Point
@@ -230,8 +231,7 @@ fun ScannerTopBar(
             ) {
                 listOf(
                     ScannerMode.DOCUMENT to "Paper",
-                    ScannerMode.CARD to "Card",
-                    ScannerMode.GRID to "Grid"
+                    ScannerMode.CARD to "Card"
                 ).forEach { (mode, label) ->
                     val isSelected = currentMode == mode
                     Box(
@@ -270,66 +270,77 @@ fun ScannerCenterInstructions(
     val slots by viewModel.slots.collectAsState()
     val selectedSlotId by viewModel.selectedSlotId.collectAsState()
 
+    val targetSlot = remember(selectedSlotId, slots) {
+        if (selectedSlotId != null) {
+            slots.firstOrNull { it.id == selectedSlotId }
+        } else {
+            slots.firstOrNull { it.bitmap == null }
+        }
+    }
+
+    var isGuideVisible by remember { mutableStateOf(true) }
+
+    LaunchedEffect(targetSlot?.id, currentMode) {
+        isGuideVisible = true
+        delay(5000L)
+        isGuideVisible = false
+    }
+
     // Determine instructional text based on document detection and scanning mode
     val guideText = if (isDocumentDetected) {
         if (autoCapture) "HOLD STILL... AUTO-CAPTURING" else "READY TO CAPTURE"
-    } else {
+    } else if (isGuideVisible) {
         when (currentMode) {
             ScannerMode.CARD -> {
-                val targetSlot = if (selectedSlotId != null) {
-                    slots.firstOrNull { it.id == selectedSlotId }
-                } else {
-                    slots.firstOrNull { it.bitmap == null }
-                }
-                if (targetSlot != null) {
-                    "Align ${targetSlot.label} Inside Cutout"
-                } else {
-                    "All 8 Slots Captured"
-                }
+                targetSlot?.label ?: "All 8 Slots Captured"
             }
             ScannerMode.DOCUMENT -> "Align Document Inside Frame"
-            ScannerMode.GRID -> "Utilize Grid for Centered Alignment"
         }
+    } else {
+        null
     }
-    val guideColor = if (isDocumentDetected) Color(0xFF10B981) else Color.Yellow
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+    if (guideText != null) {
+        val guideColor = if (isDocumentDetected) Color(0xFF10B981) else Color.Yellow
+
+        Box(
             modifier = Modifier
-                .background(Color.Black.copy(alpha = 0.75f), shape = RoundedCornerShape(8.dp))
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+            contentAlignment = Alignment.Center
         ) {
-            // Pulse indicator dot when document is detected
-            if (isDocumentDetected) {
-                val pulseTransition = rememberInfiniteTransition(label = "dot_pulse")
-                val dotAlpha by pulseTransition.animateFloat(
-                    initialValue = 0.3f,
-                    targetValue = 1.0f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(800, easing = LinearEasing),
-                        repeatMode = RepeatMode.Reverse
-                    ),
-                    label = "dot_alpha"
-                )
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF10B981).copy(alpha = dotAlpha))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.75f), shape = RoundedCornerShape(8.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                // Pulse indicator dot when document is detected
+                if (isDocumentDetected) {
+                    val pulseTransition = rememberInfiniteTransition(label = "dot_pulse")
+                    val dotAlpha by pulseTransition.animateFloat(
+                        initialValue = 0.3f,
+                        targetValue = 1.0f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(800, easing = LinearEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "dot_alpha"
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF10B981).copy(alpha = dotAlpha))
+                    )
+                }
+                Text(
+                    text = guideText,
+                    color = guideColor,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
                 )
             }
-            Text(
-                text = guideText,
-                color = guideColor,
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-            )
         }
     }
 }
@@ -433,7 +444,7 @@ fun ViewfinderOverlay(
             )
 
             // 3. Draw grid if requested
-            if (showGrid || mode == ScannerMode.GRID) {
+            if (showGrid) {
                 // Draw standard 3x3 alignment grids inside the container
                 drawLine(
                     color = Color.White.copy(alpha = 0.35f),

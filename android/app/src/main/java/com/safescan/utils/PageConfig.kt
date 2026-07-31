@@ -85,7 +85,7 @@ object PageConfig {
     fun getOnscreenLayoutRatio(context: Context?, mode: ScannerMode): Float {
         val baseRatio = com.safescan.scanner.CameraHardwareConfig.getTargetRatio(context, mode)
         return when (mode) {
-            ScannerMode.CARD, ScannerMode.GRID -> {
+            ScannerMode.CARD -> {
                 1f / 1.586f // Card portrait layout
             }
             ScannerMode.DOCUMENT -> {

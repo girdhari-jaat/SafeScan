@@ -61,7 +61,7 @@ class EdgeDetectionEngine {
             val minG = minMax.minVal
             val maxG = minMax.maxVal
             val range = if (maxG - minG > 0.0) maxG - minG else 1.0
-            val stretchFactor = if (mode == com.safescan.data.ScannerMode.CARD || mode == com.safescan.data.ScannerMode.GRID) 260.0 else 255.0
+            val stretchFactor = if (mode == com.safescan.data.ScannerMode.CARD) 260.0 else 255.0
             
             stretched = Mat()
             gray.convertTo(stretched, -1, stretchFactor / range, -minG * (stretchFactor / range))
@@ -71,7 +71,7 @@ class EdgeDetectionEngine {
             var blurSigmaI = 20.0
             var blurSigmaS = 10.0
             
-            if (mode == com.safescan.data.ScannerMode.CARD || mode == com.safescan.data.ScannerMode.GRID) {
+            if (mode == com.safescan.data.ScannerMode.CARD) {
                 blurDiameter = 5
                 blurSigmaI = 25.0
             } else {
@@ -142,7 +142,7 @@ class EdgeDetectionEngine {
 
             // 6. Scanning strategies
             val isManualCrop = mode?.name?.startsWith("MANUAL") == true
-            val isCardMode = mode == com.safescan.data.ScannerMode.CARD || mode == com.safescan.data.ScannerMode.GRID
+            val isCardMode = mode == com.safescan.data.ScannerMode.CARD
 
             val borderY = Math.round(sh * 0.02f)
             val borderX = Math.round(sw * 0.02f)
