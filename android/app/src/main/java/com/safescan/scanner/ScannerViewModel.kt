@@ -1138,7 +1138,7 @@ class ScannerViewModel @Inject constructor(
                 openedDocumentId?.let { docId ->
                     val currentState = editorState.value
                     val pageId = if (index < slots.value.size) slots.value[index].id else "p${index + 1}"
-                    val corners = jpgCorners.getOrNull(index)
+                    val corners = jpgCorners[index]
                     viewModelScope.launch(Dispatchers.IO) {
                         saveDocumentUseCase.updatePageEdits(
                             docId = docId,
