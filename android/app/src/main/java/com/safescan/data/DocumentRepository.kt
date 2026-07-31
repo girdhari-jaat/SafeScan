@@ -16,11 +16,15 @@ import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
 @Singleton
 class DocumentRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val TAG = "DocumentRepository"
+    private val fileMutex = Mutex()
     private val baseDir: File? by lazy {
         val dir = context.getExternalFilesDir("ScannedDocuments")
         if (dir != null && !dir.exists()) {
@@ -90,6 +94,14 @@ class DocumentRepository @Inject constructor(
         return@withContext null
     }
 
+    private fun isPageMatch(page: PageMetadata, pageId: String, idx: Int, totalPages: Int): Boolean {
+        if (page.id == pageId) return true
+        if (totalPages == 1 && idx == 0) return true
+        if (pageId.startsWith("p") && pageId.drop(1).toIntOrNull() == idx + 1) return true
+        if (pageId.toIntOrNull() == idx + 1) return true
+        return false
+    }
+
     /**
      * Saves a brand new document or updates an existing one on disk.
      * Pages is a list of Page ID to Pair(OriginalBitmap, PreviewBitmap).
@@ -100,71 +112,72 @@ class DocumentRepository @Inject constructor(
         mode: String,
         pagesData: List<PageSaveData>
     ): Boolean = withContext(Dispatchers.IO) {
-        val root = baseDir ?: return@withContext false
-        val docFolder = File(root, docId)
-        if (!docFolder.exists()) {
-            docFolder.mkdirs()
-        }
-
-        val pagesDir = File(docFolder, "pages")
-        if (!pagesDir.exists()) pagesDir.mkdirs()
-
-        val previewsDir = File(docFolder, "previews")
-        if (!previewsDir.exists()) previewsDir.mkdirs()
-
-        // Load existing metadata if any to preserve page edits!
-        val existingMetaFile = File(docFolder, "metadata.json")
-        val existingMeta = if (existingMetaFile.exists()) {
-            try {
-                parseDocumentMetadata(existingMetaFile.readText())
-            } catch (e: Exception) {
-                null
+        fileMutex.withLock {
+            val root = baseDir ?: return@withLock false
+            val docFolder = File(root, docId)
+            if (!docFolder.exists()) {
+                docFolder.mkdirs()
             }
-        } else null
 
-        val pagesMetaList = mutableListOf<PageMetadata>()
+            val pagesDir = File(docFolder, "pages")
+            if (!pagesDir.exists()) pagesDir.mkdirs()
 
-        for (page in pagesData) {
-            val origFile = File(pagesDir, "${page.id}.jpg")
-            val prevFile = File(previewsDir, "${page.id}.jpg")
+            val previewsDir = File(docFolder, "previews")
+            if (!previewsDir.exists()) previewsDir.mkdirs()
 
-            if (!origFile.exists()) {
-                saveBitmapToFile(page.originalBitmap, origFile)
-            }
-            if (!prevFile.exists()) {
+            // Load existing metadata if any to preserve page edits!
+            val existingMetaFile = File(docFolder, "metadata.json")
+            val existingMeta = if (existingMetaFile.exists()) {
+                try {
+                    parseDocumentMetadata(existingMetaFile.readText())
+                } catch (e: Exception) {
+                    null
+                }
+            } else null
+
+            val pagesMetaList = mutableListOf<PageMetadata>()
+
+            for (page in pagesData) {
+                val origFile = File(pagesDir, "${page.id}.jpg")
+                val prevFile = File(previewsDir, "${page.id}.jpg")
+
+                if (!origFile.exists()) {
+                    saveBitmapToFile(page.originalBitmap, origFile)
+                }
+                // Save/update preview bitmap on disk
                 saveBitmapToFile(page.previewBitmap, prevFile)
+
+                val pageIndex = pagesData.indexOf(page)
+                val existingPage = existingMeta?.pages?.find { isPageMatch(it, page.id, pageIndex, pagesData.size) }
+                    ?: existingMeta?.pages?.getOrNull(pageIndex)
+
+                pagesMetaList.add(
+                    PageMetadata(
+                        id = page.id,
+                        originalFilename = "pages/${page.id}.jpg",
+                        previewFilename = "previews/${page.id}.jpg",
+                        filter = page.filter ?: existingPage?.filter ?: "COLOR",
+                        brightness = page.brightness ?: existingPage?.brightness ?: 0f,
+                        contrast = page.contrast ?: existingPage?.contrast ?: 1.0f,
+                        sharpness = page.sharpness ?: existingPage?.sharpness ?: 0f,
+                        saturation = page.saturation ?: existingPage?.saturation ?: 0f,
+                        rotation = page.rotation ?: existingPage?.rotation ?: 0,
+                        recognizedText = page.recognizedText ?: existingPage?.recognizedText,
+                        corners = page.corners ?: existingPage?.corners
+                    )
+                )
             }
 
-            val pageIndex = pagesData.indexOf(page)
-            val existingPage = existingMeta?.pages?.find { it.id == page.id }
-                ?: existingMeta?.pages?.getOrNull(pageIndex)
-
-            pagesMetaList.add(
-                PageMetadata(
-                    id = page.id,
-                    originalFilename = "pages/${page.id}.jpg",
-                    previewFilename = "previews/${page.id}.jpg",
-                    filter = existingPage?.filter ?: "COLOR",
-                    brightness = existingPage?.brightness ?: 0f,
-                    contrast = existingPage?.contrast ?: 1.0f,
-                    sharpness = existingPage?.sharpness ?: 0f,
-                    saturation = existingPage?.saturation ?: 0f,
-                    rotation = existingPage?.rotation ?: 0,
-                    recognizedText = existingPage?.recognizedText,
-                    corners = page.corners ?: existingPage?.corners
-                )
+            val meta = DocumentMetadata(
+                id = docId,
+                title = title,
+                createdAt = existingMeta?.createdAt ?: System.currentTimeMillis(),
+                mode = mode,
+                pages = pagesMetaList
             )
+
+            writeMetaFile(docFolder, meta)
         }
-
-        val meta = DocumentMetadata(
-            id = docId,
-            title = title,
-            createdAt = existingMeta?.createdAt ?: System.currentTimeMillis(),
-            mode = mode,
-            pages = pagesMetaList
-        )
-
-        return@withContext writeMetaFile(docFolder, meta)
     }
 
     /**
@@ -182,38 +195,40 @@ class DocumentRepository @Inject constructor(
         corners: List<Point>?,
         newPreview: Bitmap? = null
     ): Boolean = withContext(Dispatchers.IO) {
-        val root = baseDir ?: return@withContext false
-        val docFolder = File(root, docId)
-        val metaFile = File(docFolder, "metadata.json")
-        if (!metaFile.exists()) return@withContext false
+        fileMutex.withLock {
+            val root = baseDir ?: return@withLock false
+            val docFolder = File(root, docId)
+            val metaFile = File(docFolder, "metadata.json")
+            if (!metaFile.exists()) return@withLock false
 
-        try {
-            val jsonStr = metaFile.readText()
-            val doc = parseDocumentMetadata(jsonStr)
-            val updatedPages = doc.pages.mapIndexed { idx, page ->
-                val isMatch = page.id == pageId || (doc.pages.size == 1 && idx == 0)
-                if (isMatch) {
-                    if (newPreview != null) {
-                        val previewsDir = File(docFolder, "previews")
-                        val prevFile = File(previewsDir, "${page.id}.jpg")
-                        saveBitmapToFile(newPreview, prevFile)
-                    }
-                    page.copy(
-                        filter = filter,
-                        brightness = brightness,
-                        contrast = contrast,
-                        sharpness = sharpness,
-                        saturation = saturation,
-                        rotation = rotation,
-                        corners = corners ?: page.corners
-                    )
-                } else page
+            try {
+                val jsonStr = metaFile.readText()
+                val doc = parseDocumentMetadata(jsonStr)
+                val updatedPages = doc.pages.mapIndexed { idx, page ->
+                    val isMatch = isPageMatch(page, pageId, idx, doc.pages.size)
+                    if (isMatch) {
+                        if (newPreview != null) {
+                            val previewsDir = File(docFolder, "previews")
+                            val prevFile = File(previewsDir, "${page.id}.jpg")
+                            saveBitmapToFile(newPreview, prevFile)
+                        }
+                        page.copy(
+                            filter = filter,
+                            brightness = brightness,
+                            contrast = contrast,
+                            sharpness = sharpness,
+                            saturation = saturation,
+                            rotation = rotation,
+                            corners = corners ?: page.corners
+                        )
+                    } else page
+                }
+                val updatedDoc = doc.copy(pages = updatedPages)
+                writeMetaFile(docFolder, updatedDoc)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to update page edits for doc: $docId, page: $pageId", e)
+                false
             }
-            val updatedDoc = doc.copy(pages = updatedPages)
-            return@withContext writeMetaFile(docFolder, updatedDoc)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to update page edits for doc: $docId, page: $pageId", e)
-            return@withContext false
         }
     }
 
@@ -221,24 +236,26 @@ class DocumentRepository @Inject constructor(
      * Updates OCR Text for a specific page.
      */
     suspend fun updatePageOcrText(docId: String, pageId: String, text: String): Boolean = withContext(Dispatchers.IO) {
-        val root = baseDir ?: return@withContext false
-        val docFolder = File(root, docId)
-        val metaFile = File(docFolder, "metadata.json")
-        if (!metaFile.exists()) return@withContext false
+        fileMutex.withLock {
+            val root = baseDir ?: return@withLock false
+            val docFolder = File(root, docId)
+            val metaFile = File(docFolder, "metadata.json")
+            if (!metaFile.exists()) return@withLock false
 
-        try {
-            val jsonStr = metaFile.readText()
-            val doc = parseDocumentMetadata(jsonStr)
-            val updatedPages = doc.pages.mapIndexed { idx, page ->
-                if (page.id == pageId || (doc.pages.size == 1 && idx == 0)) {
-                    page.copy(recognizedText = text)
-                } else page
+            try {
+                val jsonStr = metaFile.readText()
+                val doc = parseDocumentMetadata(jsonStr)
+                val updatedPages = doc.pages.mapIndexed { idx, page ->
+                    if (isPageMatch(page, pageId, idx, doc.pages.size)) {
+                        page.copy(recognizedText = text)
+                    } else page
+                }
+                val updatedDoc = doc.copy(pages = updatedPages)
+                writeMetaFile(docFolder, updatedDoc)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to update page OCR for doc: $docId, page: $pageId", e)
+                false
             }
-            val updatedDoc = doc.copy(pages = updatedPages)
-            return@withContext writeMetaFile(docFolder, updatedDoc)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to update page OCR for doc: $docId, page: $pageId", e)
-            return@withContext false
         }
     }
 
@@ -248,29 +265,31 @@ class DocumentRepository @Inject constructor(
         corners: List<Point>,
         newPreview: Bitmap?
     ): Boolean = withContext(Dispatchers.IO) {
-        val root = baseDir ?: return@withContext false
-        val docFolder = File(root, docId)
-        val metaFile = File(docFolder, "metadata.json")
-        if (!metaFile.exists()) return@withContext false
+        fileMutex.withLock {
+            val root = baseDir ?: return@withLock false
+            val docFolder = File(root, docId)
+            val metaFile = File(docFolder, "metadata.json")
+            if (!metaFile.exists()) return@withLock false
 
-        try {
-            val jsonStr = metaFile.readText()
-            val doc = parseDocumentMetadata(jsonStr)
-            val updatedPages = doc.pages.mapIndexed { idx, page ->
-                if (page.id == pageId || (doc.pages.size == 1 && idx == 0)) {
-                    if (newPreview != null) {
-                        val previewsDir = File(docFolder, "previews")
-                        val prevFile = File(previewsDir, "${page.id}.jpg")
-                        saveBitmapToFile(newPreview, prevFile)
-                    }
-                    page.copy(corners = corners)
-                } else page
+            try {
+                val jsonStr = metaFile.readText()
+                val doc = parseDocumentMetadata(jsonStr)
+                val updatedPages = doc.pages.mapIndexed { idx, page ->
+                    if (isPageMatch(page, pageId, idx, doc.pages.size)) {
+                        if (newPreview != null) {
+                            val previewsDir = File(docFolder, "previews")
+                            val prevFile = File(previewsDir, "${page.id}.jpg")
+                            saveBitmapToFile(newPreview, prevFile)
+                        }
+                        page.copy(corners = corners)
+                    } else page
+                }
+                val updatedDoc = doc.copy(pages = updatedPages)
+                writeMetaFile(docFolder, updatedDoc)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to update page corners for doc: $docId, page: $pageId", e)
+                false
             }
-            val updatedDoc = doc.copy(pages = updatedPages)
-            return@withContext writeMetaFile(docFolder, updatedDoc)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to update page corners for doc: $docId, page: $pageId", e)
-            return@withContext false
         }
     }
 

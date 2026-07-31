@@ -7,7 +7,14 @@ data class PageSaveData(
     val id: String,
     val originalBitmap: Bitmap,
     val previewBitmap: Bitmap,
-    val corners: List<Point>? = null
+    val corners: List<Point>? = null,
+    val filter: String? = null,
+    val brightness: Float? = null,
+    val contrast: Float? = null,
+    val sharpness: Float? = null,
+    val saturation: Float? = null,
+    val rotation: Int? = null,
+    val recognizedText: String? = null
 )
 
 data class PageMetadata(
