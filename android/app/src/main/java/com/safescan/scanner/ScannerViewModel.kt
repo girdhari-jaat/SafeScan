@@ -1121,6 +1121,8 @@ class ScannerViewModel @Inject constructor(
 
         viewModelScope.launch(Dispatchers.IO) {
             val docId = openedDocumentId
+            val existingDoc = if (docId != null) saveDocumentUseCase.getDocument(docId) else null
+            val pageMetaMap = existingDoc?.pages?.associateBy { it.id } ?: emptyMap()
             val currentSlots = slots.value
             val isFlat = wizardWarp.value == "Flat" || wizardWarp.value == "Flat Crop Only"
 
@@ -1142,9 +1144,23 @@ class ScannerViewModel @Inject constructor(
                             origBmp
                         }
 
+                        val pageMeta = pageMetaMap[slot.id]
+                        val brightness = pageMeta?.brightness ?: 0f
+                        val contrast = pageMeta?.contrast ?: 1.0f
+                        val sharpness = pageMeta?.sharpness ?: 0f
+                        val saturation = pageMeta?.saturation ?: 0f
+                        val rotation = pageMeta?.rotation ?: 0
+
                         val processed = com.safescan.domain.ImageProcessor.apply(
                             baseImage,
-                            com.safescan.data.EditorState(filter = filterType)
+                            com.safescan.data.EditorState(
+                                filter = filterType,
+                                brightness = brightness,
+                                contrast = contrast,
+                                sharpness = sharpness,
+                                saturation = saturation,
+                                rotation = rotation
+                            )
                         )
 
                         highResCache.put("${slot.id}_processed", processed)
@@ -1156,11 +1172,11 @@ class ScannerViewModel @Inject constructor(
                                 docId = docId,
                                 pageId = slot.id,
                                 filter = filterType.name,
-                                brightness = 0f,
-                                contrast = 1.0f,
-                                sharpness = 0f,
-                                saturation = 0f,
-                                rotation = 0,
+                                brightness = brightness,
+                                contrast = contrast,
+                                sharpness = sharpness,
+                                saturation = saturation,
+                                rotation = rotation,
                                 corners = corners,
                                 newPreview = processed
                             )

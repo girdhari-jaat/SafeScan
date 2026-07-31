@@ -350,7 +350,10 @@ fun CropScreen(viewModel: ScannerViewModel) {
                         CornerHandle(
                             key = bmp,
                             offset = tl, 
-                            onDragStart = { draggingHandle = "tl" },
+                            onDragStart = { 
+                                draggingHandle = "tl"
+                                dragOffset = tl
+                            },
                             onDragEnd = { draggingHandle = null },
                             onDrag = { 
                                 tl = updateOffset(tl, it, imageSize)
@@ -360,7 +363,10 @@ fun CropScreen(viewModel: ScannerViewModel) {
                         CornerHandle(
                             key = bmp,
                             offset = tr, 
-                            onDragStart = { draggingHandle = "tr" },
+                            onDragStart = { 
+                                draggingHandle = "tr"
+                                dragOffset = tr
+                            },
                             onDragEnd = { draggingHandle = null },
                             onDrag = { 
                                 tr = updateOffset(tr, it, imageSize)
@@ -370,7 +376,10 @@ fun CropScreen(viewModel: ScannerViewModel) {
                         CornerHandle(
                             key = bmp,
                             offset = br, 
-                            onDragStart = { draggingHandle = "br" },
+                            onDragStart = { 
+                                draggingHandle = "br"
+                                dragOffset = br
+                            },
                             onDragEnd = { draggingHandle = null },
                             onDrag = { 
                                 br = updateOffset(br, it, imageSize)
@@ -380,7 +389,10 @@ fun CropScreen(viewModel: ScannerViewModel) {
                         CornerHandle(
                             key = bmp,
                             offset = bl, 
-                            onDragStart = { draggingHandle = "bl" },
+                            onDragStart = { 
+                                draggingHandle = "bl"
+                                dragOffset = bl
+                            },
                             onDragEnd = { draggingHandle = null },
                             onDrag = { 
                                 bl = updateOffset(bl, it, imageSize)
@@ -393,7 +405,10 @@ fun CropScreen(viewModel: ScannerViewModel) {
                             key = bmp,
                             offset = midTop,
                             size = 40.dp,
-                            onDragStart = { draggingHandle = "midTop" },
+                            onDragStart = { 
+                                draggingHandle = "midTop"
+                                dragOffset = midTop
+                            },
                             onDragEnd = { draggingHandle = null },
                             onDrag = { delta ->
                                 tl = updateOffset(tl, Offset(0f, delta.y), imageSize)
@@ -405,7 +420,10 @@ fun CropScreen(viewModel: ScannerViewModel) {
                             key = bmp,
                             offset = midRight,
                             size = 40.dp,
-                            onDragStart = { draggingHandle = "midRight" },
+                            onDragStart = { 
+                                draggingHandle = "midRight"
+                                dragOffset = midRight
+                            },
                             onDragEnd = { draggingHandle = null },
                             onDrag = { delta ->
                                 tr = updateOffset(tr, Offset(delta.x, 0f), imageSize)
@@ -417,7 +435,10 @@ fun CropScreen(viewModel: ScannerViewModel) {
                             key = bmp,
                             offset = midBottom,
                             size = 40.dp,
-                            onDragStart = { draggingHandle = "midBottom" },
+                            onDragStart = { 
+                                draggingHandle = "midBottom"
+                                dragOffset = midBottom
+                            },
                             onDragEnd = { draggingHandle = null },
                             onDrag = { delta ->
                                 br = updateOffset(br, Offset(0f, delta.y), imageSize)
@@ -429,7 +450,10 @@ fun CropScreen(viewModel: ScannerViewModel) {
                             key = bmp,
                             offset = midLeft,
                             size = 40.dp,
-                            onDragStart = { draggingHandle = "midLeft" },
+                            onDragStart = { 
+                                draggingHandle = "midLeft"
+                                dragOffset = midLeft
+                            },
                             onDragEnd = { draggingHandle = null },
                             onDrag = { delta ->
                                 tl = updateOffset(tl, Offset(delta.x, 0f), imageSize)
@@ -458,7 +482,11 @@ fun CropScreen(viewModel: ScannerViewModel) {
                                     border = androidx.compose.foundation.BorderStroke(3.dp, Color(0xFF10B981)),
                                     elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
                                 ) {
-                                    Box(modifier = Modifier.size(magnifierSize)) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(magnifierSize)
+                                            .clip(CircleShape)
+                                    ) {
                                         val zoom = 4f
                                         val density = androidx.compose.ui.platform.LocalDensity.current.density
                                         Image(
@@ -473,8 +501,14 @@ fun CropScreen(viewModel: ScannerViewModel) {
                                             contentScale = ContentScale.FillBounds
                                         )
                                         // Crosshair matching the Emerald brand color
-                                        HorizontalDivider(modifier = Modifier.width(30.dp).align(Alignment.Center), color = Color(0xFF10B981), thickness = 1.dp)
-                                        VerticalDivider(modifier = Modifier.height(30.dp).width(1.dp).align(Alignment.Center), color = Color(0xFF10B981))
+                                        HorizontalDivider(modifier = Modifier.width(36.dp).align(Alignment.Center), color = Color(0xFF10B981), thickness = 1.dp)
+                                        VerticalDivider(modifier = Modifier.height(36.dp).width(1.dp).align(Alignment.Center), color = Color(0xFF10B981))
+                                        
+                                        // Center drag handle target indicator inside magnifier lens
+                                        Canvas(modifier = Modifier.size(16.dp).align(Alignment.Center)) {
+                                            drawCircle(Color.White, radius = 8.dp.toPx())
+                                            drawCircle(Color(0xFF10B981), radius = 5.dp.toPx())
+                                        }
                                     }
                                 }
                             }
