@@ -534,7 +534,11 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    private suspend fun buildPagesData(docId: String, tempBitmapsToRecycle: MutableList<Bitmap>): List<com.safescan.data.PageSaveData> {
+    private suspend fun buildPagesData(
+        docId: String, 
+        tempBitmapsToRecycle: MutableList<Bitmap>,
+        overrideFilter: String? = null
+    ): List<com.safescan.data.PageSaveData> {
         val existingDoc = saveDocumentUseCase.getDocument(docId)
         val existingMetaMap = existingDoc?.pages?.associateBy { it.id } ?: emptyMap()
 
@@ -547,7 +551,10 @@ class ScannerViewModel @Inject constructor(
                 val originalBmp = originalJpgBitmaps[idx] ?: bmp
                 val corners = jpgCorners[idx]
                 val pageId = if (idx < slots.value.size) slots.value[idx].id else "p${idx + 1}"
-                val existingPage = existingMetaMap[pageId] ?: existingDoc?.pages?.getOrNull(idx)
+                val existingPage = existingMetaMap[pageId]
+                    ?: existingDoc?.pages?.find { p -> p.id == pageId || (existingDoc.pages.size == 1 && idx == 0) || (p.id.startsWith("p") && p.id.drop(1) == (idx + 1).toString()) }
+                    ?: existingDoc?.pages?.getOrNull(idx)
+
                 val isEditingThisJpg = isEditing.value && editingJpgIndex.value == idx
                 val currentEdits = if (isEditingThisJpg) editorState.value else null
 
@@ -555,21 +562,25 @@ class ScannerViewModel @Inject constructor(
                     id = pageId,
                     originalBitmap = originalBmp,
                     previewBitmap = bmp,
-                    corners = corners,
-                    filter = currentEdits?.filter?.name ?: existingPage?.filter,
-                    brightness = currentEdits?.brightness ?: existingPage?.brightness,
-                    contrast = currentEdits?.contrast ?: existingPage?.contrast,
-                    sharpness = currentEdits?.sharpness ?: existingPage?.sharpness,
-                    saturation = currentEdits?.saturation ?: existingPage?.saturation,
-                    rotation = currentEdits?.rotation ?: existingPage?.rotation,
+                    corners = corners ?: existingPage?.corners,
+                    filter = overrideFilter ?: currentEdits?.filter?.name ?: existingPage?.filter ?: "COLOR",
+                    brightness = currentEdits?.brightness ?: existingPage?.brightness ?: 0f,
+                    contrast = currentEdits?.contrast ?: existingPage?.contrast ?: 1.0f,
+                    sharpness = currentEdits?.sharpness ?: existingPage?.sharpness ?: 0f,
+                    saturation = currentEdits?.saturation ?: existingPage?.saturation ?: 0f,
+                    rotation = currentEdits?.rotation ?: existingPage?.rotation ?: 0,
                     recognizedText = if (isEditingThisJpg) recognizedText.value else existingPage?.recognizedText
                 )
             }
         } else {
             slots.value.filter { it.bitmap != null }.map { slot ->
+                val slotIdx = slots.value.indexOf(slot)
                 val fullResProcessed = getFullResBitmap(slot.id, isOriginal = false) ?: slot.bitmap!!
                 val fullResOriginal = getFullResBitmap(slot.id, isOriginal = true) ?: fullResProcessed
                 val existingPage = existingMetaMap[slot.id]
+                    ?: existingDoc?.pages?.find { p -> p.id == slot.id || (p.id.startsWith("p") && p.id.drop(1) == (slotIdx + 1).toString()) }
+                    ?: existingDoc?.pages?.getOrNull(slotIdx)
+
                 val isEditingThisSlot = isEditing.value && editingSlotId.value == slot.id
                 val currentEdits = if (isEditingThisSlot) editorState.value else null
 
@@ -577,13 +588,13 @@ class ScannerViewModel @Inject constructor(
                     id = slot.id,
                     originalBitmap = fullResOriginal,
                     previewBitmap = fullResProcessed,
-                    corners = slot.corners,
-                    filter = currentEdits?.filter?.name ?: existingPage?.filter,
-                    brightness = currentEdits?.brightness ?: existingPage?.brightness,
-                    contrast = currentEdits?.contrast ?: existingPage?.contrast,
-                    sharpness = currentEdits?.sharpness ?: existingPage?.sharpness,
-                    saturation = currentEdits?.saturation ?: existingPage?.saturation,
-                    rotation = currentEdits?.rotation ?: existingPage?.rotation,
+                    corners = slot.corners ?: existingPage?.corners,
+                    filter = overrideFilter ?: currentEdits?.filter?.name ?: existingPage?.filter ?: "COLOR",
+                    brightness = currentEdits?.brightness ?: existingPage?.brightness ?: 0f,
+                    contrast = currentEdits?.contrast ?: existingPage?.contrast ?: 1.0f,
+                    sharpness = currentEdits?.sharpness ?: existingPage?.sharpness ?: 0f,
+                    saturation = currentEdits?.saturation ?: existingPage?.saturation ?: 0f,
+                    rotation = currentEdits?.rotation ?: existingPage?.rotation ?: 0,
                     recognizedText = if (isEditingThisSlot) recognizedText.value else existingPage?.recognizedText
                 )
             }
@@ -869,6 +880,27 @@ class ScannerViewModel @Inject constructor(
                 val cropped = documentScanner.cropAndTransform(bmp, quad, currentMode.value.name, flatCrop = isFlat)
                 val cornersList = listOf(quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft)
 
+                val docId = openedDocumentId ?: ("doc_" + System.currentTimeMillis()).also { openedDocumentId = it }
+                val existingDoc = saveDocumentUseCase.getDocument(docId)
+
+                val pageId = currentSlotId ?: (if (currentJpgIndex != null && currentJpgIndex < slots.value.size) slots.value[currentJpgIndex].id else "p${(currentJpgIndex ?: 0) + 1}")
+                val existingPage = existingDoc?.pages?.find { p -> p.id == pageId || (currentJpgIndex != null && (p.id == "p${currentJpgIndex + 1}" || existingDoc.pages.size == 1)) }
+                    ?: existingDoc?.pages?.getOrNull(currentJpgIndex ?: 0)
+
+                val filterStr = existingPage?.filter ?: "COLOR"
+                val filterEnum = try { com.safescan.data.FilterType.valueOf(filterStr) } catch (e: Exception) { com.safescan.data.FilterType.COLOR }
+                val pageEdits = com.safescan.data.EditorState(
+                    brightness = existingPage?.brightness ?: 0f,
+                    contrast = existingPage?.contrast ?: 1.0f,
+                    sharpness = existingPage?.sharpness ?: 0f,
+                    saturation = existingPage?.saturation ?: 0f,
+                    rotation = existingPage?.rotation ?: 0,
+                    filter = filterEnum
+                )
+
+                // Re-apply existing filter and adjustments on newly cropped bitmap
+                val processedCropped = com.safescan.domain.ImageProcessor.apply(cropped, pageEdits)
+
                 croppingSlotId.value?.let { slotId ->
                     val currentSlots = slots.value.toMutableList()
                     val index = currentSlots.indexOfFirst { it.id == slotId }
@@ -876,8 +908,8 @@ class ScannerViewModel @Inject constructor(
                         val existing = currentSlots[index]
                         
                         // Save high-res to disk
-                        val processedPath = saveHighResToDisk(cropped, slotId, "processed")
-                        highResCache.put("${slotId}_processed", cropped)
+                        val processedPath = saveHighResToDisk(processedCropped, slotId, "processed")
+                        highResCache.put("${slotId}_processed", processedCropped)
                         
                         var origPath = existing.originalBitmapPath
                         if (origPath == null) {
@@ -886,7 +918,7 @@ class ScannerViewModel @Inject constructor(
                         highResCache.put("${slotId}_original", bmp)
 
                         // Generate lightweight thumbnail
-                        val thumbnail = generateThumbnail(cropped, 360)
+                        val thumbnail = generateThumbnail(processedCropped, 360)
 
                         currentSlots[index] = existing.copy(
                             bitmap = thumbnail,
@@ -902,7 +934,7 @@ class ScannerViewModel @Inject constructor(
                             val file = capturedJpgFiles[index]
                             try {
                                 val out = java.io.FileOutputStream(file)
-                                cropped.compress(Bitmap.CompressFormat.JPEG, jpegQuality.value.toInt(), out)
+                                processedCropped.compress(Bitmap.CompressFormat.JPEG, jpegQuality.value.toInt(), out)
                                 out.flush()
                                 out.close()
                             } catch (e: Exception) {
@@ -911,15 +943,13 @@ class ScannerViewModel @Inject constructor(
                         }
                     }
                     
-                    // Sync to persistent library JSON if we are editing a saved document
-                    openedDocumentId?.let { docId ->
-                        saveDocumentUseCase.updatePageCornersAndPreview(
-                            docId = docId,
-                            pageId = slotId,
-                            corners = cornersList,
-                            newPreview = cropped
-                        )
-                    }
+                    // Sync to persistent library JSON
+                    saveDocumentUseCase.updatePageCornersAndPreview(
+                        docId = docId,
+                        pageId = slotId,
+                        corners = cornersList,
+                        newPreview = processedCropped
+                    )
                 }
                 croppingJpgIndex.value?.let { index ->
                     jpgCorners[index] = cornersList
@@ -930,14 +960,24 @@ class ScannerViewModel @Inject constructor(
                     if (file != null) {
                         try {
                             val out = java.io.FileOutputStream(file)
-                            cropped.compress(Bitmap.CompressFormat.JPEG, jpegQuality.value.toInt(), out)
+                            processedCropped.compress(Bitmap.CompressFormat.JPEG, jpegQuality.value.toInt(), out)
                             out.flush()
                             out.close()
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
                     }
+
+                    saveDocumentUseCase.updatePageCornersAndPreview(
+                        docId = docId,
+                        pageId = pageId,
+                        corners = cornersList,
+                        newPreview = processedCropped
+                    )
                 }
+
+                // Sync document state offline to keep metadata.json consistent
+                saveDocumentStateOffline(docId)
             }
             withContext(Dispatchers.Main) {
                 if (andNext) {
@@ -1100,30 +1140,28 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    fun commitActiveEditorChanges() {
+    suspend fun commitActiveEditorChangesSuspend() {
         editingBitmapPreview.value?.let { processed ->
+            val docId = openedDocumentId ?: ("doc_" + System.currentTimeMillis()).also { openedDocumentId = it }
             editingSlotId.value?.let { slotId ->
                 captureToSlot(processed, slotId)
                 
-                // Sync to persistent library JSON if we are editing a saved document
-                openedDocumentId?.let { docId ->
-                    val currentState = editorState.value
-                    val slotCorners = slots.value.find { it.id == slotId }?.corners
-                    viewModelScope.launch(Dispatchers.IO) {
-                        saveDocumentUseCase.updatePageEdits(
-                            docId = docId,
-                            pageId = slotId,
-                            filter = currentState.filter.name,
-                            brightness = currentState.brightness,
-                            contrast = currentState.contrast,
-                            sharpness = currentState.sharpness,
-                            saturation = currentState.saturation,
-                            rotation = currentState.rotation,
-                            corners = slotCorners,
-                            newPreview = processed
-                        )
-                    }
-                }
+                // Sync to persistent library JSON
+                val currentState = editorState.value
+                val slotCorners = slots.value.find { it.id == slotId }?.corners
+                saveDocumentUseCase.updatePageEdits(
+                    docId = docId,
+                    pageId = slotId,
+                    filter = currentState.filter.name,
+                    brightness = currentState.brightness,
+                    contrast = currentState.contrast,
+                    sharpness = currentState.sharpness,
+                    saturation = currentState.saturation,
+                    rotation = currentState.rotation,
+                    corners = slotCorners,
+                    newPreview = processed
+                )
+                saveDocumentStateOffline(docId)
             }
             editingJpgIndex.value?.let { index ->
                 val file = capturedJpgFiles.getOrNull(index)
@@ -1135,26 +1173,29 @@ class ScannerViewModel @Inject constructor(
                         out.close()
                     } catch (e: Exception) {}
                 }
-                openedDocumentId?.let { docId ->
-                    val currentState = editorState.value
-                    val pageId = if (index < slots.value.size) slots.value[index].id else "p${index + 1}"
-                    val corners = jpgCorners[index]
-                    viewModelScope.launch(Dispatchers.IO) {
-                        saveDocumentUseCase.updatePageEdits(
-                            docId = docId,
-                            pageId = pageId,
-                            filter = currentState.filter.name,
-                            brightness = currentState.brightness,
-                            contrast = currentState.contrast,
-                            sharpness = currentState.sharpness,
-                            saturation = currentState.saturation,
-                            rotation = currentState.rotation,
-                            corners = corners,
-                            newPreview = processed
-                        )
-                    }
-                }
+                val currentState = editorState.value
+                val pageId = if (index < slots.value.size) slots.value[index].id else "p${index + 1}"
+                val corners = jpgCorners[index]
+                saveDocumentUseCase.updatePageEdits(
+                    docId = docId,
+                    pageId = pageId,
+                    filter = currentState.filter.name,
+                    brightness = currentState.brightness,
+                    contrast = currentState.contrast,
+                    sharpness = currentState.sharpness,
+                    saturation = currentState.saturation,
+                    rotation = currentState.rotation,
+                    corners = corners,
+                    newPreview = processed
+                )
+                saveDocumentStateOffline(docId)
             }
+        }
+    }
+
+    fun commitActiveEditorChanges() {
+        viewModelScope.launch(Dispatchers.IO) {
+            commitActiveEditorChangesSuspend()
         }
     }
 
@@ -1418,13 +1459,17 @@ class ScannerViewModel @Inject constructor(
         val tempBitmapsToRecycle = mutableListOf<Bitmap>()
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                if (isEditing.value) {
+                    commitActiveEditorChangesSuspend()
+                }
+
                 // Also save the captured pages and metadata persistently as a document
                 val docId = openedDocumentId ?: ("doc_" + System.currentTimeMillis())
                 if (openedDocumentId == null) {
                     openedDocumentId = docId
                 }
                 val title = customTitle ?: getOrGenerateDocumentTitle(docId)
-                val pagesData = buildPagesData(docId, tempBitmapsToRecycle)
+                val pagesData = buildPagesData(docId, tempBitmapsToRecycle, overrideFilter = customFilter)
                 
                 if (pagesData.isNotEmpty()) {
                     saveDocumentUseCase.saveDocument(docId, title, currentMode.value.name, pagesData)
@@ -1435,133 +1480,119 @@ class ScannerViewModel @Inject constructor(
                     reloadSavedDocuments()
                 }
 
-                // IMPROVEMENT: Using injected exportPdfUseCase to keep a clean architecture
-                if (autoPdf.value) {
-                    val savedDoc = openedDocumentId?.let { saveDocumentUseCase.getDocument(it) }
-                    val effectiveWarp = customWarp ?: wizardWarp.value
-                    val isFlatWarp = effectiveWarp == "Flat" || effectiveWarp == "Flat Crop Only"
-                    val overrideFilterEnum = customFilter?.let {
-                        try { com.safescan.data.FilterType.valueOf(it) } catch (e: Exception) { null }
-                    }
+                val savedDoc = openedDocumentId?.let { saveDocumentUseCase.getDocument(it) }
+                val effectiveWarp = customWarp ?: wizardWarp.value
+                val isFlatWarp = effectiveWarp == "Flat" || effectiveWarp == "Flat Crop Only"
+                val overrideFilterEnum = customFilter?.let {
+                    try { com.safescan.data.FilterType.valueOf(it) } catch (e: Exception) { null }
+                }
 
-                    val slotsToExport = if (capturedJpgFiles.isNotEmpty()) {
-                        capturedJpgFiles.mapIndexed { idx, file ->
-                            val pageId = if (idx < slots.value.size) slots.value[idx].id else "p${idx + 1}"
-                            val pageMeta = savedDoc?.pages?.find { it.id == pageId } ?: savedDoc?.pages?.getOrNull(idx)
-                            val rawBmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
-                            val origBmp = originalJpgBitmaps[idx] ?: rawBmp
-                            val corners = jpgCorners[idx] ?: pageMeta?.corners
-                            var finalBmp = if (origBmp != null && corners != null && corners.size == 4) {
-                                val quad = Quadrilateral(corners[0], corners[1], corners[2], corners[3])
-                                try {
-                                    documentScanner.cropAndTransform(origBmp, quad, currentMode.value.name, flatCrop = isFlatWarp)
-                                } catch (e: Exception) { rawBmp ?: origBmp }
-                            } else {
-                                rawBmp ?: origBmp
-                            }
-                            val rotation = pageMeta?.rotation ?: 0
-                            if (finalBmp != null && rotation != 0) {
-                                val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
-                                finalBmp = android.graphics.Bitmap.createBitmap(finalBmp, 0, 0, finalBmp.width, finalBmp.height, matrix, true)
-                            }
-                            val activeFilter = overrideFilterEnum ?: try { pageMeta?.filter?.let { com.safescan.data.FilterType.valueOf(it) } ?: com.safescan.data.FilterType.COLOR } catch (e: Exception) { com.safescan.data.FilterType.COLOR }
+                val slotsToExport = if (capturedJpgFiles.isNotEmpty()) {
+                    capturedJpgFiles.mapIndexed { idx, file ->
+                        val pageId = if (idx < slots.value.size) slots.value[idx].id else "p${idx + 1}"
+                        val pageMeta = savedDoc?.pages?.find { it.id == pageId } ?: savedDoc?.pages?.getOrNull(idx)
+                        val rawBmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                        val origBmp = originalJpgBitmaps[idx] ?: rawBmp
+                        val corners = jpgCorners[idx] ?: pageMeta?.corners
+                        var finalBmp = if (origBmp != null && corners != null && corners.size == 4) {
+                            val quad = Quadrilateral(corners[0], corners[1], corners[2], corners[3])
+                            try {
+                                documentScanner.cropAndTransform(origBmp, quad, currentMode.value.name, flatCrop = isFlatWarp)
+                            } catch (e: Exception) { rawBmp ?: origBmp }
+                        } else {
+                            rawBmp ?: origBmp
+                        }
+                        val rotation = pageMeta?.rotation ?: 0
+                        if (finalBmp != null && rotation != 0) {
+                            val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
+                            finalBmp = android.graphics.Bitmap.createBitmap(finalBmp, 0, 0, finalBmp.width, finalBmp.height, matrix, true)
+                        }
+                        val activeFilter = overrideFilterEnum ?: try { pageMeta?.filter?.let { com.safescan.data.FilterType.valueOf(it) } ?: com.safescan.data.FilterType.COLOR } catch (e: Exception) { com.safescan.data.FilterType.COLOR }
+                        val state = com.safescan.data.EditorState(
+                            brightness = pageMeta?.brightness ?: 0f,
+                            contrast = pageMeta?.contrast ?: 1f,
+                            sharpness = pageMeta?.sharpness ?: 0f,
+                            saturation = pageMeta?.saturation ?: 0f,
+                            rotation = rotation,
+                            filter = activeFilter
+                        )
+                        if (finalBmp != null) {
+                            finalBmp = com.safescan.domain.ImageProcessor.apply(finalBmp, state)
+                            tempBitmapsToRecycle.add(finalBmp)
+                        }
+                        Slot(pageId, "Page ${idx + 1}", finalBmp)
+                    }
+                } else {
+                    slots.value.filter { it.bitmap != null }.map { slot ->
+                        val pageMeta = savedDoc?.pages?.find { it.id == slot.id }
+                        val originalRes = getFullResBitmap(slot.id, isOriginal = true)
+                            ?: (openedDocumentId?.let { saveDocumentUseCase.loadOriginalBitmap(it, slot.id) })
+                        
+                        val corners = slot.corners ?: pageMeta?.corners
+                        val rotation = pageMeta?.rotation ?: 0
+                        
+                        var highResBmp: Bitmap? = if (originalRes != null && corners != null && corners.size == 4) {
+                            val quad = Quadrilateral(corners[0], corners[1], corners[2], corners[3])
+                            try {
+                                documentScanner.cropAndTransform(originalRes, quad, currentMode.value.name, flatCrop = isFlatWarp)
+                            } catch (e: Exception) { originalRes }
+                        } else {
+                            originalRes ?: getFullResBitmap(slot.id, isOriginal = true) ?: getFullResBitmap(slot.id, isOriginal = false) ?: slot.bitmap
+                        }
+                        
+                        if (highResBmp != null && rotation != 0) {
+                            val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
+                            highResBmp = android.graphics.Bitmap.createBitmap(highResBmp, 0, 0, highResBmp.width, highResBmp.height, matrix, true)
+                        }
+
+                        if (highResBmp != null) {
+                            val filterEnum = overrideFilterEnum ?: try { pageMeta?.filter?.let { com.safescan.data.FilterType.valueOf(it) } ?: com.safescan.data.FilterType.COLOR } catch (e: Exception) { com.safescan.data.FilterType.COLOR }
                             val state = com.safescan.data.EditorState(
                                 brightness = pageMeta?.brightness ?: 0f,
                                 contrast = pageMeta?.contrast ?: 1f,
                                 sharpness = pageMeta?.sharpness ?: 0f,
                                 saturation = pageMeta?.saturation ?: 0f,
-                                rotation = rotation,
-                                filter = activeFilter
+                                filter = filterEnum
                             )
-                            if (finalBmp != null) {
-                                finalBmp = com.safescan.domain.ImageProcessor.apply(finalBmp, state)
-                                tempBitmapsToRecycle.add(finalBmp)
-                            }
-                            Slot(pageId, "Page ${idx + 1}", finalBmp)
+                            highResBmp = com.safescan.domain.ImageProcessor.apply(highResBmp, state)
                         }
+
+                        if (highResBmp != null) {
+                            tempBitmapsToRecycle.add(highResBmp)
+                        }
+                        
+                        slot.copy(bitmap = highResBmp ?: slot.bitmap)
+                    }
+                }
+                val targetPageSize = customPageSize ?: pageSize.value
+                val targetOrientation = customOrientation ?: pdfOrientation.value
+                val targetQuality = customQuality ?: jpegQuality.value
+                DiagnosticsLogger.info("Exporting document to PDF at $targetPageSize layout off-thread...")
+                val result = exportPdfUseCase.exportCardsToPdf(
+                    slotsToExport,
+                    title,
+                    currentMode.value,
+                    targetPageSize,
+                    targetOrientation,
+                    dpi = targetDpi,
+                    jpegQuality = targetQuality,
+                    cardLayout = targetCardLayout
+                )
+                withContext(Dispatchers.Main) {
+                    if (clearSession) {
+                        capturedJpgFiles.clear()
+                        originalJpgBitmaps.clear()
+                        jpgCorners.clear()
+                        cachedPdfFile = null
+                        lastExportPdfHash = 0
+                        openedDocumentId = null
+                        initialDocumentTitle = null
                     } else {
-                        slots.value.filter { it.bitmap != null }.map { slot ->
-                            val pageMeta = savedDoc?.pages?.find { it.id == slot.id }
-                            val originalRes = getFullResBitmap(slot.id, isOriginal = true)
-                                ?: (openedDocumentId?.let { saveDocumentUseCase.loadOriginalBitmap(it, slot.id) })
-                            
-                            val corners = slot.corners ?: pageMeta?.corners
-                            val rotation = pageMeta?.rotation ?: 0
-                            
-                            var highResBmp: Bitmap? = if (originalRes != null && corners != null && corners.size == 4) {
-                                val quad = Quadrilateral(corners[0], corners[1], corners[2], corners[3])
-                                try {
-                                    documentScanner.cropAndTransform(originalRes, quad, currentMode.value.name, flatCrop = isFlatWarp)
-                                } catch (e: Exception) { originalRes }
-                            } else {
-                                originalRes ?: getFullResBitmap(slot.id, isOriginal = true) ?: getFullResBitmap(slot.id, isOriginal = false) ?: slot.bitmap
-                            }
-                            
-                            if (highResBmp != null && rotation != 0) {
-                                val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
-                                highResBmp = android.graphics.Bitmap.createBitmap(highResBmp, 0, 0, highResBmp.width, highResBmp.height, matrix, true)
-                            }
-
-                            if (highResBmp != null) {
-                                val filterEnum = overrideFilterEnum ?: try { pageMeta?.filter?.let { com.safescan.data.FilterType.valueOf(it) } ?: com.safescan.data.FilterType.COLOR } catch (e: Exception) { com.safescan.data.FilterType.COLOR }
-                                val state = com.safescan.data.EditorState(
-                                    brightness = pageMeta?.brightness ?: 0f,
-                                    contrast = pageMeta?.contrast ?: 1f,
-                                    sharpness = pageMeta?.sharpness ?: 0f,
-                                    saturation = pageMeta?.saturation ?: 0f,
-                                    filter = filterEnum
-                                )
-                                highResBmp = com.safescan.domain.ImageProcessor.apply(highResBmp, state)
-                            }
-
-                            if (highResBmp != null) {
-                                tempBitmapsToRecycle.add(highResBmp)
-                            }
-                            
-                            slot.copy(bitmap = highResBmp ?: slot.bitmap)
-                        }
+                        cachedPdfFile = result.getOrNull()
+                        lastExportPdfHash = currentHash
                     }
-                    val targetPageSize = customPageSize ?: pageSize.value
-                    val targetOrientation = customOrientation ?: pdfOrientation.value
-                    val targetQuality = customQuality ?: jpegQuality.value
-                    DiagnosticsLogger.info("Exporting document to PDF at $targetPageSize layout off-thread...")
-                    val result = exportPdfUseCase.exportCardsToPdf(
-                        slotsToExport,
-                        title,
-                        currentMode.value,
-                        targetPageSize,
-                        targetOrientation,
-                        dpi = targetDpi,
-                        jpegQuality = targetQuality,
-                        cardLayout = targetCardLayout
-                    )
-                    withContext(Dispatchers.Main) {
-                        if (clearSession) {
-                            capturedJpgFiles.clear()
-                            originalJpgBitmaps.clear()
-                            jpgCorners.clear()
-                            cachedPdfFile = null
-                            lastExportPdfHash = 0
-                            openedDocumentId = null
-                            initialDocumentTitle = null
-                        } else {
-                            cachedPdfFile = result.getOrNull()
-                            lastExportPdfHash = currentHash
-                        }
-                        DiagnosticsLogger.info("PDF document generated successfully.")
-                        onResult(result.getOrNull())
-                    }
-                } else {
-                    withContext(Dispatchers.Main) {
-                        if (clearSession) {
-                            capturedJpgFiles.clear()
-                            originalJpgBitmaps.clear()
-                            jpgCorners.clear()
-                            openedDocumentId = null
-                            initialDocumentTitle = null
-                        }
-                        onResult(null)
-                    }
+                    DiagnosticsLogger.info("PDF document generated successfully.")
+                    onResult(result.getOrNull())
                 }
             } catch (e: Exception) {
                 DiagnosticsLogger.error("PDF Export Pipeline error: ${e.message}")

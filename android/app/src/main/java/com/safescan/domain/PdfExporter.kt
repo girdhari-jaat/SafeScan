@@ -116,20 +116,26 @@ class PdfExporter(private val context: Context) {
                         }
 
                         val (imgBytes, imgWidth, imgHeight) = if (rawBmp != null) {
-                            val jpegData = compressToJpegBytes(rawBmp, qualityInt, targetWidth, targetHeight)
+                            val jpegData = compressToJpegBytes(rawBmp, qualityInt)
+                            val actualW = rawBmp.width
+                            val actualH = rawBmp.height
                             if (slot?.bitmapPath != null && rawBmp != slot.bitmap && !rawBmp.isRecycled) {
                                 rawBmp.recycle()
                             }
-                            Triple(jpegData, targetWidth, targetHeight)
+                            Triple(jpegData, actualW, actualH)
                         } else {
                             val emptyBmp = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
                             Canvas(emptyBmp).drawColor(Color.WHITE)
-                            val jpegData = compressToJpegBytes(emptyBmp, qualityInt, targetWidth, targetHeight)
+                            val jpegData = compressToJpegBytes(emptyBmp, qualityInt)
                             emptyBmp.recycle()
                             Triple(jpegData, targetWidth, targetHeight)
                         }
 
-                        val dstRect = ExportHelper.calculateStretchedDrawingRect(finalWidth, finalHeight, pageSizeStr)
+                        val dstRect = if (pageSizeStr.equals("Original", ignoreCase = true)) {
+                            android.graphics.RectF(0f, 0f, finalWidth.toFloat(), finalHeight.toFloat())
+                        } else {
+                            ExportHelper.calculateBitmapDrawingRects(imgWidth, imgHeight, finalWidth, finalHeight, pageSizeStr)
+                        }
                         val left = dstRect.left
                         val top = dstRect.top
                         val drawnW = dstRect.width()
