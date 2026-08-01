@@ -226,7 +226,11 @@ class PdfExporter(private val context: Context) {
 
                     val W = 2480f
                     val H = 3508f
-                    canvas.scale(canvasW / W, canvasH / H)
+                    val scale = minOf(canvasW / W, canvasH / H)
+                    val dx = (canvasW - W * scale) / 2f
+                    val dy = (canvasH - H * scale) / 2f
+                    canvas.translate(dx, dy)
+                    canvas.scale(scale, scale)
 
                     if (cardLayout.equals("ID", ignoreCase = true)) {
                         // ID mode: Front 1 top, Back 1 bottom on A4 page

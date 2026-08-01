@@ -351,7 +351,6 @@ fun EditorScreen(viewModel: ScannerViewModel) {
             onDismiss = { showExportModal = false },
             onConfirmExport = { options ->
                 showExportModal = false
-                viewModel.updateEditorState(editorState.copy(filter = options.filter))
                 viewModel.exportPdf(
                     context = context,
                     customTitle = options.title,

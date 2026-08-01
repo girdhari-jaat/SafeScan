@@ -63,10 +63,12 @@ object ImageFilterEngine {
             // 1. Light background shadow whitening
             // -----------------------------
             smallV = Mat()
-            Imgproc.resize(channels[2], smallV, Size(), 0.2, 0.2, Imgproc.INTER_LINEAR)
+            val maxDim = maxOf(channels[2].cols(), channels[2].rows())
+            val scale = if (maxDim > 0) (320.0 / maxDim).coerceAtMost(0.4) else 0.2
+            Imgproc.resize(channels[2], smallV, Size(), scale, scale, Imgproc.INTER_LINEAR)
 
             bgSmall = Mat()
-            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(11.0, 11.0))
+            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(15.0, 15.0))
             Imgproc.dilate(smallV, bgSmall, kernel)
             Imgproc.GaussianBlur(bgSmall, bgSmall, Size(21.0, 21.0), 0.0)
 
@@ -78,6 +80,7 @@ object ImageFilterEngine {
             channels[2].convertTo(vFloat, CvType.CV_32F)
             bg.convertTo(bgFloat, CvType.CV_32F)
             Core.add(bgFloat, org.opencv.core.Scalar(1.0), bgFloat)
+            Core.max(bgFloat, org.opencv.core.Scalar(110.0), bgFloat)
 
             div = Mat()
             Core.divide(vFloat, bgFloat, div)
@@ -86,18 +89,17 @@ object ImageFilterEngine {
             cleanV = Mat()
             div.convertTo(cleanV, CvType.CV_8U)
 
-            // Blend 60% shadow-flattened background with 40% original background
-            Core.addWeighted(channels[2], 0.4, cleanV, 0.6, 0.0, channels[2])
+            // Whiten paper/card background slightly to eliminate gray shadow patches around text
+            cleanV.convertTo(cleanV, -1, 1.15, -20.0)
+
+            // Blend 80% clean shadow-removed background with 20% original V
+            Core.addWeighted(channels[2], 0.2, cleanV, 0.8, 0.0, channels[2])
 
             // -----------------------------
-            // 2. Adjust saturation & boost contrast slightly
+            // 2. Adjust saturation & boost contrast gently
             // -----------------------------
-            channels[1].convertTo(channels[1], -1, 0.85, 0.0)
-            channels[2].convertTo(channels[2], -1, 1.12, -4.0)
-
-            // Improve brightness consistency
-            clahe = Imgproc.createCLAHE(1.5, Size(8.0, 8.0))
-            clahe.apply(channels[2], channels[2])
+            channels[1].convertTo(channels[1], -1, 0.95, 0.0)
+            channels[2].convertTo(channels[2], -1, 1.05, 0.0)
 
             // Merge HSV
             Core.merge(channels, hsv)
@@ -242,14 +244,14 @@ object ImageFilterEngine {
                     hsvChannels = ArrayList()
                     Core.split(hsv, hsvChannels)
                     
-                    // Desaturate dark text regions (V < 95) so black text stays neutral black/gray without green/cyan tint
+                    // Desaturate only deep black text regions (V < 60) so black text stays neutral black/gray without green/cyan tint
                     darkMask = Mat()
-                    Imgproc.threshold(hsvChannels[2], darkMask, 95.0, 255.0, Imgproc.THRESH_BINARY_INV)
+                    Imgproc.threshold(hsvChannels[2], darkMask, 60.0, 255.0, Imgproc.THRESH_BINARY_INV)
                     hsvChannels[1].setTo(org.opencv.core.Scalar(0.0), darkMask)
 
                     // Boost saturation and contrast gently for colorful regions
-                    hsvChannels[1].convertTo(hsvChannels[1], -1, 1.2, 0.0)
-                    hsvChannels[2].convertTo(hsvChannels[2], -1, 1.15, -5.0)
+                    hsvChannels[1].convertTo(hsvChannels[1], -1, 1.12, 0.0)
+                    hsvChannels[2].convertTo(hsvChannels[2], -1, 1.08, 0.0)
                     
                     Core.merge(hsvChannels, hsv)
                     
@@ -258,8 +260,8 @@ object ImageFilterEngine {
                     
                     // Apply Unsharp Masking for crisp text
                     blurred = Mat()
-                    Imgproc.GaussianBlur(enhanced, blurred, Size(0.0, 0.0), 3.0)
-                    Core.addWeighted(enhanced, 1.4, blurred, -0.4, 0.0, outMat)
+                    Imgproc.GaussianBlur(enhanced, blurred, Size(0.0, 0.0), 2.0)
+                    Core.addWeighted(enhanced, 1.25, blurred, -0.25, 0.0, outMat)
                     
                     Imgproc.cvtColor(outMat, outMat, Imgproc.COLOR_BGR2RGBA)
                 } finally {
@@ -308,11 +310,12 @@ object ImageFilterEngine {
                     
                     // 1. Adaptive method for Shadow removal on darkTextGray
                     smallV = Mat()
-                    val scale = 0.2
+                    val maxDim = maxOf(darkTextGray.cols(), darkTextGray.rows())
+                    val scale = if (maxDim > 0) (320.0 / maxDim).coerceAtMost(0.4) else 0.2
                     Imgproc.resize(darkTextGray, smallV, Size(), scale, scale, Imgproc.INTER_LINEAR)
                     
                     bgSmall = Mat()
-                    kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(9.0, 9.0))
+                    kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(15.0, 15.0))
                     Imgproc.dilate(smallV, bgSmall, kernel)
                     Imgproc.GaussianBlur(bgSmall, bgSmall, Size(21.0, 21.0), 0.0)
                     
@@ -324,6 +327,7 @@ object ImageFilterEngine {
                     darkTextGray.convertTo(vFloat, CvType.CV_32F)
                     bg.convertTo(bgFloat, CvType.CV_32F)
                     Core.add(bgFloat, org.opencv.core.Scalar(1.0), bgFloat)
+                    Core.max(bgFloat, org.opencv.core.Scalar(110.0), bgFloat)
                     
                     div = Mat()
                     Core.divide(vFloat, bgFloat, div)
@@ -396,7 +400,8 @@ object ImageFilterEngine {
         val result = Mat()
         try {
             smallV = Mat()
-            val scale = 0.2
+            val maxDim = maxOf(gray.cols(), gray.rows())
+            val scale = if (maxDim > 0) (320.0 / maxDim).coerceAtMost(0.4) else 0.2
             Imgproc.resize(gray, smallV, Size(), scale, scale, Imgproc.INTER_LINEAR)
 
             bgSmall = Mat()
@@ -414,6 +419,7 @@ object ImageFilterEngine {
             bg.convertTo(bgFloat, CvType.CV_32F)
 
             Core.add(bgFloat, org.opencv.core.Scalar(1.0), bgFloat)
+            Core.max(bgFloat, org.opencv.core.Scalar(110.0), bgFloat)
 
             div = Mat()
             Core.divide(grayFloat, bgFloat, div)
@@ -421,9 +427,8 @@ object ImageFilterEngine {
 
             div.convertTo(result, CvType.CV_8U)
 
-            // Clamp light pixels to white to eliminate background noise and compression artifacts
-            Imgproc.threshold(result, result, 225.0, 255.0, Imgproc.THRESH_TRUNC)
-            Core.normalize(result, result, 0.0, 255.0, Core.NORM_MINMAX)
+            // Whiten light paper background to eliminate gray shadow patches around text
+            result.convertTo(result, -1, 1.15, -20.0)
         } catch (e: Exception) {
             result.release()
             throw e
@@ -443,7 +448,8 @@ object ImageFilterEngine {
         var hsv: Mat? = null
         var channels: ArrayList<Mat>? = null
         var originalV: Mat? = null
-        var dilated: Mat? = null
+        var smallV: Mat? = null
+        var bgSmall: Mat? = null
         var kernel: Mat? = null
         var bgIllum: Mat? = null
         var vFloat: Mat? = null
@@ -461,12 +467,18 @@ object ImageFilterEngine {
             
             originalV = channels[2]
             
-            dilated = Mat()
-            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(7.0, 7.0))
-            Imgproc.dilate(originalV, dilated, kernel)
-            
+            smallV = Mat()
+            val maxDim = maxOf(originalV.cols(), originalV.rows())
+            val scale = if (maxDim > 0) (320.0 / maxDim).coerceAtMost(0.4) else 0.2
+            Imgproc.resize(originalV, smallV, Size(), scale, scale, Imgproc.INTER_LINEAR)
+
+            bgSmall = Mat()
+            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(15.0, 15.0))
+            Imgproc.dilate(smallV, bgSmall, kernel)
+            Imgproc.GaussianBlur(bgSmall, bgSmall, Size(21.0, 21.0), 0.0)
+
             bgIllum = Mat()
-            Imgproc.GaussianBlur(dilated, bgIllum, Size(21.0, 21.0), 0.0)
+            Imgproc.resize(bgSmall, bgIllum, originalV.size(), 0.0, 0.0, Imgproc.INTER_LINEAR)
             
             vFloat = Mat()
             originalV.convertTo(vFloat, CvType.CV_32F)
@@ -474,16 +486,18 @@ object ImageFilterEngine {
             bgFloat = Mat()
             bgIllum.convertTo(bgFloat, CvType.CV_32F)
             Core.add(bgFloat, org.opencv.core.Scalar(1.0), bgFloat)
+            Core.max(bgFloat, org.opencv.core.Scalar(110.0), bgFloat)
             
             div = Mat()
             Core.divide(vFloat, bgFloat, div)
             Core.multiply(div, org.opencv.core.Scalar(255.0), div)
             
-            Core.normalize(div, div, 0.0, 255.0, Core.NORM_MINMAX)
-            
             vOut = Mat()
             div.convertTo(vOut, CvType.CV_8U)
             
+            // Whiten light paper background to eliminate residual gray shadow patches around text
+            vOut.convertTo(vOut, -1, 1.15, -20.0)
+
             channels[2] = vOut
             
             mergedHsv = Mat()
@@ -496,12 +510,13 @@ object ImageFilterEngine {
         } finally {
             hsv?.release()
             originalV?.release()
+            smallV?.release()
+            bgSmall?.release()
             channels?.forEach { 
                 if (it != originalV) {
                     it.release()
                 }
             }
-            dilated?.release()
             kernel?.release()
             bgIllum?.release()
             vFloat?.release()

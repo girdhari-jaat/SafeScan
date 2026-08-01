@@ -172,16 +172,8 @@ class ScannerViewModel @Inject constructor(
 
     private val settingsHandler = ScannerSettingsHandler(settingsRepository, viewModelScope)
 
-    // High-Performance Memory-Aware LRU Cache for high-res Bitmaps in RAM (max 1/8th RAM, min 16MB)
-    private val maxCacheMemoryKb = (Runtime.getRuntime().maxMemory() / 1024 / 8).toInt().coerceAtLeast(16 * 1024)
-    private val highResCache = object : android.util.LruCache<String, Bitmap>(maxCacheMemoryKb) {
-        override fun sizeOf(key: String, value: Bitmap): Int {
-            return (value.allocationByteCount / 1024).coerceAtLeast(1)
-        }
-        override fun entryRemoved(evicted: Boolean, key: String?, oldValue: Bitmap?, newValue: Bitmap?) {
-            Log.d("ScannerViewModel", "Disk-Backed Hybrid LRU Cache evicted high-res bitmap for key: $key")
-        }
-    }
+    val imageCacheHelper = ImageCacheHelper(context, saveDocumentUseCase)
+    val exportHelper = ScannerExportHelper(saveDocumentUseCase, exportPdfUseCase, documentScanner, imageCacheHelper)
 
     init {
         viewModelScope.launch {
@@ -192,87 +184,15 @@ class ScannerViewModel @Inject constructor(
     }
 
     fun getFullResBitmap(slotId: String, isOriginal: Boolean = false): Bitmap? {
-        val cacheKey = if (isOriginal) "${slotId}_original" else "${slotId}_processed"
-        val cached = highResCache.get(cacheKey)
-        if (cached != null) {
-            if (!cached.isRecycled) {
-                return cached
-            } else {
-                highResCache.remove(cacheKey)
-            }
-        }
-
-        val slot = slots.value.find { it.id == slotId }
-        val path = if (isOriginal) slot?.originalBitmapPath else slot?.bitmapPath
-        if (path != null) {
-            val file = java.io.File(path)
-            if (file.exists()) {
-                try {
-                    val bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
-                    if (bitmap != null) {
-                        highResCache.put(cacheKey, bitmap)
-                        return bitmap
-                    }
-                } catch (e: Exception) {
-                    Log.e("ScannerViewModel", "Failed to load full-res bitmap from path: $path", e)
-                }
-            }
-        }
-
-        openedDocumentId?.let { docId ->
-            try {
-                val bitmap = kotlinx.coroutines.runBlocking(Dispatchers.IO) {
-                    if (isOriginal) {
-                        saveDocumentUseCase.loadOriginalBitmap(docId, slotId)
-                    } else {
-                        saveDocumentUseCase.loadPreviewBitmap(docId, slotId)
-                    }
-                }
-                if (bitmap != null) {
-                    highResCache.put(cacheKey, bitmap)
-                    return bitmap
-                }
-            } catch (e: Exception) {
-                Log.e("ScannerViewModel", "Failed to load bitmap from saveDocumentUseCase for $docId / $slotId", e)
-            }
-        }
-
-        return null
+        return imageCacheHelper.getFullResBitmap(slotId, isOriginal, slots.value, openedDocumentId)
     }
 
     private fun saveHighResToDisk(bitmap: Bitmap, slotId: String, suffix: String): String? {
-        val dir = java.io.File(context.cacheDir, "temp_scans")
-        if (!dir.exists()) {
-            dir.mkdirs()
-        }
-        val file = java.io.File(dir, "${slotId}_${suffix}.jpg")
-        return try {
-            java.io.FileOutputStream(file).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
-            }
-            val sizeKb = file.length() / 1024
-            ScannerDebugLogger.logSaveFullImage(sizeKb)
-            file.absolutePath
-        } catch (e: Exception) {
-            Log.e("ScannerViewModel", "Failed to save high-res bitmap to disk", e)
-            null
-        }
+        return imageCacheHelper.saveHighResToDisk(bitmap, slotId, suffix)
     }
 
     private fun generateThumbnail(bitmap: Bitmap, maxDimension: Int = 360): Bitmap {
-        val width = bitmap.width
-        val height = bitmap.height
-        val ratio = kotlin.math.min(maxDimension.toFloat() / width, maxDimension.toFloat() / height)
-        return if (ratio < 1f) {
-            Bitmap.createScaledBitmap(
-                bitmap,
-                (width * ratio).toInt(),
-                (height * ratio).toInt(),
-                true
-            )
-        } else {
-            bitmap
-        }
+        return imageCacheHelper.generateThumbnail(bitmap, maxDimension)
     }
 
     fun getOrGenerateDocumentTitle(docId: String?): String {
@@ -487,10 +407,10 @@ class ScannerViewModel @Inject constructor(
             val existing = currentSlots[index]
 
             // Instantly update RAM cache & generate lightweight thumbnail
-            highResCache.put("${slotId}_processed", bitmap)
+            imageCacheHelper.put("${slotId}_processed", bitmap)
             val origToSave = originalBitmap ?: bitmap
             if (isCapture || existing.originalBitmapPath == null) {
-                highResCache.put("${slotId}_original", origToSave)
+                imageCacheHelper.put("${slotId}_original", origToSave)
             }
 
             val thumbnail = generateThumbnail(bitmap, 360)
@@ -563,160 +483,24 @@ class ScannerViewModel @Inject constructor(
         tempBitmapsToRecycle: MutableList<Bitmap>,
         overrideFilter: String? = null
     ): List<com.safescan.data.PageSaveData> {
-        val existingDoc = saveDocumentUseCase.getDocument(docId)
-        val existingMetaMap = existingDoc?.pages?.associateBy { it.id } ?: emptyMap()
-
-        val effectiveWarp = wizardWarp.value
-        val isFlatWarp = effectiveWarp == "Flat" || effectiveWarp == "Flat Crop Only"
-
-        return if (capturedJpgFiles.isNotEmpty()) {
-            capturedJpgFiles.mapIndexed { idx, file ->
-                val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
-                val originalBmp = originalJpgBitmaps[idx] ?: bmp
-                val corners = jpgCorners[idx]
-                val pageId = if (idx < slots.value.size) slots.value[idx].id else "p${idx + 1}"
-                val existingPage = existingMetaMap[pageId]
-                    ?: existingDoc?.pages?.find { p -> p.id == pageId || (existingDoc.pages.size == 1 && idx == 0) || (p.id.startsWith("p") && p.id.drop(1) == (idx + 1).toString()) }
-                    ?: existingDoc?.pages?.getOrNull(idx)
-
-                val isEditingThisJpg = isEditing.value && editingJpgIndex.value == idx
-                val currentEdits = if (isEditingThisJpg) editorState.value else null
-                
-                val finalFilterStr = overrideFilter ?: currentEdits?.filter?.name ?: existingPage?.filter ?: "COLOR"
-                val rotation = currentEdits?.rotation ?: existingPage?.rotation ?: 0
-                val cornersList = corners ?: existingPage?.corners
-
-                var processedBmp: Bitmap? = if (originalBmp != null && cornersList != null && cornersList.size == 4) {
-                    val quad = Quadrilateral(cornersList[0], cornersList[1], cornersList[2], cornersList[3])
-                    try {
-                        documentScanner.cropAndTransform(originalBmp, quad, currentMode.value.name, flatCrop = isFlatWarp)
-                    } catch (e: Exception) { originalBmp }
-                } else {
-                    originalBmp
-                }
-
-                if (processedBmp != null && rotation != 0) {
-                    val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
-                    val rotated = android.graphics.Bitmap.createBitmap(processedBmp, 0, 0, processedBmp.width, processedBmp.height, matrix, true)
-                    if (rotated !== processedBmp && processedBmp !== originalBmp && processedBmp !== bmp) processedBmp.recycle()
-                    processedBmp = rotated
-                }
-
-                if (processedBmp != null) {
-                    val filterEnum = try { com.safescan.data.FilterType.valueOf(finalFilterStr) } catch (e: Exception) { com.safescan.data.FilterType.COLOR }
-                    val state = com.safescan.data.EditorState(
-                        brightness = currentEdits?.brightness ?: existingPage?.brightness ?: 0f,
-                        contrast = currentEdits?.contrast ?: existingPage?.contrast ?: 1.0f,
-                        sharpness = currentEdits?.sharpness ?: existingPage?.sharpness ?: 0f,
-                        saturation = currentEdits?.saturation ?: existingPage?.saturation ?: 0f,
-                        filter = filterEnum
-                    )
-                    val applied = com.safescan.domain.ImageProcessor.apply(processedBmp, state)
-                    if (applied !== processedBmp && processedBmp !== originalBmp && processedBmp !== bmp) processedBmp.recycle()
-                    processedBmp = applied
-                }
-
-                var tempPreviewFile: java.io.File? = null
-                if (processedBmp != null) {
-                    val tempPath = saveHighResToDisk(processedBmp, pageId, "build_temp_${System.currentTimeMillis()}")
-                    if (tempPath != null) tempPreviewFile = java.io.File(tempPath)
-                    if (processedBmp !== originalBmp && processedBmp !== bmp) {
-                        processedBmp.recycle()
-                    }
-                }
-                if (bmp != null && bmp !== originalBmp && !bmp.isRecycled) {
-                    bmp.recycle()
-                }
-
-                com.safescan.data.PageSaveData(
-                    id = pageId,
-                    originalFile = file,
-                    previewFile = tempPreviewFile,
-                    originalBitmap = originalBmp,
-                    previewBitmap = null, // Will use previewFile
-                    corners = cornersList,
-                    filter = finalFilterStr,
-                    brightness = currentEdits?.brightness ?: existingPage?.brightness ?: 0f,
-                    contrast = currentEdits?.contrast ?: existingPage?.contrast ?: 1.0f,
-                    sharpness = currentEdits?.sharpness ?: existingPage?.sharpness ?: 0f,
-                    saturation = currentEdits?.saturation ?: existingPage?.saturation ?: 0f,
-                    rotation = rotation,
-                    recognizedText = if (isEditingThisJpg) recognizedText.value else existingPage?.recognizedText
-                )
-            }
-        } else {
-            slots.value.filter { it.bitmap != null }.map { slot ->
-                val slotIdx = slots.value.indexOf(slot)
-                
-                val existingPage = existingMetaMap[slot.id]
-                    ?: existingDoc?.pages?.find { p -> p.id == slot.id || (p.id.startsWith("p") && p.id.drop(1) == (slotIdx + 1).toString()) }
-                    ?: existingDoc?.pages?.getOrNull(slotIdx)
-
-                val isEditingThisSlot = isEditing.value && editingSlotId.value == slot.id
-                val currentEdits = if (isEditingThisSlot) editorState.value else null
-                
-                val finalFilterStr = overrideFilter ?: currentEdits?.filter?.name ?: existingPage?.filter ?: "COLOR"
-                val rotation = currentEdits?.rotation ?: existingPage?.rotation ?: 0
-                val cornersList = slot.corners ?: existingPage?.corners
-
-                val originalRes = getFullResBitmap(slot.id, isOriginal = true)
-                    ?: getFullResBitmap(existingPage?.id ?: slot.id, isOriginal = true)
-
-                var processedBmp: Bitmap? = if (originalRes != null && cornersList != null && cornersList.size == 4) {
-                    val quad = Quadrilateral(cornersList[0], cornersList[1], cornersList[2], cornersList[3])
-                    try {
-                        documentScanner.cropAndTransform(originalRes, quad, currentMode.value.name, flatCrop = isFlatWarp)
-                    } catch (e: Exception) { originalRes }
-                } else {
-                    originalRes ?: getFullResBitmap(slot.id, isOriginal = false) ?: slot.bitmap
-                }
-
-                if (processedBmp != null && rotation != 0) {
-                    val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
-                    val rotated = android.graphics.Bitmap.createBitmap(processedBmp, 0, 0, processedBmp.width, processedBmp.height, matrix, true)
-                    if (rotated !== processedBmp && processedBmp !== originalRes && processedBmp !== slot.bitmap) processedBmp.recycle()
-                    processedBmp = rotated
-                }
-
-                if (processedBmp != null) {
-                    val filterEnum = try { com.safescan.data.FilterType.valueOf(finalFilterStr) } catch (e: Exception) { com.safescan.data.FilterType.COLOR }
-                    val state = com.safescan.data.EditorState(
-                        brightness = currentEdits?.brightness ?: existingPage?.brightness ?: 0f,
-                        contrast = currentEdits?.contrast ?: existingPage?.contrast ?: 1.0f,
-                        sharpness = currentEdits?.sharpness ?: existingPage?.sharpness ?: 0f,
-                        saturation = currentEdits?.saturation ?: existingPage?.saturation ?: 0f,
-                        filter = filterEnum
-                    )
-                    val applied = com.safescan.domain.ImageProcessor.apply(processedBmp, state)
-                    if (applied !== processedBmp && processedBmp !== originalRes && processedBmp !== slot.bitmap) processedBmp.recycle()
-                    processedBmp = applied
-                }
-
-                var tempPreviewFile: java.io.File? = null
-                if (processedBmp != null) {
-                    val tempPath = saveHighResToDisk(processedBmp, slot.id, "build_temp_${System.currentTimeMillis()}")
-                    if (tempPath != null) tempPreviewFile = java.io.File(tempPath)
-                    if (processedBmp !== originalRes && processedBmp !== slot.bitmap) {
-                        processedBmp.recycle()
-                    }
-                }
-
-                com.safescan.data.PageSaveData(
-                    id = slot.id,
-                    originalBitmap = originalRes,
-                    previewBitmap = null,
-                    previewFile = tempPreviewFile,
-                    corners = cornersList,
-                    filter = finalFilterStr,
-                    brightness = currentEdits?.brightness ?: existingPage?.brightness ?: 0f,
-                    contrast = currentEdits?.contrast ?: existingPage?.contrast ?: 1.0f,
-                    sharpness = currentEdits?.sharpness ?: existingPage?.sharpness ?: 0f,
-                    saturation = currentEdits?.saturation ?: existingPage?.saturation ?: 0f,
-                    rotation = rotation,
-                    recognizedText = if (isEditingThisSlot) recognizedText.value else existingPage?.recognizedText
-                )
-            }
-        }
+        return exportHelper.buildPagesData(
+            context = context,
+            docId = docId,
+            tempBitmapsToRecycle = tempBitmapsToRecycle,
+            overrideFilter = overrideFilter,
+            capturedJpgFiles = capturedJpgFiles,
+            originalJpgBitmaps = originalJpgBitmaps,
+            jpgCorners = jpgCorners,
+            slots = slots.value,
+            isEditing = isEditing.value,
+            editingJpgIndex = editingJpgIndex.value,
+            editingSlotId = editingSlotId.value,
+            editorState = editorState.value,
+            recognizedText = recognizedText.value,
+            wizardWarp = wizardWarp.value,
+            currentMode = currentMode.value,
+            openedDocumentId = openedDocumentId
+        )
     }
 
     private fun saveDocumentStateOffline(docId: String) {
@@ -775,8 +559,8 @@ class ScannerViewModel @Inject constructor(
                     java.io.File(path).delete()
                 } catch (e: Exception) {}
             }
-            highResCache.remove("${slotId}_processed")
-            highResCache.remove("${slotId}_original")
+            imageCacheHelper.remove("${slotId}_processed")
+            imageCacheHelper.remove("${slotId}_original")
 
             if (currentMode.value == ScannerMode.DOCUMENT) {
                 currentSlots.removeAt(index)
@@ -887,8 +671,8 @@ class ScannerViewModel @Inject constructor(
                         java.io.File(path).delete()
                     } catch (e: Exception) {}
                 }
-                highResCache.remove("${slot.id}_processed")
-                highResCache.remove("${slot.id}_original")
+                imageCacheHelper.remove("${slot.id}_processed")
+                imageCacheHelper.remove("${slot.id}_original")
 
                 if (currentMode.value == ScannerMode.DOCUMENT) {
                     currentSlots.removeAt(index)
@@ -939,7 +723,7 @@ class ScannerViewModel @Inject constructor(
         capturedJpgFiles.clear()
         originalJpgBitmaps.clear()
         jpgCorners.clear()
-        highResCache.evictAll()
+        imageCacheHelper.evictAll()
         DiagnosticsLogger.info("Session ended. All slots and temporary images cleared for a new document.")
     }
 
@@ -1041,13 +825,13 @@ class ScannerViewModel @Inject constructor(
                         
                         // Save high-res to disk
                         val processedPath = saveHighResToDisk(processedCropped, slotId, "processed")
-                        highResCache.put("${slotId}_processed", processedCropped)
+                        imageCacheHelper.put("${slotId}_processed", processedCropped)
                         
                         var origPath = existing.originalBitmapPath
                         if (origPath == null) {
                             origPath = saveHighResToDisk(bmp, slotId, "original")
                         }
-                        highResCache.put("${slotId}_original", bmp)
+                        imageCacheHelper.put("${slotId}_original", bmp)
 
                         // Generate lightweight thumbnail
                         val thumbnail = generateThumbnail(processedCropped, 360)
@@ -1432,7 +1216,7 @@ class ScannerViewModel @Inject constructor(
                             )
                         )
 
-                        highResCache.put("${slot.id}_processed", processed)
+                        imageCacheHelper.put("${slot.id}_processed", processed)
                         val processedPath = saveHighResToDisk(processed, slot.id, "processed")
                         val thumb = generateThumbnail(processed, 360)
 
@@ -1566,289 +1350,81 @@ class ScannerViewModel @Inject constructor(
         customCardLayout: String? = null,
         onResult: (java.io.File?) -> Unit
     ) {
-        if (isEditing.value) {
-            commitActiveEditorChanges()
-        }
-
-        val docIdForHash = openedDocumentId ?: "new_doc"
-        val titleForHash = customTitle ?: getOrGenerateDocumentTitle(docIdForHash)
-        val targetPageSize = customPageSize ?: pageSize.value
-        val targetOrientation = customOrientation ?: pdfOrientation.value
-        val targetQuality = customQuality ?: jpegQuality.value
-        val targetDpi = customDpi ?: dpi.value
-        val targetCardLayout = customCardLayout ?: "2x4"
-
-        val currentHash = java.util.Objects.hash(
-            slots.value.hashCode(),
-            capturedJpgFiles.toList().hashCode(),
-            titleForHash,
-            targetPageSize,
-            targetOrientation,
-            targetQuality,
-            targetDpi,
-            customWarp,
-            customFilter,
-            targetCardLayout
+        exportHelper.exportPdf(
+            scope = viewModelScope,
+            context = context,
+            clearSession = clearSession,
+            customTitle = customTitle,
+            customPageSize = customPageSize,
+            customOrientation = customOrientation,
+            customQuality = customQuality,
+            customDpi = customDpi,
+            customWarp = customWarp,
+            customFilter = customFilter,
+            customCardLayout = customCardLayout,
+            isEditing = isEditing.value,
+            openedDocumentId = openedDocumentId,
+            initialDocumentTitle = initialDocumentTitle,
+            pageSize = pageSize.value,
+            pdfOrientation = pdfOrientation.value,
+            jpegQuality = jpegQuality.value,
+            dpi = dpi.value,
+            wizardWarp = wizardWarp.value,
+            currentMode = currentMode.value,
+            slots = slots.value,
+            capturedJpgFiles = capturedJpgFiles,
+            originalJpgBitmaps = originalJpgBitmaps,
+            jpgCorners = jpgCorners,
+            cachedPdfFile = cachedPdfFile,
+            lastExportPdfHash = lastExportPdfHash,
+            editingJpgIndex = editingJpgIndex.value,
+            editingSlotId = editingSlotId.value,
+            editorState = editorState.value,
+            recognizedText = recognizedText.value,
+            commitActiveEditorChanges = { commitActiveEditorChanges() },
+            commitActiveEditorChangesSuspend = { commitActiveEditorChangesSuspend() },
+            getOrGenerateDocumentTitle = { docId -> getOrGenerateDocumentTitle(docId) },
+            reloadSavedDocuments = { reloadSavedDocuments() },
+            onDocumentIdAssigned = { assignedId -> openedDocumentId = assignedId },
+            onSessionCleared = {
+                capturedJpgFiles.clear()
+                originalJpgBitmaps.clear()
+                jpgCorners.clear()
+                cachedPdfFile = null
+                lastExportPdfHash = 0
+                openedDocumentId = null
+                initialDocumentTitle = null
+            },
+            onCacheExportedPdf = { pdfFile, hash ->
+                cachedPdfFile = pdfFile
+                lastExportPdfHash = hash
+            },
+            onResult = onResult
         )
-
-        if (!clearSession && cachedPdfFile != null && cachedPdfFile!!.exists() && lastExportPdfHash == currentHash) {
-            DiagnosticsLogger.info("Using cached PDF file: ${cachedPdfFile!!.name}")
-            onResult(cachedPdfFile)
-            return
-        }
-
-        DiagnosticsLogger.info("Starting PDF/Document assembly pipeline...")
-        // FIX: FINAL LEAK
-        val tempBitmapsToRecycle = mutableListOf<Bitmap>()
-        val tempFilesToDelete = mutableListOf<String>()
-        var pagesData: List<com.safescan.data.PageSaveData>? = null
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                if (isEditing.value) {
-                    commitActiveEditorChangesSuspend()
-                }
-
-                // Also save the captured pages and metadata persistently as a document
-                val docId = openedDocumentId ?: ("doc_" + System.currentTimeMillis())
-                if (openedDocumentId == null) {
-                    openedDocumentId = docId
-                }
-                val title = customTitle ?: getOrGenerateDocumentTitle(docId)
-                pagesData = buildPagesData(docId, tempBitmapsToRecycle, overrideFilter = customFilter)
-                
-                if (pagesData!!.isNotEmpty()) {
-                    saveDocumentUseCase.saveDocument(docId, title, currentMode.value.name, pagesData!!)
-                    DiagnosticsLogger.info("Saved document meta of ${pagesData.size} pages securely offline.")
-                    reloadSavedDocuments()
-                } else {
-                    saveDocumentUseCase.deleteDocument(docId)
-                    reloadSavedDocuments()
-                }
-
-                val savedDoc = openedDocumentId?.let { saveDocumentUseCase.getDocument(it) }
-                val effectiveWarp = customWarp ?: wizardWarp.value
-                val isFlatWarp = effectiveWarp == "Flat" || effectiveWarp == "Flat Crop Only"
-                val overrideFilterEnum = customFilter?.let {
-                    try { com.safescan.data.FilterType.valueOf(it) } catch (e: Exception) { null }
-                }
-
-                val slotsToExport = if (capturedJpgFiles.isNotEmpty()) {
-                    capturedJpgFiles.mapIndexed { idx, file ->
-                        val pageId = if (idx < slots.value.size) slots.value[idx].id else "p${idx + 1}"
-                        val pageMeta = savedDoc?.pages?.find { it.id == pageId } ?: savedDoc?.pages?.getOrNull(idx)
-                        val rawBmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
-                        val origBmp = originalJpgBitmaps[idx] ?: rawBmp
-                        val corners = jpgCorners[idx] ?: pageMeta?.corners
-                        var finalBmp = if (origBmp != null && corners != null && corners.size == 4) {
-                            val quad = Quadrilateral(corners[0], corners[1], corners[2], corners[3])
-                            try {
-                                documentScanner.cropAndTransform(origBmp, quad, currentMode.value.name, flatCrop = isFlatWarp)
-                            } catch (e: Exception) { rawBmp ?: origBmp }
-                        } else {
-                            rawBmp ?: origBmp
-                        }
-                        val rotation = pageMeta?.rotation ?: 0
-                        if (finalBmp != null && rotation != 0) {
-                            val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
-                            val rotated = android.graphics.Bitmap.createBitmap(finalBmp, 0, 0, finalBmp.width, finalBmp.height, matrix, true)
-                            if (rotated !== finalBmp && finalBmp !== origBmp && finalBmp !== rawBmp) finalBmp.recycle()
-                            finalBmp = rotated
-                        }
-                        val activeFilter = overrideFilterEnum ?: try { pageMeta?.filter?.let { com.safescan.data.FilterType.valueOf(it) } ?: com.safescan.data.FilterType.COLOR } catch (e: Exception) { com.safescan.data.FilterType.COLOR }
-                        val state = com.safescan.data.EditorState(
-                            brightness = pageMeta?.brightness ?: 0f,
-                            contrast = pageMeta?.contrast ?: 1f,
-                            sharpness = pageMeta?.sharpness ?: 0f,
-                            saturation = pageMeta?.saturation ?: 0f,
-                            rotation = rotation,
-                            filter = activeFilter
-                        )
-                        if (finalBmp != null) {
-                            val processed = com.safescan.domain.ImageProcessor.apply(finalBmp, state)
-                            if (processed !== finalBmp && finalBmp !== origBmp && finalBmp !== rawBmp) finalBmp.recycle()
-                            finalBmp = processed
-                        }
-                        
-                        var tempPath: String? = null
-                        if (finalBmp != null) {
-                            tempPath = saveHighResToDisk(finalBmp, pageId, "export_temp_${System.currentTimeMillis()}")
-                            if (tempPath != null) tempFilesToDelete.add(tempPath)
-                            if (finalBmp !== origBmp && finalBmp !== rawBmp) {
-                                finalBmp.recycle()
-                            }
-                        }
-                        if (rawBmp != null && rawBmp !== origBmp && !rawBmp.isRecycled) {
-                            rawBmp.recycle()
-                        }
-                        Slot(pageId, "Page ${idx + 1}", bitmap = null, bitmapPath = tempPath)
-                    }
-                } else {
-                    slots.value.filter { it.bitmap != null }.map { slot ->
-                        val slotIdx = slots.value.indexOf(slot)
-                        val pageMeta = savedDoc?.pages?.find { it.id == slot.id }
-                            ?: savedDoc?.pages?.find { p -> p.id.startsWith("p") && p.id.drop(1) == (slotIdx + 1).toString() }
-                            ?: savedDoc?.pages?.getOrNull(slotIdx)
-                        val effectivePageId = pageMeta?.id ?: slot.id
-
-                        val originalRes = getFullResBitmap(slot.id, isOriginal = true)
-                            ?: getFullResBitmap(effectivePageId, isOriginal = true)
-                        
-                        val corners = slot.corners ?: pageMeta?.corners
-                        val rotation = pageMeta?.rotation ?: 0
-                        
-                        var highResBmp: Bitmap? = if (originalRes != null && corners != null && corners.size == 4) {
-                            val quad = Quadrilateral(corners[0], corners[1], corners[2], corners[3])
-                            try {
-                                documentScanner.cropAndTransform(originalRes, quad, currentMode.value.name, flatCrop = isFlatWarp)
-                            } catch (e: Exception) { originalRes }
-                        } else {
-                            originalRes ?: getFullResBitmap(slot.id, isOriginal = true) ?: getFullResBitmap(slot.id, isOriginal = false) ?: slot.bitmap
-                        }
-                        
-                        if (highResBmp != null && rotation != 0) {
-                            val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
-                            val rotated = android.graphics.Bitmap.createBitmap(highResBmp, 0, 0, highResBmp.width, highResBmp.height, matrix, true)
-                            if (rotated !== highResBmp && highResBmp !== originalRes && highResBmp !== slot.bitmap) highResBmp.recycle()
-                            highResBmp = rotated
-                        }
-
-                        if (highResBmp != null) {
-                            val filterEnum = overrideFilterEnum ?: try { pageMeta?.filter?.let { com.safescan.data.FilterType.valueOf(it) } ?: com.safescan.data.FilterType.COLOR } catch (e: Exception) { com.safescan.data.FilterType.COLOR }
-                            val state = com.safescan.data.EditorState(
-                                brightness = pageMeta?.brightness ?: 0f,
-                                contrast = pageMeta?.contrast ?: 1f,
-                                sharpness = pageMeta?.sharpness ?: 0f,
-                                saturation = pageMeta?.saturation ?: 0f,
-                                filter = filterEnum
-                            )
-                            val processed = com.safescan.domain.ImageProcessor.apply(highResBmp, state)
-                            if (processed !== highResBmp && highResBmp !== originalRes && highResBmp !== slot.bitmap) highResBmp.recycle()
-                            highResBmp = processed
-                        }
-
-                        var tempPath: String? = null
-                        if (highResBmp != null) {
-                            tempPath = saveHighResToDisk(highResBmp, effectivePageId, "export_temp_${System.currentTimeMillis()}")
-                            if (tempPath != null) tempFilesToDelete.add(tempPath)
-                            if (highResBmp !== originalRes && highResBmp !== slot.bitmap) {
-                                highResBmp.recycle()
-                            }
-                        }
-                        
-                        slot.copy(bitmap = null, bitmapPath = tempPath ?: slot.bitmapPath)
-                    }
-                }
-                val targetPageSize = customPageSize ?: pageSize.value
-                val targetOrientation = customOrientation ?: pdfOrientation.value
-                val targetQuality = customQuality ?: jpegQuality.value
-                DiagnosticsLogger.info("Exporting document to PDF at $targetPageSize layout off-thread...")
-                val result = exportPdfUseCase.exportCardsToPdf(
-                    slotsToExport,
-                    title,
-                    currentMode.value,
-                    targetPageSize,
-                    targetOrientation,
-                    dpi = targetDpi,
-                    jpegQuality = targetQuality,
-                    cardLayout = targetCardLayout
-                )
-                withContext(Dispatchers.Main) {
-                    if (clearSession) {
-                        capturedJpgFiles.clear()
-                        originalJpgBitmaps.clear()
-                        jpgCorners.clear()
-                        cachedPdfFile = null
-                        lastExportPdfHash = 0
-                        openedDocumentId = null
-                        initialDocumentTitle = null
-                    } else {
-                        cachedPdfFile = result.getOrNull()
-                        lastExportPdfHash = currentHash
-                    }
-                    DiagnosticsLogger.info("PDF document generated successfully.")
-                    onResult(result.getOrNull())
-                }
-            } catch (e: Exception) {
-                DiagnosticsLogger.error("PDF Export Pipeline error: ${e.message}")
-                withContext(Dispatchers.Main) {
-                    onResult(null)
-                }
-            } finally {
-                // FIX: FINAL LEAK
-                for (bmp in tempBitmapsToRecycle) {
-                    if (!bmp.isRecycled) {
-                        val isOriginal = originalJpgBitmaps.values.any { it === bmp } || 
-                                         slots.value.any { it.bitmap === bmp }
-                        if (!isOriginal) {
-                            bmp.recycle()
-                        }
-                    }
-                }
-                tempBitmapsToRecycle.clear()
-                
-                for (path in tempFilesToDelete) {
-                    try {
-                        val f = java.io.File(path)
-                        if (f.exists()) f.delete()
-                    } catch (e: Exception) {
-                        // ignore
-                    }
-                }
-                tempFilesToDelete.clear()
-                pagesData?.forEach { page ->
-                    page.previewFile?.let { if (it.exists()) it.delete() }
-                }
-            }
-        }
     }
 
     fun saveDocumentOnly(onResult: (Boolean) -> Unit) {
-        DiagnosticsLogger.info("Starting offline Document save pipeline...")
-        val tempBitmapsToRecycle = mutableListOf<Bitmap>()
-        var pagesData: List<com.safescan.data.PageSaveData>? = null
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val docId = openedDocumentId ?: ("doc_" + System.currentTimeMillis())
-                val title = getOrGenerateDocumentTitle(docId)
-                pagesData = buildPagesData(docId, tempBitmapsToRecycle)
-                
-                if (pagesData!!.isNotEmpty()) {
-                    saveDocumentUseCase.saveDocument(docId, title, currentMode.value.name, pagesData!!)
-                    DiagnosticsLogger.info("Saved document meta of ${pagesData.size} pages securely offline.")
-                    reloadSavedDocuments()
-                    withContext(Dispatchers.Main) {
-                        endSession()
-                        onResult(true)
-                    }
-                } else {
-                    saveDocumentUseCase.deleteDocument(docId)
-                    reloadSavedDocuments()
-                    withContext(Dispatchers.Main) {
-                        endSession()
-                        onResult(false)
-                    }
-                }
-            } catch (e: Exception) {
-                DiagnosticsLogger.error("Document Save Only error: ${e.message}")
-                withContext(Dispatchers.Main) {
-                    onResult(false)
-                }
-            } finally {
-                for (bmp in tempBitmapsToRecycle) {
-                    if (!bmp.isRecycled) {
-                        val isOriginal = originalJpgBitmaps.values.any { it === bmp } || 
-                                         slots.value.any { it.bitmap === bmp }
-                        if (!isOriginal) {
-                            bmp.recycle()
-                        }
-                    }
-                }
-                tempBitmapsToRecycle.clear()
-                pagesData?.forEach { page ->
-                    page.previewFile?.let { if (it.exists()) it.delete() }
-                }
-            }
-        }
+        exportHelper.saveDocumentOnly(
+            scope = viewModelScope,
+            context = context,
+            openedDocumentId = openedDocumentId,
+            capturedJpgFiles = capturedJpgFiles,
+            originalJpgBitmaps = originalJpgBitmaps,
+            jpgCorners = jpgCorners,
+            slots = slots.value,
+            currentMode = currentMode.value,
+            isEditing = isEditing.value,
+            editingJpgIndex = editingJpgIndex.value,
+            editingSlotId = editingSlotId.value,
+            editorState = editorState.value,
+            recognizedText = recognizedText.value,
+            wizardWarp = wizardWarp.value,
+            getOrGenerateDocumentTitle = { docId -> getOrGenerateDocumentTitle(docId) },
+            reloadSavedDocuments = { reloadSavedDocuments() },
+            onDocumentIdAssigned = { assignedId -> openedDocumentId = assignedId },
+            endSession = { endSession() },
+            onResult = onResult
+        )
     }
 
     fun loadDocumentIntoSlots(doc: com.safescan.data.DocumentMetadata) {
@@ -1869,7 +1445,7 @@ class ScannerViewModel @Inject constructor(
                 
                 if (originalBmp != null) {
                     originalPath = saveHighResToDisk(originalBmp, page.id, "original")
-                    highResCache.put("${page.id}_original", originalBmp)
+                    imageCacheHelper.put("${page.id}_original", originalBmp)
                 }
                 if (previewBmp != null) {
                     if (previewBmp === originalBmp && originalPath != null) {
@@ -1883,7 +1459,7 @@ class ScannerViewModel @Inject constructor(
                     } else {
                         processedPath = saveHighResToDisk(previewBmp, page.id, "processed")
                     }
-                    highResCache.put("${page.id}_processed", previewBmp)
+                    imageCacheHelper.put("${page.id}_processed", previewBmp)
                 }
 
                 // Generate downsampled lightweight thumbnail
@@ -2185,18 +1761,8 @@ class ScannerViewModel @Inject constructor(
         super.onCleared()
         editingJob?.cancel()
 
-        // Clear and recycle all bitmaps in the highResCache to prevent native OOM
-        try {
-            val snapshot = highResCache.snapshot()
-            for (bitmap in snapshot.values) {
-                if (bitmap != null && !bitmap.isRecycled) {
-                    bitmap.recycle()
-                }
-            }
-            highResCache.evictAll()
-        } catch (e: Exception) {
-            Log.e("ScannerViewModel", "Failed to clear highResCache in onCleared", e)
-        }
+        // Clear and recycle all bitmaps in the imageCacheHelper to prevent native OOM
+        imageCacheHelper.clearAndRecycle()
 
         // Recycle originalJpgBitmaps
         try {

@@ -417,11 +417,17 @@ object ImageProcessor {
             val meanBg =
                 Core.mean(bgIllum)
                     .`val`[0]
-                    .coerceIn(80.0, 220.0)
+                    .coerceIn(110.0, 220.0)
 
             Core.add(
                 bgFloat,
                 Scalar(1.0),
+                bgFloat
+            )
+
+            Core.max(
+                bgFloat,
+                Scalar(110.0),
                 bgFloat
             )
 
