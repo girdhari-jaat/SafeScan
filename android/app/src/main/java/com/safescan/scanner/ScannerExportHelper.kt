@@ -10,6 +10,7 @@ import com.safescan.data.FilterType
 import com.safescan.data.PageSaveData
 import com.safescan.data.ScannerMode
 import com.safescan.data.Slot
+import com.safescan.domain.ImageProcessor
 import com.safescan.domain.model.Point
 import com.safescan.domain.model.Quadrilateral
 import com.safescan.domain.usecase.ExportPdfUseCase
@@ -41,7 +42,7 @@ class ScannerExportHelper(
         editingJpgIndex: Int?,
         editingSlotId: String?,
         editorState: EditorState,
-        recognizedText: String,
+        recognizedText: String? = null,
         wizardWarp: String,
         currentMode: ScannerMode,
         openedDocumentId: String?
@@ -232,7 +233,7 @@ class ScannerExportHelper(
         editingJpgIndex: Int?,
         editingSlotId: String?,
         editorState: EditorState,
-        recognizedText: String,
+        recognizedText: String? = null,
         commitActiveEditorChanges: () -> Unit,
         commitActiveEditorChangesSuspend: suspend () -> Unit,
         getOrGenerateDocumentTitle: (String?) -> String,
@@ -499,7 +500,7 @@ class ScannerExportHelper(
         editingJpgIndex: Int?,
         editingSlotId: String?,
         editorState: EditorState,
-        recognizedText: String,
+        recognizedText: String? = null,
         wizardWarp: String,
         getOrGenerateDocumentTitle: (String?) -> String,
         reloadSavedDocuments: suspend () -> Unit,

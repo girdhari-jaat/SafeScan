@@ -34,8 +34,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.safescan.data.ScannerMode
+import com.safescan.data.Slot
 import com.safescan.scanner.ScannerViewModel
-import com.safescan.scanner.Slot
 import java.io.File
 
 @Composable
