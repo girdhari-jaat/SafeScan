@@ -494,7 +494,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
                                             bitmap = imageBitmap,
                                             contentDescription = null,
                                             modifier = Modifier
-                                                .size(width = (imageSize.width.toFloat() / density * zoom).dp, height = (imageSize.height.toFloat() / density * zoom).dp)
+                                                .requiredSize(width = (imageSize.width.toFloat() / density * zoom).dp, height = (imageSize.height.toFloat() / density * zoom).dp)
                                                 .offset(
                                                     x = (-(dragOffset.x / density * zoom) + (magnifierSize.value / 2)).dp,
                                                     y = (-(dragOffset.y / density * zoom) + (magnifierSize.value / 2)).dp
