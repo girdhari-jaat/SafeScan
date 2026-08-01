@@ -220,10 +220,12 @@ class ScannerViewModel @Inject constructor(
 
         openedDocumentId?.let { docId ->
             try {
-                val bitmap = if (isOriginal) {
-                    saveDocumentUseCase.loadOriginalBitmap(docId, slotId)
-                } else {
-                    saveDocumentUseCase.loadPreviewBitmap(docId, slotId)
+                val bitmap = kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                    if (isOriginal) {
+                        saveDocumentUseCase.loadOriginalBitmap(docId, slotId)
+                    } else {
+                        saveDocumentUseCase.loadPreviewBitmap(docId, slotId)
+                    }
                 }
                 if (bitmap != null) {
                     highResCache.put(cacheKey, bitmap)
@@ -1276,7 +1278,6 @@ class ScannerViewModel @Inject constructor(
             if (currentSlots.isNotEmpty()) {
                 val updatedSlots = currentSlots.map { slot ->
                     val origBmp = getFullResBitmap(slot.id, isOriginal = true)
-                        ?: (docId?.let { saveDocumentUseCase.loadOriginalBitmap(it, slot.id) })
                         ?: getFullResBitmap(slot.id, isOriginal = false)
                         ?: slot.bitmap
 
@@ -1553,7 +1554,6 @@ class ScannerViewModel @Inject constructor(
 
                         val originalRes = getFullResBitmap(slot.id, isOriginal = true)
                             ?: getFullResBitmap(effectivePageId, isOriginal = true)
-                            ?: (openedDocumentId?.let { saveDocumentUseCase.loadOriginalBitmap(it, effectivePageId) })
                         
                         val corners = slot.corners ?: pageMeta?.corners
                         val rotation = pageMeta?.rotation ?: 0
