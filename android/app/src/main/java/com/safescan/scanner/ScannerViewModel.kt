@@ -565,12 +565,12 @@ class ScannerViewModel @Inject constructor(
         val existingDoc = saveDocumentUseCase.getDocument(docId)
         val existingMetaMap = existingDoc?.pages?.associateBy { it.id } ?: emptyMap()
 
+        val effectiveWarp = wizardWarp.value
+        val isFlatWarp = effectiveWarp == "Flat" || effectiveWarp == "Flat Crop Only"
+
         return if (capturedJpgFiles.isNotEmpty()) {
             capturedJpgFiles.mapIndexed { idx, file ->
                 val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
-                if (bmp != null) {
-                    tempBitmapsToRecycle.add(bmp)
-                }
                 val originalBmp = originalJpgBitmaps[idx] ?: bmp
                 val corners = jpgCorners[idx]
                 val pageId = if (idx < slots.value.size) slots.value[idx].id else "p${idx + 1}"
@@ -580,44 +580,138 @@ class ScannerViewModel @Inject constructor(
 
                 val isEditingThisJpg = isEditing.value && editingJpgIndex.value == idx
                 val currentEdits = if (isEditingThisJpg) editorState.value else null
+                
+                val finalFilterStr = overrideFilter ?: currentEdits?.filter?.name ?: existingPage?.filter ?: "COLOR"
+                val rotation = currentEdits?.rotation ?: existingPage?.rotation ?: 0
+                val cornersList = corners ?: existingPage?.corners
+
+                var processedBmp: Bitmap? = if (originalBmp != null && cornersList != null && cornersList.size == 4) {
+                    val quad = Quadrilateral(cornersList[0], cornersList[1], cornersList[2], cornersList[3])
+                    try {
+                        documentScanner.cropAndTransform(originalBmp, quad, currentMode.value.name, flatCrop = isFlatWarp)
+                    } catch (e: Exception) { originalBmp }
+                } else {
+                    originalBmp
+                }
+
+                if (processedBmp != null && rotation != 0) {
+                    val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
+                    val rotated = android.graphics.Bitmap.createBitmap(processedBmp, 0, 0, processedBmp.width, processedBmp.height, matrix, true)
+                    if (rotated !== processedBmp && processedBmp !== originalBmp && processedBmp !== bmp) processedBmp.recycle()
+                    processedBmp = rotated
+                }
+
+                if (processedBmp != null) {
+                    val filterEnum = try { com.safescan.data.FilterType.valueOf(finalFilterStr) } catch (e: Exception) { com.safescan.data.FilterType.COLOR }
+                    val state = com.safescan.data.EditorState(
+                        brightness = currentEdits?.brightness ?: existingPage?.brightness ?: 0f,
+                        contrast = currentEdits?.contrast ?: existingPage?.contrast ?: 1.0f,
+                        sharpness = currentEdits?.sharpness ?: existingPage?.sharpness ?: 0f,
+                        saturation = currentEdits?.saturation ?: existingPage?.saturation ?: 0f,
+                        filter = filterEnum
+                    )
+                    val applied = com.safescan.domain.ImageProcessor.apply(processedBmp, state)
+                    if (applied !== processedBmp && processedBmp !== originalBmp && processedBmp !== bmp) processedBmp.recycle()
+                    processedBmp = applied
+                }
+
+                var tempPreviewFile: java.io.File? = null
+                if (processedBmp != null) {
+                    val tempPath = saveHighResToDisk(processedBmp, pageId, "build_temp_${System.currentTimeMillis()}")
+                    if (tempPath != null) tempPreviewFile = java.io.File(tempPath)
+                    if (processedBmp !== originalBmp && processedBmp !== bmp) {
+                        processedBmp.recycle()
+                    }
+                }
+                if (bmp != null && bmp !== originalBmp && !bmp.isRecycled) {
+                    bmp.recycle()
+                }
 
                 com.safescan.data.PageSaveData(
                     id = pageId,
+                    originalFile = file,
+                    previewFile = tempPreviewFile,
                     originalBitmap = originalBmp,
-                    previewBitmap = bmp,
-                    corners = corners ?: existingPage?.corners,
-                    filter = overrideFilter ?: currentEdits?.filter?.name ?: existingPage?.filter ?: "COLOR",
+                    previewBitmap = null, // Will use previewFile
+                    corners = cornersList,
+                    filter = finalFilterStr,
                     brightness = currentEdits?.brightness ?: existingPage?.brightness ?: 0f,
                     contrast = currentEdits?.contrast ?: existingPage?.contrast ?: 1.0f,
                     sharpness = currentEdits?.sharpness ?: existingPage?.sharpness ?: 0f,
                     saturation = currentEdits?.saturation ?: existingPage?.saturation ?: 0f,
-                    rotation = currentEdits?.rotation ?: existingPage?.rotation ?: 0,
+                    rotation = rotation,
                     recognizedText = if (isEditingThisJpg) recognizedText.value else existingPage?.recognizedText
                 )
             }
         } else {
             slots.value.filter { it.bitmap != null }.map { slot ->
                 val slotIdx = slots.value.indexOf(slot)
-                val fullResProcessed = getFullResBitmap(slot.id, isOriginal = false) ?: slot.bitmap!!
-                val fullResOriginal = getFullResBitmap(slot.id, isOriginal = true) ?: fullResProcessed
+                
                 val existingPage = existingMetaMap[slot.id]
                     ?: existingDoc?.pages?.find { p -> p.id == slot.id || (p.id.startsWith("p") && p.id.drop(1) == (slotIdx + 1).toString()) }
                     ?: existingDoc?.pages?.getOrNull(slotIdx)
 
                 val isEditingThisSlot = isEditing.value && editingSlotId.value == slot.id
                 val currentEdits = if (isEditingThisSlot) editorState.value else null
+                
+                val finalFilterStr = overrideFilter ?: currentEdits?.filter?.name ?: existingPage?.filter ?: "COLOR"
+                val rotation = currentEdits?.rotation ?: existingPage?.rotation ?: 0
+                val cornersList = slot.corners ?: existingPage?.corners
+
+                val originalRes = getFullResBitmap(slot.id, isOriginal = true)
+                    ?: getFullResBitmap(existingPage?.id ?: slot.id, isOriginal = true)
+
+                var processedBmp: Bitmap? = if (originalRes != null && cornersList != null && cornersList.size == 4) {
+                    val quad = Quadrilateral(cornersList[0], cornersList[1], cornersList[2], cornersList[3])
+                    try {
+                        documentScanner.cropAndTransform(originalRes, quad, currentMode.value.name, flatCrop = isFlatWarp)
+                    } catch (e: Exception) { originalRes }
+                } else {
+                    originalRes ?: getFullResBitmap(slot.id, isOriginal = false) ?: slot.bitmap
+                }
+
+                if (processedBmp != null && rotation != 0) {
+                    val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
+                    val rotated = android.graphics.Bitmap.createBitmap(processedBmp, 0, 0, processedBmp.width, processedBmp.height, matrix, true)
+                    if (rotated !== processedBmp && processedBmp !== originalRes && processedBmp !== slot.bitmap) processedBmp.recycle()
+                    processedBmp = rotated
+                }
+
+                if (processedBmp != null) {
+                    val filterEnum = try { com.safescan.data.FilterType.valueOf(finalFilterStr) } catch (e: Exception) { com.safescan.data.FilterType.COLOR }
+                    val state = com.safescan.data.EditorState(
+                        brightness = currentEdits?.brightness ?: existingPage?.brightness ?: 0f,
+                        contrast = currentEdits?.contrast ?: existingPage?.contrast ?: 1.0f,
+                        sharpness = currentEdits?.sharpness ?: existingPage?.sharpness ?: 0f,
+                        saturation = currentEdits?.saturation ?: existingPage?.saturation ?: 0f,
+                        filter = filterEnum
+                    )
+                    val applied = com.safescan.domain.ImageProcessor.apply(processedBmp, state)
+                    if (applied !== processedBmp && processedBmp !== originalRes && processedBmp !== slot.bitmap) processedBmp.recycle()
+                    processedBmp = applied
+                }
+
+                var tempPreviewFile: java.io.File? = null
+                if (processedBmp != null) {
+                    val tempPath = saveHighResToDisk(processedBmp, slot.id, "build_temp_${System.currentTimeMillis()}")
+                    if (tempPath != null) tempPreviewFile = java.io.File(tempPath)
+                    if (processedBmp !== originalRes && processedBmp !== slot.bitmap) {
+                        processedBmp.recycle()
+                    }
+                }
 
                 com.safescan.data.PageSaveData(
                     id = slot.id,
-                    originalBitmap = fullResOriginal,
-                    previewBitmap = fullResProcessed,
-                    corners = slot.corners ?: existingPage?.corners,
-                    filter = overrideFilter ?: currentEdits?.filter?.name ?: existingPage?.filter ?: "COLOR",
+                    originalBitmap = originalRes,
+                    previewBitmap = null,
+                    previewFile = tempPreviewFile,
+                    corners = cornersList,
+                    filter = finalFilterStr,
                     brightness = currentEdits?.brightness ?: existingPage?.brightness ?: 0f,
                     contrast = currentEdits?.contrast ?: existingPage?.contrast ?: 1.0f,
                     sharpness = currentEdits?.sharpness ?: existingPage?.sharpness ?: 0f,
                     saturation = currentEdits?.saturation ?: existingPage?.saturation ?: 0f,
-                    rotation = currentEdits?.rotation ?: existingPage?.rotation ?: 0,
+                    rotation = rotation,
                     recognizedText = if (isEditingThisSlot) recognizedText.value else existingPage?.recognizedText
                 )
             }
@@ -626,13 +720,14 @@ class ScannerViewModel @Inject constructor(
 
     private fun saveDocumentStateOffline(docId: String) {
         viewModelScope.launch(Dispatchers.IO) {
+            var pagesData: List<com.safescan.data.PageSaveData>? = null
+            val tempBitmapsToRecycle = mutableListOf<Bitmap>()
             try {
                 val title = getOrGenerateDocumentTitle(docId)
-                val tempBitmapsToRecycle = mutableListOf<Bitmap>()
-                val pagesData = buildPagesData(docId, tempBitmapsToRecycle)
+                pagesData = buildPagesData(docId, tempBitmapsToRecycle)
                 
-                if (pagesData.isNotEmpty()) {
-                    saveDocumentUseCase.saveDocument(docId, title, currentMode.value.name, pagesData)
+                if (pagesData!!.isNotEmpty()) {
+                    saveDocumentUseCase.saveDocument(docId, title, currentMode.value.name, pagesData!!)
                     reloadSavedDocuments()
                 }
                 
@@ -647,6 +742,19 @@ class ScannerViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 DiagnosticsLogger.error("Error auto-saving document: ${e.message}")
+            } finally {
+                for (bmp in tempBitmapsToRecycle) {
+                    if (!bmp.isRecycled) {
+                        val isOriginal = originalJpgBitmaps.values.any { it === bmp } || 
+                                         slots.value.any { it.bitmap === bmp }
+                        if (!isOriginal) {
+                            bmp.recycle()
+                        }
+                    }
+                }
+                pagesData?.forEach { page ->
+                    page.previewFile?.let { if (it.exists()) it.delete() }
+                }
             }
         }
     }
@@ -1479,6 +1587,8 @@ class ScannerViewModel @Inject constructor(
         DiagnosticsLogger.info("Starting PDF/Document assembly pipeline...")
         // FIX: FINAL LEAK
         val tempBitmapsToRecycle = mutableListOf<Bitmap>()
+        val tempFilesToDelete = mutableListOf<String>()
+        var pagesData: List<com.safescan.data.PageSaveData>? = null
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 if (isEditing.value) {
@@ -1491,10 +1601,10 @@ class ScannerViewModel @Inject constructor(
                     openedDocumentId = docId
                 }
                 val title = customTitle ?: getOrGenerateDocumentTitle(docId)
-                val pagesData = buildPagesData(docId, tempBitmapsToRecycle, overrideFilter = customFilter)
+                pagesData = buildPagesData(docId, tempBitmapsToRecycle, overrideFilter = customFilter)
                 
-                if (pagesData.isNotEmpty()) {
-                    saveDocumentUseCase.saveDocument(docId, title, currentMode.value.name, pagesData)
+                if (pagesData!!.isNotEmpty()) {
+                    saveDocumentUseCase.saveDocument(docId, title, currentMode.value.name, pagesData!!)
                     DiagnosticsLogger.info("Saved document meta of ${pagesData.size} pages securely offline.")
                     reloadSavedDocuments()
                 } else {
@@ -1527,7 +1637,9 @@ class ScannerViewModel @Inject constructor(
                         val rotation = pageMeta?.rotation ?: 0
                         if (finalBmp != null && rotation != 0) {
                             val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
-                            finalBmp = android.graphics.Bitmap.createBitmap(finalBmp, 0, 0, finalBmp.width, finalBmp.height, matrix, true)
+                            val rotated = android.graphics.Bitmap.createBitmap(finalBmp, 0, 0, finalBmp.width, finalBmp.height, matrix, true)
+                            if (rotated !== finalBmp && finalBmp !== origBmp && finalBmp !== rawBmp) finalBmp.recycle()
+                            finalBmp = rotated
                         }
                         val activeFilter = overrideFilterEnum ?: try { pageMeta?.filter?.let { com.safescan.data.FilterType.valueOf(it) } ?: com.safescan.data.FilterType.COLOR } catch (e: Exception) { com.safescan.data.FilterType.COLOR }
                         val state = com.safescan.data.EditorState(
@@ -1539,10 +1651,23 @@ class ScannerViewModel @Inject constructor(
                             filter = activeFilter
                         )
                         if (finalBmp != null) {
-                            finalBmp = com.safescan.domain.ImageProcessor.apply(finalBmp, state)
-                            tempBitmapsToRecycle.add(finalBmp)
+                            val processed = com.safescan.domain.ImageProcessor.apply(finalBmp, state)
+                            if (processed !== finalBmp && finalBmp !== origBmp && finalBmp !== rawBmp) finalBmp.recycle()
+                            finalBmp = processed
                         }
-                        Slot(pageId, "Page ${idx + 1}", finalBmp)
+                        
+                        var tempPath: String? = null
+                        if (finalBmp != null) {
+                            tempPath = saveHighResToDisk(finalBmp, pageId, "export_temp_${System.currentTimeMillis()}")
+                            if (tempPath != null) tempFilesToDelete.add(tempPath)
+                            if (finalBmp !== origBmp && finalBmp !== rawBmp) {
+                                finalBmp.recycle()
+                            }
+                        }
+                        if (rawBmp != null && rawBmp !== origBmp && !rawBmp.isRecycled) {
+                            rawBmp.recycle()
+                        }
+                        Slot(pageId, "Page ${idx + 1}", bitmap = null, bitmapPath = tempPath)
                     }
                 } else {
                     slots.value.filter { it.bitmap != null }.map { slot ->
@@ -1569,7 +1694,9 @@ class ScannerViewModel @Inject constructor(
                         
                         if (highResBmp != null && rotation != 0) {
                             val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
-                            highResBmp = android.graphics.Bitmap.createBitmap(highResBmp, 0, 0, highResBmp.width, highResBmp.height, matrix, true)
+                            val rotated = android.graphics.Bitmap.createBitmap(highResBmp, 0, 0, highResBmp.width, highResBmp.height, matrix, true)
+                            if (rotated !== highResBmp && highResBmp !== originalRes && highResBmp !== slot.bitmap) highResBmp.recycle()
+                            highResBmp = rotated
                         }
 
                         if (highResBmp != null) {
@@ -1581,14 +1708,21 @@ class ScannerViewModel @Inject constructor(
                                 saturation = pageMeta?.saturation ?: 0f,
                                 filter = filterEnum
                             )
-                            highResBmp = com.safescan.domain.ImageProcessor.apply(highResBmp, state)
+                            val processed = com.safescan.domain.ImageProcessor.apply(highResBmp, state)
+                            if (processed !== highResBmp && highResBmp !== originalRes && highResBmp !== slot.bitmap) highResBmp.recycle()
+                            highResBmp = processed
                         }
 
+                        var tempPath: String? = null
                         if (highResBmp != null) {
-                            tempBitmapsToRecycle.add(highResBmp)
+                            tempPath = saveHighResToDisk(highResBmp, effectivePageId, "export_temp_${System.currentTimeMillis()}")
+                            if (tempPath != null) tempFilesToDelete.add(tempPath)
+                            if (highResBmp !== originalRes && highResBmp !== slot.bitmap) {
+                                highResBmp.recycle()
+                            }
                         }
                         
-                        slot.copy(bitmap = highResBmp ?: slot.bitmap)
+                        slot.copy(bitmap = null, bitmapPath = tempPath ?: slot.bitmapPath)
                     }
                 }
                 val targetPageSize = customPageSize ?: pageSize.value
@@ -1638,6 +1772,19 @@ class ScannerViewModel @Inject constructor(
                     }
                 }
                 tempBitmapsToRecycle.clear()
+                
+                for (path in tempFilesToDelete) {
+                    try {
+                        val f = java.io.File(path)
+                        if (f.exists()) f.delete()
+                    } catch (e: Exception) {
+                        // ignore
+                    }
+                }
+                tempFilesToDelete.clear()
+                pagesData?.forEach { page ->
+                    page.previewFile?.let { if (it.exists()) it.delete() }
+                }
             }
         }
     }
@@ -1645,14 +1792,15 @@ class ScannerViewModel @Inject constructor(
     fun saveDocumentOnly(onResult: (Boolean) -> Unit) {
         DiagnosticsLogger.info("Starting offline Document save pipeline...")
         val tempBitmapsToRecycle = mutableListOf<Bitmap>()
+        var pagesData: List<com.safescan.data.PageSaveData>? = null
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val docId = openedDocumentId ?: ("doc_" + System.currentTimeMillis())
                 val title = getOrGenerateDocumentTitle(docId)
-                val pagesData = buildPagesData(docId, tempBitmapsToRecycle)
+                pagesData = buildPagesData(docId, tempBitmapsToRecycle)
                 
-                if (pagesData.isNotEmpty()) {
-                    saveDocumentUseCase.saveDocument(docId, title, currentMode.value.name, pagesData)
+                if (pagesData!!.isNotEmpty()) {
+                    saveDocumentUseCase.saveDocument(docId, title, currentMode.value.name, pagesData!!)
                     DiagnosticsLogger.info("Saved document meta of ${pagesData.size} pages securely offline.")
                     reloadSavedDocuments()
                     withContext(Dispatchers.Main) {
@@ -1683,6 +1831,9 @@ class ScannerViewModel @Inject constructor(
                     }
                 }
                 tempBitmapsToRecycle.clear()
+                pagesData?.forEach { page ->
+                    page.previewFile?.let { if (it.exists()) it.delete() }
+                }
             }
         }
     }

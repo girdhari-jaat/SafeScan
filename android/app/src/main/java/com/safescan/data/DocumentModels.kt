@@ -5,8 +5,10 @@ import com.safescan.domain.model.Point
 
 data class PageSaveData(
     val id: String,
-    val originalBitmap: Bitmap,
-    val previewBitmap: Bitmap,
+    val originalBitmap: Bitmap? = null,
+    val previewBitmap: Bitmap? = null,
+    val originalFile: java.io.File? = null,
+    val previewFile: java.io.File? = null,
     val corners: List<Point>? = null,
     val filter: String? = null,
     val brightness: Float? = null,

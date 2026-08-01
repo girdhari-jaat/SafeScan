@@ -142,10 +142,19 @@ class DocumentRepository @Inject constructor(
                 val prevFile = File(previewsDir, "${page.id}.jpg")
 
                 if (!origFile.exists()) {
-                    saveBitmapToFile(page.originalBitmap, origFile)
+                    if (page.originalFile != null && page.originalFile.exists()) {
+                        page.originalFile.copyTo(origFile, overwrite = true)
+                    } else if (page.originalBitmap != null) {
+                        saveBitmapToFile(page.originalBitmap, origFile)
+                    }
                 }
+                
                 // Save/update preview bitmap on disk
-                saveBitmapToFile(page.previewBitmap, prevFile)
+                if (page.previewFile != null && page.previewFile.exists()) {
+                    page.previewFile.copyTo(prevFile, overwrite = true)
+                } else if (page.previewBitmap != null) {
+                    saveBitmapToFile(page.previewBitmap, prevFile)
+                }
 
                 val pageIndex = pagesData.indexOf(page)
                 val existingPage = existingMeta?.pages?.find { isPageMatch(it, page.id, pageIndex, pagesData.size) }
