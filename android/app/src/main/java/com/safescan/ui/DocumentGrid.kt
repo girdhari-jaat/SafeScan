@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.safescan.R
 import com.safescan.scanner.ScannerViewModel
 import com.safescan.data.Slot
@@ -268,7 +269,11 @@ fun DocumentGridView(
                                     .border(1.dp, Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                             ) {
                                 AsyncImage(
-                                    model = file,
+                                    model = ImageRequest.Builder(context)
+                                        .data(file)
+                                        .memoryCacheKey(file.absolutePath + file.lastModified())
+                                        .diskCacheKey(file.absolutePath + file.lastModified())
+                                        .build(),
                                     contentDescription = "Page ${idx + 1}",
                                     modifier = Modifier.fillMaxSize().clickable {
                                         viewModel.openEditorForJpg(idx)
@@ -368,8 +373,14 @@ fun DocumentGridView(
                                     .background(Color.DarkGray)
                                     .border(1.dp, Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                             ) {
+                                val modelData = slot.bitmapPath?.let { java.io.File(it) } ?: slot.bitmap
+                                val cacheKey = slot.bitmapPath?.let { java.io.File(it).lastModified().toString() } ?: System.currentTimeMillis().toString()
                                 AsyncImage(
-                                    model = slot.bitmapPath ?: slot.bitmap,
+                                    model = ImageRequest.Builder(context)
+                                        .data(modelData)
+                                        .memoryCacheKey(slot.bitmapPath.orEmpty() + cacheKey)
+                                        .diskCacheKey(slot.bitmapPath.orEmpty() + cacheKey)
+                                        .build(),
                                     contentDescription = slot.label,
                                     modifier = Modifier.fillMaxSize().clickable {
                                         viewModel.openEditor(slot.id)

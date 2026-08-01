@@ -963,6 +963,7 @@ fun SlotItem(
     onLongClick: () -> Unit,
     onClear: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     Box(
         modifier = Modifier
             .aspectRatio(0.72f)
@@ -977,8 +978,14 @@ fun SlotItem(
         contentAlignment = Alignment.Center
     ) {
         if (slot.bitmap != null) {
-            AsyncImage(
-                model = slot.bitmapPath ?: slot.bitmap,
+            val modelData = slot.bitmapPath?.let { java.io.File(it) } ?: slot.bitmap
+            val cacheKey = slot.bitmapPath?.let { java.io.File(it).lastModified().toString() } ?: System.currentTimeMillis().toString()
+            coil.compose.AsyncImage(
+                model = coil.request.ImageRequest.Builder(context)
+                    .data(modelData)
+                    .memoryCacheKey(slot.bitmapPath.orEmpty() + cacheKey)
+                    .diskCacheKey(slot.bitmapPath.orEmpty() + cacheKey)
+                    .build(),
                 contentDescription = slot.label,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
