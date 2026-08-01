@@ -1273,18 +1273,22 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    suspend fun commitActiveEditorChangesSuspend() {
-        editingBitmapPreview.value?.let { processed ->
+    suspend fun commitActiveEditorChangesSuspend(
+        processed: Bitmap? = editingBitmapPreview.value,
+        slotId: String? = editingSlotId.value,
+        index: Int? = editingJpgIndex.value,
+        currentState: com.safescan.data.EditorState = editorState.value
+    ) {
+        processed?.let { processedBmp ->
             val docId = openedDocumentId ?: ("doc_" + System.currentTimeMillis()).also { openedDocumentId = it }
-            editingSlotId.value?.let { slotId ->
-                captureToSlot(processed, slotId)
+            slotId?.let { sId ->
+                captureToSlot(processedBmp, sId)
                 
                 // Sync to persistent library JSON
-                val currentState = editorState.value
-                val slotCorners = slots.value.find { it.id == slotId }?.corners
+                val slotCorners = slots.value.find { it.id == sId }?.corners
                 saveDocumentUseCase.updatePageEdits(
                     docId = docId,
-                    pageId = slotId,
+                    pageId = sId,
                     filter = currentState.filter.name,
                     brightness = currentState.brightness,
                     contrast = currentState.contrast,
@@ -1292,23 +1296,22 @@ class ScannerViewModel @Inject constructor(
                     saturation = currentState.saturation,
                     rotation = currentState.rotation,
                     corners = slotCorners,
-                    newPreview = processed
+                    newPreview = processedBmp
                 )
                 saveDocumentStateOffline(docId)
             }
-            editingJpgIndex.value?.let { index ->
-                val file = capturedJpgFiles.getOrNull(index)
+            index?.let { idx ->
+                val file = capturedJpgFiles.getOrNull(idx)
                 if (file != null) {
                     try {
                         val out = java.io.FileOutputStream(file)
-                        processed.compress(Bitmap.CompressFormat.JPEG, jpegQuality.value.toInt(), out)
+                        processedBmp.compress(Bitmap.CompressFormat.JPEG, jpegQuality.value.toInt(), out)
                         out.flush()
                         out.close()
                     } catch (e: Exception) {}
                 }
-                val currentState = editorState.value
-                val pageId = if (index < slots.value.size) slots.value[index].id else "p${index + 1}"
-                val corners = jpgCorners[index]
+                val pageId = if (idx < slots.value.size) slots.value[idx].id else "p${idx + 1}"
+                val corners = jpgCorners[idx]
                 saveDocumentUseCase.updatePageEdits(
                     docId = docId,
                     pageId = pageId,
@@ -1319,7 +1322,7 @@ class ScannerViewModel @Inject constructor(
                     saturation = currentState.saturation,
                     rotation = currentState.rotation,
                     corners = corners,
-                    newPreview = processed
+                    newPreview = processedBmp
                 )
                 saveDocumentStateOffline(docId)
             }
@@ -1330,8 +1333,13 @@ class ScannerViewModel @Inject constructor(
     }
 
     fun commitActiveEditorChanges() {
+        val processed = editingBitmapPreview.value
+        val slotId = editingSlotId.value
+        val index = editingJpgIndex.value
+        val currentState = editorState.value
+        
         viewModelScope.launch(Dispatchers.IO) {
-            commitActiveEditorChangesSuspend()
+            commitActiveEditorChangesSuspend(processed, slotId, index, currentState)
         }
     }
 
