@@ -5,15 +5,13 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import com.safescan.core.DiagnosticsLogger
-import com.safescan.core.DocumentScanner
 import com.safescan.data.EditorState
 import com.safescan.data.FilterType
 import com.safescan.data.PageSaveData
+import com.safescan.data.ScannerMode
 import com.safescan.data.Slot
-import com.safescan.domain.ImageProcessor
 import com.safescan.domain.model.Point
 import com.safescan.domain.model.Quadrilateral
-import com.safescan.domain.model.ScannerMode
 import com.safescan.domain.usecase.ExportPdfUseCase
 import com.safescan.domain.usecase.SaveDocumentUseCase
 import kotlinx.coroutines.CoroutineScope
@@ -40,7 +38,7 @@ class ScannerExportHelper(
         jpgCorners: Map<Int, List<Point>>,
         slots: List<Slot>,
         isEditing: Boolean,
-        editingJpgIndex: Int,
+        editingJpgIndex: Int?,
         editingSlotId: String?,
         editorState: EditorState,
         recognizedText: String,
@@ -231,7 +229,7 @@ class ScannerExportHelper(
         jpgCorners: MutableMap<Int, List<Point>>,
         cachedPdfFile: File?,
         lastExportPdfHash: Int,
-        editingJpgIndex: Int,
+        editingJpgIndex: Int?,
         editingSlotId: String?,
         editorState: EditorState,
         recognizedText: String,
@@ -498,7 +496,7 @@ class ScannerExportHelper(
         jpgCorners: Map<Int, List<Point>>,
         slots: List<Slot>,
         isEditing: Boolean,
-        editingJpgIndex: Int,
+        editingJpgIndex: Int?,
         editingSlotId: String?,
         editorState: EditorState,
         recognizedText: String,

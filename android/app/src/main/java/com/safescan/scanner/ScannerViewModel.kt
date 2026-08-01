@@ -1382,7 +1382,7 @@ class ScannerViewModel @Inject constructor(
             editorState = editorState.value,
             recognizedText = recognizedText.value,
             commitActiveEditorChanges = { commitActiveEditorChanges() },
-            commitActiveEditorChangesSuspend = { commitActiveEditorChangesSuspend() },
+            commitActiveEditorChangesSuspend = ::commitActiveEditorChangesSuspend,
             getOrGenerateDocumentTitle = { docId -> getOrGenerateDocumentTitle(docId) },
             reloadSavedDocuments = { reloadSavedDocuments() },
             onDocumentIdAssigned = { assignedId -> openedDocumentId = assignedId },
