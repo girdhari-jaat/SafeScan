@@ -487,6 +487,7 @@ fun ScannerBottomCarousel(
 ) {
     val currentMode by viewModel.currentMode.collectAsState()
     val slots by viewModel.slots.collectAsState()
+    val updateTick by viewModel.imageUpdateTick.collectAsState()
 
     if (currentMode != ScannerMode.DOCUMENT) {
         Box(
@@ -512,6 +513,7 @@ fun ScannerBottomCarousel(
                         Box(modifier = Modifier.width(85.dp)) {
                             SlotItem(
                                 slot = slot,
+                                updateTick = updateTick,
                                 onClick = { onSlotClick(slot.id) },
                                 onLongClick = { onSlotLongClick(slot.id) },
                                 onClear = { viewModel.clearSlot(slot.id) }
@@ -959,6 +961,7 @@ private fun PopoverToggleRow(
 @Composable
 fun SlotItem(
     slot: Slot,
+    updateTick: Long,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onClear: () -> Unit
@@ -979,12 +982,13 @@ fun SlotItem(
     ) {
         if (slot.bitmap != null) {
             val modelData = slot.bitmapPath?.let { java.io.File(it) } ?: slot.bitmap
-            val cacheKey = slot.bitmapPath?.let { java.io.File(it).lastModified().toString() } ?: System.currentTimeMillis().toString()
+            val cacheKey = remember(updateTick, slot.bitmapPath) { slot.bitmapPath?.let { java.io.File(it).lastModified().toString() } ?: System.currentTimeMillis().toString() }
             coil.compose.AsyncImage(
                 model = coil.request.ImageRequest.Builder(context)
                     .data(modelData)
-                    .memoryCacheKey(slot.bitmapPath.orEmpty() + cacheKey)
-                    .diskCacheKey(slot.bitmapPath.orEmpty() + cacheKey)
+                    .setParameter("tick", updateTick, null)
+                    .memoryCacheKey(slot.bitmapPath.orEmpty() + cacheKey + updateTick)
+                    .diskCacheKey(slot.bitmapPath.orEmpty() + cacheKey + updateTick)
                     .build(),
                 contentDescription = slot.label,
                 modifier = Modifier.fillMaxSize(),

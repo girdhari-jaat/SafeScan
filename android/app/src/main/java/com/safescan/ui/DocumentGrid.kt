@@ -37,6 +37,7 @@ fun DocumentGridView(
     onScanPage: (() -> Unit)? = null
 ) {
     val slots by viewModel.slots.collectAsState()
+    val updateTick by viewModel.imageUpdateTick.collectAsState()
     val capturedJpgs = viewModel.capturedJpgFiles
     val context = androidx.compose.ui.platform.LocalContext.current
     var showExportModal by remember { mutableStateOf(false) }
@@ -268,11 +269,13 @@ fun DocumentGridView(
                                     .background(Color.DarkGray)
                                     .border(1.dp, Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                             ) {
+                                val cacheKey = remember(updateTick, file.absolutePath) { file.lastModified().toString() }
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)
                                         .data(file)
-                                        .memoryCacheKey(file.absolutePath + file.lastModified())
-                                        .diskCacheKey(file.absolutePath + file.lastModified())
+                                        .setParameter("tick", updateTick, null)
+                                        .memoryCacheKey(file.absolutePath + cacheKey + updateTick)
+                                        .diskCacheKey(file.absolutePath + cacheKey + updateTick)
                                         .build(),
                                     contentDescription = "Page ${idx + 1}",
                                     modifier = Modifier.fillMaxSize().clickable {
@@ -374,12 +377,13 @@ fun DocumentGridView(
                                     .border(1.dp, Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                             ) {
                                 val modelData = slot.bitmapPath?.let { java.io.File(it) } ?: slot.bitmap
-                                val cacheKey = slot.bitmapPath?.let { java.io.File(it).lastModified().toString() } ?: System.currentTimeMillis().toString()
+                                val cacheKey = remember(updateTick, slot.bitmapPath) { slot.bitmapPath?.let { java.io.File(it).lastModified().toString() } ?: System.currentTimeMillis().toString() }
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)
                                         .data(modelData)
-                                        .memoryCacheKey(slot.bitmapPath.orEmpty() + cacheKey)
-                                        .diskCacheKey(slot.bitmapPath.orEmpty() + cacheKey)
+                                        .setParameter("tick", updateTick, null)
+                                        .memoryCacheKey(slot.bitmapPath.orEmpty() + cacheKey + updateTick)
+                                        .diskCacheKey(slot.bitmapPath.orEmpty() + cacheKey + updateTick)
                                         .build(),
                                     contentDescription = slot.label,
                                     modifier = Modifier.fillMaxSize().clickable {

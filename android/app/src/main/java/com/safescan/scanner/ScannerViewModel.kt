@@ -162,6 +162,7 @@ class ScannerViewModel @Inject constructor(
     val wizardManualCrop: StateFlow<Boolean> = settingsRepository.wizardManualCropFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    val imageUpdateTick = kotlinx.coroutines.flow.MutableStateFlow(0L)
     val capturedJpgFiles = androidx.compose.runtime.mutableStateListOf<java.io.File>()
     var openedDocumentId: String? = null
     private var initialDocumentTitle: String? = null
@@ -1111,6 +1112,7 @@ class ScannerViewModel @Inject constructor(
                 saveDocumentStateOffline(docId)
             }
             withContext(Dispatchers.Main) {
+                imageUpdateTick.value = System.currentTimeMillis()
                 if (andNext) {
                     if (currentSlotId != null) {
                         val currentSlots = slots.value
@@ -1320,6 +1322,9 @@ class ScannerViewModel @Inject constructor(
                     newPreview = processed
                 )
                 saveDocumentStateOffline(docId)
+            }
+            withContext(Dispatchers.Main) {
+                imageUpdateTick.value = System.currentTimeMillis()
             }
         }
     }
