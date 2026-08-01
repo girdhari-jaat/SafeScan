@@ -194,7 +194,11 @@ class ScannerViewModel @Inject constructor(
         val cacheKey = if (isOriginal) "${slotId}_original" else "${slotId}_processed"
         val cached = highResCache.get(cacheKey)
         if (cached != null) {
-            return cached
+            if (!cached.isRecycled) {
+                return cached
+            } else {
+                highResCache.remove(cacheKey)
+            }
         }
 
         val slot = slots.value.find { it.id == slotId }
@@ -213,6 +217,23 @@ class ScannerViewModel @Inject constructor(
                 }
             }
         }
+
+        openedDocumentId?.let { docId ->
+            try {
+                val bitmap = if (isOriginal) {
+                    saveDocumentUseCase.loadOriginalBitmap(docId, slotId)
+                } else {
+                    saveDocumentUseCase.loadPreviewBitmap(docId, slotId)
+                }
+                if (bitmap != null) {
+                    highResCache.put(cacheKey, bitmap)
+                    return bitmap
+                }
+            } catch (e: Exception) {
+                Log.e("ScannerViewModel", "Failed to load bitmap from saveDocumentUseCase for $docId / $slotId", e)
+            }
+        }
+
         return null
     }
 
@@ -1524,9 +1545,15 @@ class ScannerViewModel @Inject constructor(
                     }
                 } else {
                     slots.value.filter { it.bitmap != null }.map { slot ->
+                        val slotIdx = slots.value.indexOf(slot)
                         val pageMeta = savedDoc?.pages?.find { it.id == slot.id }
+                            ?: savedDoc?.pages?.find { p -> p.id.startsWith("p") && p.id.drop(1) == (slotIdx + 1).toString() }
+                            ?: savedDoc?.pages?.getOrNull(slotIdx)
+                        val effectivePageId = pageMeta?.id ?: slot.id
+
                         val originalRes = getFullResBitmap(slot.id, isOriginal = true)
-                            ?: (openedDocumentId?.let { saveDocumentUseCase.loadOriginalBitmap(it, slot.id) })
+                            ?: getFullResBitmap(effectivePageId, isOriginal = true)
+                            ?: (openedDocumentId?.let { saveDocumentUseCase.loadOriginalBitmap(it, effectivePageId) })
                         
                         val corners = slot.corners ?: pageMeta?.corners
                         val rotation = pageMeta?.rotation ?: 0
@@ -1752,9 +1779,14 @@ class ScannerViewModel @Inject constructor(
 
     private var lastCaptureTimestampMs = 0L
 
-    fun onCapture(bitmap: Bitmap, isNativeScanned: Boolean = false, forceSkipEditor: Boolean = false) {
+    fun onCapture(
+        bitmap: Bitmap, 
+        isNativeScanned: Boolean = false, 
+        forceSkipEditor: Boolean = false,
+        isGalleryImport: Boolean = false
+    ) {
         val now = System.currentTimeMillis()
-        if (now - lastCaptureTimestampMs < 500L && !forceSkipEditor) {
+        if (now - lastCaptureTimestampMs < 500L && !forceSkipEditor && !isGalleryImport && !isNativeScanned) {
             DiagnosticsLogger.info("[Capture] Ignored duplicate capture request within ${now - lastCaptureTimestampMs}ms")
             return
         }

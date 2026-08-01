@@ -141,7 +141,7 @@ class ScannerFragment : Fragment() {
                             if (viewModel.autoRotation.value) {
                                 importedBitmap = ScannerImageUtils.autoRotateForMode(importedBitmap, viewModel.currentMode.value)
                             }
-                            viewModel.onCapture(importedBitmap, forceSkipEditor = list.size > 1)
+                            viewModel.onCapture(importedBitmap, forceSkipEditor = list.size > 1, isGalleryImport = true)
                             successCount++
                         }
                     } catch (e: Exception) {
