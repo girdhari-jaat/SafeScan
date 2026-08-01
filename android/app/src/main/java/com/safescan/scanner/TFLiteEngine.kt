@@ -417,7 +417,12 @@ class TFLiteEngine(private val context: Context) {
                         val originalY = ((it.y - dyD) / scaleD).coerceIn(0.0, bitmap.height.toDouble())
                         Point(originalX, originalY)
                     }
-                    val ordered = orderPoints(scaledPoints)
+                    val snappedPoints = if (!isLive) {
+                        scaledPoints.map { EdgeDetectionEngine.snapToExactCorner(bitmap, it) }
+                    } else {
+                        scaledPoints
+                    }
+                    val ordered = orderPoints(snappedPoints)
                     
                     if (isLive) {
                         if (lastStableCorners != null) {

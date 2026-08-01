@@ -1,4 +1,6 @@
+├── .gitignore
 ├── GEMINI.md
+├── Guideline_Sindhi.txt
 ├── README_TEST.md
 ├── RELEASE_CHECKLIST.md
 ├── android_tree.txt
@@ -50,34 +52,69 @@
 │           │           │   ├── ImageFilterEngine.kt
 │           │           │   ├── ImageProcessor.kt
 │           │           │   ├── PdfExporter.kt
-│           │           │   └── model
-│           │           │       └── Quadrilateral.kt
+│           │           │   ├── model
+│           │           │   │   └── Quadrilateral.kt
+│           │           │   └── usecase
+│           │           │       ├── ApplyFilterUseCase.kt
+│           │           │       ├── DetectEdgesUseCase.kt
+│           │           │       ├── ExportPdfUseCase.kt
+│           │           │       ├── ManageSlotsUseCase.kt
+│           │           │       └── SaveDocumentUseCase.kt
 │           │           ├── scanner
 │           │           │   ├── CameraHardwareConfig.kt
+│           │           │   ├── DeviceMotionDetector.kt
 │           │           │   ├── DocumentScanner.kt
 │           │           │   ├── DocumentScannerEngine.kt
 │           │           │   ├── EdgeDetectionEngine.kt
+│           │           │   ├── EdgeDetectionEngine.kt.bak
+│           │           │   ├── ImageCacheHelper.kt
 │           │           │   ├── LiveEdgeDetectionEngine.kt
+│           │           │   ├── LiveEdgeDetectionEngine.kt.bak
 │           │           │   ├── OcrEngine.kt
 │           │           │   ├── RansacHelper.kt
+│           │           │   ├── RansacHelper.kt.bak
+│           │           │   ├── ScannerExportHelper.kt
+│           │           │   ├── ScannerExportUtils.kt
+│           │           │   ├── ScannerSettingsHandler.kt
+│           │           │   ├── ScannerStateMachine.kt
+│           │           │   ├── ScannerTitleUtils.kt
 │           │           │   ├── ScannerViewModel.kt
 │           │           │   ├── TFLiteEdgeDetectionEngine.kt
 │           │           │   └── TFLiteEngine.kt
 │           │           ├── ui
+│           │           │   ├── CameraController.kt
 │           │           │   ├── CropScreen.kt
 │           │           │   ├── DeveloperStatsView.kt
 │           │           │   ├── DocumentGrid.kt
 │           │           │   ├── EditorScreen.kt
+│           │           │   ├── ExportModalDialog.kt
 │           │           │   ├── LibraryScreen.kt
+│           │           │   ├── PermissionManager.kt
+│           │           │   ├── ScannerCaptureManager.kt
 │           │           │   ├── ScannerFragment.kt
+│           │           │   ├── ScannerImageUtils.kt
+│           │           │   ├── ScannerNavigation.kt
+│           │           │   ├── ScannerObservers.kt
+│           │           │   ├── ScannerUiActions.kt
 │           │           │   ├── SettingsScreen.kt
 │           │           │   ├── SlotsScreen.kt
 │           │           │   ├── WizardScreen.kt
 │           │           │   ├── ZoomableImage.kt
+│           │           │   ├── editor
+│           │           │   │   ├── EditorBottomToolbar.kt
+│           │           │   │   ├── EditorEnhancementPanel.kt
+│           │           │   │   ├── EditorExportDialogs.kt
+│           │           │   │   └── EditorTopBar.kt
+│           │           │   ├── slots
+│           │           │   │   ├── ScannerBottomBar.kt
+│           │           │   │   ├── ScannerSettingsPopover.kt
+│           │           │   │   ├── ScannerTopBar.kt
+│           │           │   │   └── ScannerViewfinderComponents.kt
 │           │           │   └── theme
 │           │           │       ├── Font.kt
 │           │           │       └── Theme.kt
 │           │           └── utils
+│           │               ├── HapticFeedbackHelper.kt
 │           │               └── PageConfig.kt
 │           └── res
 │               ├── drawable
