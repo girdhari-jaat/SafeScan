@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlin.math.pow
 import dagger.hilt.android.lifecycle.HiltViewModel
+import com.safescan.data.FlashMode
 import com.safescan.data.ScannerMode
 import com.safescan.data.Slot
 import com.safescan.data.SettingsRepository
