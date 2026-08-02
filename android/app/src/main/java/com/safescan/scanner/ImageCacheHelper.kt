@@ -41,7 +41,7 @@ class ImageCacheHelper(
 
     fun snapshot(): Map<String, Bitmap> = highResCache.snapshot()
 
-    fun getFullResBitmap(
+    suspend fun getFullResBitmap(
         slotId: String, 
         isOriginal: Boolean = false, 
         slots: List<Slot>, 
@@ -76,7 +76,7 @@ class ImageCacheHelper(
 
         openedDocumentId?.let { docId ->
             try {
-                val bitmap = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                val bitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     if (isOriginal) {
                         saveDocumentUseCase.loadOriginalBitmap(docId, slotId)
                     } else {

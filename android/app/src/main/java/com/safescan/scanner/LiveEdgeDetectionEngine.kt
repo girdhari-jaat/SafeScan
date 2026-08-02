@@ -157,25 +157,37 @@ class LiveEdgeDetectionEngine {
                     imageProxy.close()
                     return
                 }
-                if (bitmap!!.config != android.graphics.Bitmap.Config.ARGB_8888 || !bitmap!!.isMutable) {
-                    val softwareBmp = bitmap!!.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
-                    if (softwareBmp != null && softwareBmp != bitmap) {
-                        bitmap!!.recycle()
+                val currentBitmap = bitmap
+                if (currentBitmap.config != android.graphics.Bitmap.Config.ARGB_8888 || !currentBitmap.isMutable) {
+                    val softwareBmp = currentBitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
+                    if (softwareBmp != null && softwareBmp != currentBitmap) {
+                        currentBitmap.recycle()
                         bitmap = softwareBmp
                     }
                 }
-                Utils.bitmapToMat(bitmap, src!!)
-                val resizeRatio = 400.0 / Math.max(src!!.width(), src!!.height())
-                if (resizeRatio < 1.0) {
-                    Imgproc.resize(src!!, resized!!, Size(src!!.width() * resizeRatio, src!!.height() * resizeRatio))
-                } else {
-                    src!!.copyTo(resized!!)
+
+                val activeBitmap = bitmap ?: return
+                val currentSrc = src ?: return
+                val currentResized = resized ?: return
+                val currentGray = gray ?: return
+
+                Utils.bitmapToMat(activeBitmap, currentSrc)
+                val srcW = currentSrc.width()
+                val srcH = currentSrc.height()
+                if (srcW <= 0 || srcH <= 0) {
+                    return
                 }
-                Imgproc.cvtColor(resized!!, gray!!, Imgproc.COLOR_RGBA2GRAY)
-                sharpness = calculateSharpness(gray!!)
+                val resizeRatio = 400.0 / Math.max(srcW, srcH)
+                if (resizeRatio < 1.0) {
+                    Imgproc.resize(currentSrc, currentResized, Size(srcW * resizeRatio, srcH * resizeRatio))
+                } else {
+                    currentSrc.copyTo(currentResized)
+                }
+                Imgproc.cvtColor(currentResized, currentGray, Imgproc.COLOR_RGBA2GRAY)
+                sharpness = calculateSharpness(currentGray)
 
                 // Mandatory TFLite Mask Gate: Check if TFLite detects a valid document mask first
-                val quad = documentScanner?.detectDocument(bitmap!!, true)
+                val quad = documentScanner?.detectDocument(activeBitmap, true)
                 if (quad != null) {
                     // TFLite mask is valid: Pass 4 corners derived from the TFLite mask
                     foundCorners = listOf(quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft)
@@ -186,37 +198,44 @@ class LiveEdgeDetectionEngine {
                     foundCorners = null
                 }
                 
-                if (foundCorners != null) {
-                    Log.d("LiveEdgeDetection", "Found 4 document corners: $foundCorners, sharpness=$sharpness")
+                val currentCorners = foundCorners
+                if (currentCorners != null && currentCorners.size == 4) {
+                    Log.d("LiveEdgeDetection", "Found 4 document corners: $currentCorners, sharpness=$sharpness")
                     framesWithoutDetection = 0
-                    if (previousCorners != null) {
-                        val maxDistance = foundCorners!!.mapIndexed { index, p ->
-                            Math.hypot(p.x - previousCorners!![index].x, p.y - previousCorners!![index].y)
+                    val prev = previousCorners
+                    if (prev != null && prev.size == 4) {
+                        val maxDistance = currentCorners.mapIndexed { index, p ->
+                            Math.hypot(p.x - prev[index].x, p.y - prev[index].y)
                         }.maxOrNull() ?: 0.0
                         
                         if (maxDistance > 200) { 
                             // Large jump, reset smoothing
-                            previousCorners = foundCorners
+                            previousCorners = currentCorners
+                            foundCorners = currentCorners
                         } else {
                             // Exponential Moving Average for stabilization
-                            foundCorners = foundCorners!!.mapIndexed { index, p ->
+                            val smoothedCorners = currentCorners.mapIndexed { index, p ->
                                 Point(
-                                    previousCorners!![index].x + 0.35 * (p.x - previousCorners!![index].x),
-                                    previousCorners!![index].y + 0.35 * (p.y - previousCorners!![index].y)
+                                    prev[index].x + 0.35 * (p.x - prev[index].x),
+                                    prev[index].y + 0.35 * (p.y - prev[index].y)
                                 )
                             }
-                            previousCorners = foundCorners
+                            previousCorners = smoothedCorners
+                            foundCorners = smoothedCorners
                         }
                     } else {
-                        previousCorners = foundCorners
+                        previousCorners = currentCorners
                     }
                     
-                    ScannerDebugLogger.logLiveEdgePoints(
-                        foundCorners!![0].toString(),
-                        foundCorners!![1].toString(),
-                        foundCorners!![2].toString(),
-                        foundCorners!![3].toString()
-                    )
+                    val validCorners = foundCorners ?: currentCorners
+                    if (validCorners.size >= 4) {
+                        ScannerDebugLogger.logLiveEdgePoints(
+                            validCorners[0].toString(),
+                            validCorners[1].toString(),
+                            validCorners[2].toString(),
+                            validCorners[3].toString()
+                        )
+                    }
                 } else {
                     framesWithoutDetection++
                     if (framesWithoutDetection < 5 && previousCorners != null) {
@@ -257,11 +276,15 @@ class LiveEdgeDetectionEngine {
     }
 
     private fun calculateSharpness(mat: Mat): Double {
-        Imgproc.Laplacian(mat, laplacian!!, CvType.CV_64F)
-        Core.meanStdDev(laplacian!!, meanStdDevMean!!, meanStdDevStdDev!!)
-        val stddevVal = meanStdDevStdDev!!.get(0, 0)[0]
-        val variance = stddevVal * stddevVal
-        return variance
+        val lap = laplacian ?: return 0.0
+        val mean = meanStdDevMean ?: return 0.0
+        val stdDev = meanStdDevStdDev ?: return 0.0
+        Imgproc.Laplacian(mat, lap, CvType.CV_64F)
+        Core.meanStdDev(lap, mean, stdDev)
+        val arr = stdDev.get(0, 0)
+        if (arr == null || arr.isEmpty()) return 0.0
+        val stddevVal = arr[0]
+        return stddevVal * stddevVal
     }
 
     private fun getExtremePointsArray(contour: MatOfPoint): Array<org.opencv.core.Point>? {
@@ -305,6 +328,7 @@ class LiveEdgeDetectionEngine {
 
     private fun isConvexPoints(points: Array<org.opencv.core.Point>): Boolean {
         if (points.size != 4) return false
+        val mat4 = tempMatOfPoint4 ?: return false
         tempIntArray8[0] = points[0].x.toInt()
         tempIntArray8[1] = points[0].y.toInt()
         tempIntArray8[2] = points[1].x.toInt()
@@ -313,8 +337,8 @@ class LiveEdgeDetectionEngine {
         tempIntArray8[5] = points[2].y.toInt()
         tempIntArray8[6] = points[3].x.toInt()
         tempIntArray8[7] = points[3].y.toInt()
-        tempMatOfPoint4!!.put(0, 0, tempIntArray8)
-        return Imgproc.isContourConvex(tempMatOfPoint4!!)
+        mat4.put(0, 0, tempIntArray8)
+        return Imgproc.isContourConvex(mat4)
     }
 
     private fun getMaxCosinePoints(points: Array<org.opencv.core.Point>): Double {

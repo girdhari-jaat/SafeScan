@@ -141,8 +141,9 @@ object ImageFilterEngine {
 
     fun applyFilter(src: Mat, filterType: FilterType): Mat {
         val outMat = Mat()
-        when (filterType) {
-            FilterType.GRAYSCALE -> {
+        try {
+            when (filterType) {
+                FilterType.GRAYSCALE -> {
                 var gray: Mat? = null
                 var sharpGray: Mat? = null
                 var kernel: Mat? = null
@@ -225,9 +226,13 @@ object ImageFilterEngine {
                 }
             }
             FilterType.CARD -> {
-                val cardResult = applyCardFilter(src)
-                cardResult.copyTo(outMat)
-                safeRelease(cardResult)
+                var cardResult: Mat? = null
+                try {
+                    cardResult = applyCardFilter(src)
+                    cardResult.copyTo(outMat)
+                } finally {
+                    safeRelease(cardResult)
+                }
             }
             FilterType.MAGIC_COLOR -> {
                 var cleanColor: Mat? = null
@@ -387,6 +392,18 @@ object ImageFilterEngine {
             }
         }
         return outMat
+        } catch (e: Exception) {
+            safeRelease(outMat)
+            val fallback = Mat()
+            try {
+                if (!src.empty()) {
+                    Imgproc.cvtColor(src, fallback, Imgproc.COLOR_BGR2RGBA)
+                }
+            } catch (t: Throwable) {
+                // Ignore fallback error
+            }
+            return fallback
+        }
     }
 
     private fun removeShadowsGray(gray: Mat): Mat {

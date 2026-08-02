@@ -84,117 +84,123 @@ class PdfExporter(private val context: Context) {
 
                     for ((idx, slot) in slotsToProcess.withIndex()) {
                         val rawBmp = if (slot != null) loadBitmap(slot) else null
-                        val (currentWidth, currentHeight) = ExportHelper.getPageDimensions(pageSizeStr, rawBmp)
+                        try {
+                            val (currentWidth, currentHeight) = ExportHelper.getPageDimensions(pageSizeStr, rawBmp)
 
-                        val isBmpLandscape = rawBmp != null && rawBmp.width > rawBmp.height
-                        val finalWidth = when (pdfOrientation) {
-                            "Portrait" -> minOf(currentWidth, currentHeight)
-                            "Landscape" -> maxOf(currentWidth, currentHeight)
-                            else -> { // Auto
-                                if (isBmpLandscape) maxOf(currentWidth, currentHeight)
-                                else minOf(currentWidth, currentHeight)
+                            val isBmpLandscape = rawBmp != null && rawBmp.width > rawBmp.height
+                            val finalWidth = when (pdfOrientation) {
+                                "Portrait" -> minOf(currentWidth, currentHeight)
+                                "Landscape" -> maxOf(currentWidth, currentHeight)
+                                else -> { // Auto
+                                    if (isBmpLandscape) maxOf(currentWidth, currentHeight)
+                                    else minOf(currentWidth, currentHeight)
+                                }
                             }
-                        }
-                        val finalHeight = when (pdfOrientation) {
-                            "Portrait" -> maxOf(currentWidth, currentHeight)
-                            "Landscape" -> minOf(currentWidth, currentHeight)
-                            else -> { // Auto
-                                if (isBmpLandscape) minOf(currentWidth, currentHeight)
-                                else maxOf(currentWidth, currentHeight)
+                            val finalHeight = when (pdfOrientation) {
+                                "Portrait" -> maxOf(currentWidth, currentHeight)
+                                "Landscape" -> minOf(currentWidth, currentHeight)
+                                else -> { // Auto
+                                    if (isBmpLandscape) minOf(currentWidth, currentHeight)
+                                    else maxOf(currentWidth, currentHeight)
+                                }
                             }
-                        }
 
-                        val targetWidth = if (pageSizeStr.equals("Original", ignoreCase = true)) {
-                            rawBmp?.width ?: finalWidth
-                        } else {
-                            (finalWidth * (dpi / 72f)).toInt()
-                        }
-                        val targetHeight = if (pageSizeStr.equals("Original", ignoreCase = true)) {
-                            rawBmp?.height ?: finalHeight
-                        } else {
-                            (finalHeight * (dpi / 72f)).toInt()
-                        }
+                            val targetWidth = if (pageSizeStr.equals("Original", ignoreCase = true)) {
+                                rawBmp?.width ?: finalWidth
+                            } else {
+                                (finalWidth * (dpi / 72f)).toInt()
+                            }
+                            val targetHeight = if (pageSizeStr.equals("Original", ignoreCase = true)) {
+                                rawBmp?.height ?: finalHeight
+                            } else {
+                                (finalHeight * (dpi / 72f)).toInt()
+                            }
 
-                        val (imgBytes, imgWidth, imgHeight) = if (rawBmp != null) {
-                            val jpegData = compressToJpegBytes(rawBmp, qualityInt)
-                            val actualW = rawBmp.width
-                            val actualH = rawBmp.height
-                            if (slot?.bitmapPath != null && rawBmp != slot.bitmap && !rawBmp.isRecycled) {
+                            val (imgBytes, imgWidth, imgHeight) = if (rawBmp != null) {
+                                val jpegData = compressToJpegBytes(rawBmp, qualityInt, targetWidth, targetHeight)
+                                val actualW = if (targetWidth > 0 && !pageSizeStr.equals("Original", ignoreCase = true)) targetWidth else rawBmp.width
+                                val actualH = if (targetHeight > 0 && !pageSizeStr.equals("Original", ignoreCase = true)) targetHeight else rawBmp.height
+                                Triple(jpegData, actualW, actualH)
+                            } else {
+                                val emptyBmp = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+                                val jpegData = try {
+                                    Canvas(emptyBmp).drawColor(Color.WHITE)
+                                    compressToJpegBytes(emptyBmp, qualityInt)
+                                } finally {
+                                    emptyBmp.recycle()
+                                }
+                                Triple(jpegData, targetWidth, targetHeight)
+                            }
+
+                            val dstRect = if (pageSizeStr.equals("Original", ignoreCase = true)) {
+                                android.graphics.RectF(0f, 0f, finalWidth.toFloat(), finalHeight.toFloat())
+                            } else {
+                                ExportHelper.calculateBitmapDrawingRects(imgWidth, imgHeight, finalWidth, finalHeight, pageSizeStr)
+                            }
+                            val left = dstRect.left
+                            val top = dstRect.top
+                            val drawnW = dstRect.width()
+                            val drawnH = dstRect.height()
+                            val yBottom = finalHeight - top - drawnH
+
+                            val pageObjId = 2 + idx * 3 + 1
+                            val contentObjId = 2 + idx * 3 + 2
+                            val imageObjId = 2 + idx * 3 + 3
+
+                            // 1. Page Object
+                            val pObj = writer.startObject() // = pageObjId
+                            writer.write("<<\n")
+                            writer.write("  /Type /Page\n")
+                            writer.write("  /Parent 2 0 R\n")
+                            writer.write("  /MediaBox [0 0 $finalWidth $finalHeight]\n")
+                            writer.write("  /Resources <<\n")
+                            writer.write("    /ProcSet [/PDF /Text /ImageB /ImageC /ImageI]\n")
+                            writer.write("    /XObject << /Im1 $imageObjId 0 R >>\n")
+                            writer.write("  >>\n")
+                            writer.write("  /Contents $contentObjId 0 R\n")
+                            writer.write(">>\n")
+                            writer.endObject()
+
+                            // 2. Content Stream
+                            val contentStr = "q\n" +
+                                    "1 1 1 rg\n" +
+                                    String.format(java.util.Locale.US, "0 0 %.2f %.2f re\n", finalWidth.toFloat(), finalHeight.toFloat()) +
+                                    "f\n" +
+                                    String.format(java.util.Locale.US, "%.2f 0 0 %.2f %.2f %.2f cm\n", drawnW, drawnH, left, yBottom) +
+                                    "/Im1 Do\n" +
+                                    "Q\n"
+                            val contentBytes = contentStr.toByteArray(Charsets.ISO_8859_1)
+
+                            val cObj = writer.startObject() // = contentObjId
+                            writer.write("<<\n")
+                            writer.write("  /Length ${contentBytes.size}\n")
+                            writer.write(">>\n")
+                            writer.write("stream\n")
+                            writer.write(contentBytes)
+                            writer.write("\nendstream\n")
+                            writer.endObject()
+
+                            // 3. Image XObject
+                            val iObj = writer.startObject() // = imageObjId
+                            writer.write("<<\n")
+                            writer.write("  /Type /XObject\n")
+                            writer.write("  /Subtype /Image\n")
+                            writer.write("  /Width $imgWidth\n")
+                            writer.write("  /Height $imgHeight\n")
+                            writer.write("  /ColorSpace /DeviceRGB\n")
+                            writer.write("  /BitsPerComponent 8\n")
+                            writer.write("  /Filter /DCTDecode\n")
+                            writer.write("  /Length ${imgBytes.size}\n")
+                            writer.write(">>\n")
+                            writer.write("stream\n")
+                            writer.write(imgBytes)
+                            writer.write("\nendstream\n")
+                            writer.endObject()
+                        } finally {
+                            if (rawBmp != null && slot != null && rawBmp != slot.bitmap && !rawBmp.isRecycled) {
                                 rawBmp.recycle()
                             }
-                            Triple(jpegData, actualW, actualH)
-                        } else {
-                            val emptyBmp = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
-                            Canvas(emptyBmp).drawColor(Color.WHITE)
-                            val jpegData = compressToJpegBytes(emptyBmp, qualityInt)
-                            emptyBmp.recycle()
-                            Triple(jpegData, targetWidth, targetHeight)
                         }
-
-                        val dstRect = if (pageSizeStr.equals("Original", ignoreCase = true)) {
-                            android.graphics.RectF(0f, 0f, finalWidth.toFloat(), finalHeight.toFloat())
-                        } else {
-                            ExportHelper.calculateBitmapDrawingRects(imgWidth, imgHeight, finalWidth, finalHeight, pageSizeStr)
-                        }
-                        val left = dstRect.left
-                        val top = dstRect.top
-                        val drawnW = dstRect.width()
-                        val drawnH = dstRect.height()
-                        val yBottom = finalHeight - top - drawnH
-
-                        val pageObjId = 2 + idx * 3 + 1
-                        val contentObjId = 2 + idx * 3 + 2
-                        val imageObjId = 2 + idx * 3 + 3
-
-                        // 1. Page Object
-                        val pObj = writer.startObject() // = pageObjId
-                        writer.write("<<\n")
-                        writer.write("  /Type /Page\n")
-                        writer.write("  /Parent 2 0 R\n")
-                        writer.write("  /MediaBox [0 0 $finalWidth $finalHeight]\n")
-                        writer.write("  /Resources <<\n")
-                        writer.write("    /ProcSet [/PDF /Text /ImageB /ImageC /ImageI]\n")
-                        writer.write("    /XObject << /Im1 $imageObjId 0 R >>\n")
-                        writer.write("  >>\n")
-                        writer.write("  /Contents $contentObjId 0 R\n")
-                        writer.write(">>\n")
-                        writer.endObject()
-
-                        // 2. Content Stream
-                        val contentStr = "q\n" +
-                                "1 1 1 rg\n" +
-                                String.format(java.util.Locale.US, "0 0 %.2f %.2f re\n", finalWidth.toFloat(), finalHeight.toFloat()) +
-                                "f\n" +
-                                String.format(java.util.Locale.US, "%.2f 0 0 %.2f %.2f %.2f cm\n", drawnW, drawnH, left, yBottom) +
-                                "/Im1 Do\n" +
-                                "Q\n"
-                        val contentBytes = contentStr.toByteArray(Charsets.ISO_8859_1)
-
-                        val cObj = writer.startObject() // = contentObjId
-                        writer.write("<<\n")
-                        writer.write("  /Length ${contentBytes.size}\n")
-                        writer.write(">>\n")
-                        writer.write("stream\n")
-                        writer.write(contentBytes)
-                        writer.write("\nendstream\n")
-                        writer.endObject()
-
-                        // 3. Image XObject
-                        val iObj = writer.startObject() // = imageObjId
-                        writer.write("<<\n")
-                        writer.write("  /Type /XObject\n")
-                        writer.write("  /Subtype /Image\n")
-                        writer.write("  /Width $imgWidth\n")
-                        writer.write("  /Height $imgHeight\n")
-                        writer.write("  /ColorSpace /DeviceRGB\n")
-                        writer.write("  /BitsPerComponent 8\n")
-                        writer.write("  /Filter /DCTDecode\n")
-                        writer.write("  /Length ${imgBytes.size}\n")
-                        writer.write(">>\n")
-                        writer.write("stream\n")
-                        writer.write(imgBytes)
-                        writer.write("\nendstream\n")
-                        writer.endObject()
                     }
                 } else {
                     // CARD or GRID mode (Single composite page)
@@ -246,11 +252,14 @@ class PdfExporter(private val context: Context) {
                         if (frontItem != null) {
                             val frontBmp = loadBitmap(frontItem)
                             if (frontBmp != null && !frontBmp.isRecycled) {
-                                val srcRect = Rect(0, 0, frontBmp.width, frontBmp.height)
-                                val dstRect = android.graphics.RectF(startX, startY1, startX + cardW, startY1 + cardH)
-                                canvas.drawBitmap(frontBmp, srcRect, dstRect, paint)
-                                if (frontItem.bitmapPath != null && frontBmp != frontItem.bitmap && !frontBmp.isRecycled) {
-                                    frontBmp.recycle()
+                                try {
+                                    val srcRect = Rect(0, 0, frontBmp.width, frontBmp.height)
+                                    val dstRect = android.graphics.RectF(startX, startY1, startX + cardW, startY1 + cardH)
+                                    canvas.drawBitmap(frontBmp, srcRect, dstRect, paint)
+                                } finally {
+                                    if (frontBmp != frontItem.bitmap && !frontBmp.isRecycled) {
+                                        frontBmp.recycle()
+                                    }
                                 }
                             }
                         }
@@ -258,11 +267,14 @@ class PdfExporter(private val context: Context) {
                         if (backItem != null) {
                             val backBmp = loadBitmap(backItem)
                             if (backBmp != null && !backBmp.isRecycled) {
-                                val srcRect = Rect(0, 0, backBmp.width, backBmp.height)
-                                val dstRect = android.graphics.RectF(startX, startY2, startX + cardW, startY2 + cardH)
-                                canvas.drawBitmap(backBmp, srcRect, dstRect, paint)
-                                if (backItem.bitmapPath != null && backBmp != backItem.bitmap && !backBmp.isRecycled) {
-                                    backBmp.recycle()
+                                try {
+                                    val srcRect = Rect(0, 0, backBmp.width, backBmp.height)
+                                    val dstRect = android.graphics.RectF(startX, startY2, startX + cardW, startY2 + cardH)
+                                    canvas.drawBitmap(backBmp, srcRect, dstRect, paint)
+                                } finally {
+                                    if (backBmp != backItem.bitmap && !backBmp.isRecycled) {
+                                        backBmp.recycle()
+                                    }
                                 }
                             }
                         }
@@ -290,11 +302,14 @@ class PdfExporter(private val context: Context) {
                             if (frontItem != null) {
                                 val frontBmp = loadBitmap(frontItem)
                                 if (frontBmp != null && !frontBmp.isRecycled) {
-                                    val srcRect = Rect(0, 0, frontBmp.width, frontBmp.height)
-                                    val dstRect = android.graphics.RectF(x, y, x + cardW, y + cardH)
-                                    canvas.drawBitmap(frontBmp, srcRect, dstRect, paint)
-                                    if (frontItem.bitmapPath != null && frontBmp != frontItem.bitmap && !frontBmp.isRecycled) {
-                                        frontBmp.recycle()
+                                    try {
+                                        val srcRect = Rect(0, 0, frontBmp.width, frontBmp.height)
+                                        val dstRect = android.graphics.RectF(x, y, x + cardW, y + cardH)
+                                        canvas.drawBitmap(frontBmp, srcRect, dstRect, paint)
+                                    } finally {
+                                        if (frontBmp != frontItem.bitmap && !frontBmp.isRecycled) {
+                                            frontBmp.recycle()
+                                        }
                                     }
                                 }
                             }
@@ -302,11 +317,14 @@ class PdfExporter(private val context: Context) {
                             if (backItem != null) {
                                 val backBmp = loadBitmap(backItem)
                                 if (backBmp != null && !backBmp.isRecycled) {
-                                    val srcRect = Rect(0, 0, backBmp.width, backBmp.height)
-                                    val dstRect = android.graphics.RectF(x + cardW + gutterX, y, x + cardW + gutterX + cardW, y + cardH)
-                                    canvas.drawBitmap(backBmp, srcRect, dstRect, paint)
-                                    if (backItem.bitmapPath != null && backBmp != backItem.bitmap && !backBmp.isRecycled) {
-                                        backBmp.recycle()
+                                    try {
+                                        val srcRect = Rect(0, 0, backBmp.width, backBmp.height)
+                                        val dstRect = android.graphics.RectF(x + cardW + gutterX, y, x + cardW + gutterX + cardW, y + cardH)
+                                        canvas.drawBitmap(backBmp, srcRect, dstRect, paint)
+                                    } finally {
+                                        if (backBmp != backItem.bitmap && !backBmp.isRecycled) {
+                                            backBmp.recycle()
+                                        }
                                     }
                                 }
                             }
@@ -433,9 +451,13 @@ class PdfExporter(private val context: Context) {
         }
 
         val baos = ByteArrayOutputStream()
-        scaledBmp.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(10, 100), baos)
-
-        if (scaledBmp != bmp) scaledBmp.recycle()
+        try {
+            scaledBmp.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(10, 100), baos)
+        } finally {
+            if (scaledBmp != bmp && !scaledBmp.isRecycled) {
+                scaledBmp.recycle()
+            }
+        }
 
         return baos.toByteArray()
     }

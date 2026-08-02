@@ -183,7 +183,7 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    fun getFullResBitmap(slotId: String, isOriginal: Boolean = false): Bitmap? {
+    suspend fun getFullResBitmap(slotId: String, isOriginal: Boolean = false): Bitmap? {
         return imageCacheHelper.getFullResBitmap(slotId, isOriginal, slots.value, openedDocumentId)
     }
 
@@ -754,8 +754,13 @@ class ScannerViewModel @Inject constructor(
         if (slot != null) {
             croppingSlotId.value = slotId
             croppingJpgIndex.value = null
-            croppingBitmap.value = getFullResBitmap(slotId, isOriginal = true) ?: getFullResBitmap(slotId, isOriginal = false) ?: slot.bitmap
-            isCropping.value = true
+            viewModelScope.launch(Dispatchers.IO) {
+                val bmp = getFullResBitmap(slotId, isOriginal = true) ?: getFullResBitmap(slotId, isOriginal = false) ?: slot.bitmap
+                withContext(Dispatchers.Main) {
+                    croppingBitmap.value = bmp
+                    isCropping.value = true
+                }
+            }
         }
     }
 
@@ -931,22 +936,22 @@ class ScannerViewModel @Inject constructor(
     fun openEditor(slotId: String) {
         val slot = slots.value.find { it.id == slotId }
         if (slot != null) {
-            val fullRes = getFullResBitmap(slotId, isOriginal = false) ?: slot.bitmap
-            val originalRes = getFullResBitmap(slotId, isOriginal = true) ?: fullRes
-            if (fullRes != null) {
-                val corners = slot.corners
-                val baseImage = if (originalRes != null && corners != null && corners.size == 4) {
-                    val isFlat = wizardWarp.value == "Flat" || wizardWarp.value == "Flat Crop Only"
-                    val quad = Quadrilateral(corners[0], corners[1], corners[2], corners[3])
-                    try {
-                        documentScanner.cropAndTransform(originalRes, quad, currentMode.value.name, flatCrop = isFlat)
-                    } catch (e: Exception) { originalRes }
-                } else {
-                    originalRes ?: fullRes
-                }
+            val docId = openedDocumentId
+            viewModelScope.launch(Dispatchers.IO) {
+                val fullRes = getFullResBitmap(slotId, isOriginal = false) ?: slot.bitmap
+                val originalRes = getFullResBitmap(slotId, isOriginal = true) ?: fullRes
+                if (fullRes != null) {
+                    val corners = slot.corners
+                    val baseImage = if (originalRes != null && corners != null && corners.size == 4) {
+                        val isFlat = wizardWarp.value == "Flat" || wizardWarp.value == "Flat Crop Only"
+                        val quad = Quadrilateral(corners[0], corners[1], corners[2], corners[3])
+                        try {
+                            documentScanner.cropAndTransform(originalRes, quad, currentMode.value.name, flatCrop = isFlat)
+                        } catch (e: Exception) { originalRes }
+                    } else {
+                        originalRes ?: fullRes
+                    }
 
-                val docId = openedDocumentId
-                viewModelScope.launch(Dispatchers.IO) {
                     val doc = docId?.let { saveDocumentUseCase.getDocument(it) }
                     val page = doc?.pages?.find { it.id == slotId }
                     val storedRotation = page?.rotation ?: 0

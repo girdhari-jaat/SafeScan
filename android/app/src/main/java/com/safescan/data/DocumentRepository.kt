@@ -303,28 +303,32 @@ class DocumentRepository @Inject constructor(
     }
 
     suspend fun deleteDocument(docId: String): Boolean = withContext(Dispatchers.IO) {
-        val root = baseDir ?: return@withContext false
-        val docFolder = File(root, docId)
-        if (docFolder.exists()) {
-            return@withContext deleteRecursive(docFolder)
+        fileMutex.withLock {
+            val root = baseDir ?: return@withLock false
+            val docFolder = File(root, docId)
+            if (docFolder.exists()) {
+                return@withLock deleteRecursive(docFolder)
+            }
+            return@withLock false
         }
-        return@withContext false
     }
 
     suspend fun renameDocument(docId: String, newTitle: String): Boolean = withContext(Dispatchers.IO) {
-        val root = baseDir ?: return@withContext false
-        val docFolder = File(root, docId)
-        val metaFile = File(docFolder, "metadata.json")
-        if (!metaFile.exists()) return@withContext false
+        fileMutex.withLock {
+            val root = baseDir ?: return@withLock false
+            val docFolder = File(root, docId)
+            val metaFile = File(docFolder, "metadata.json")
+            if (!metaFile.exists()) return@withLock false
 
-        try {
-            val jsonStr = metaFile.readText()
-            val doc = parseDocumentMetadata(jsonStr)
-            val updatedDoc = doc.copy(title = newTitle)
-            return@withContext writeMetaFile(docFolder, updatedDoc)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to rename document $docId", e)
-            return@withContext false
+            try {
+                val jsonStr = metaFile.readText()
+                val doc = parseDocumentMetadata(jsonStr)
+                val updatedDoc = doc.copy(title = newTitle)
+                return@withLock writeMetaFile(docFolder, updatedDoc)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to rename document $docId", e)
+                return@withLock false
+            }
         }
     }
 
