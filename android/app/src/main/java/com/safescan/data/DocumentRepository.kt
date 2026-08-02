@@ -38,21 +38,23 @@ class DocumentRepository @Inject constructor(
      * so photos persist publicly even if the app is uninstalled.
      */
     suspend fun saveJpgToScans(bitmap: Bitmap, quality: Int): File? = withContext(Dispatchers.IO) {
-        val scansDir = context.getExternalFilesDir("Scans") ?: return@withContext null
-        if (!scansDir.exists()) {
-            scansDir.mkdirs()
-        }
-        val fileName = "SafeScan_${System.currentTimeMillis()}.jpg"
-        val file = File(scansDir, fileName)
-        return@withContext try {
-            // Save JPG to private app storage
-            FileOutputStream(file).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
+        fileMutex.withLock {
+            val scansDir = context.getExternalFilesDir("Scans") ?: return@withLock null
+            if (!scansDir.exists()) {
+                scansDir.mkdirs()
             }
-            file
-        } catch (e: IOException) {
-            Log.e(TAG, "Error saving captured JPG to Scans", e)
-            null
+            val fileName = "SafeScan_${System.currentTimeMillis()}.jpg"
+            val file = File(scansDir, fileName)
+            return@withLock try {
+                // Save JPG to private app storage
+                FileOutputStream(file).use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
+                }
+                file
+            } catch (e: IOException) {
+                Log.e(TAG, "Error saving captured JPG to Scans", e)
+                null
+            }
         }
     }
 
@@ -60,38 +62,42 @@ class DocumentRepository @Inject constructor(
      * Retrieves all saved documents by reading metadata.json from each sub-folder.
      */
     suspend fun getDocuments(): List<DocumentMetadata> = withContext(Dispatchers.IO) {
-        val root = baseDir ?: return@withContext emptyList()
-        val docsList = mutableListOf<DocumentMetadata>()
+        fileMutex.withLock {
+            val root = baseDir ?: return@withLock emptyList()
+            val docsList = mutableListOf<DocumentMetadata>()
 
-        val folders = root.listFiles { file -> file.isDirectory } ?: return@withContext emptyList()
-        for (folder in folders) {
-            val metaFile = File(folder, "metadata.json")
-            if (metaFile.exists()) {
-                try {
-                    val jsonStr = metaFile.readText()
-                    val doc = parseDocumentMetadata(jsonStr)
-                    docsList.add(doc)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error reading metadata.json in ${folder.name}", e)
+            val folders = root.listFiles { file -> file.isDirectory } ?: return@withLock emptyList()
+            for (folder in folders) {
+                val metaFile = File(folder, "metadata.json")
+                if (metaFile.exists()) {
+                    try {
+                        val jsonStr = metaFile.readText()
+                        val doc = parseDocumentMetadata(jsonStr)
+                        docsList.add(doc)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error reading metadata.json in ${folder.name}", e)
+                    }
                 }
             }
+            docsList.sortedByDescending { it.createdAt }
         }
-        return@withContext docsList.sortedByDescending { it.createdAt }
     }
 
     suspend fun getDocument(docId: String): DocumentMetadata? = withContext(Dispatchers.IO) {
-        val root = baseDir ?: return@withContext null
-        val docFolder = File(root, docId)
-        val metaFile = File(docFolder, "metadata.json")
-        if (metaFile.exists()) {
-            try {
-                val jsonStr = metaFile.readText()
-                return@withContext parseDocumentMetadata(jsonStr)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error reading metadata.json for $docId", e)
+        fileMutex.withLock {
+            val root = baseDir ?: return@withLock null
+            val docFolder = File(root, docId)
+            val metaFile = File(docFolder, "metadata.json")
+            if (metaFile.exists()) {
+                try {
+                    val jsonStr = metaFile.readText()
+                    return@withLock parseDocumentMetadata(jsonStr)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error reading metadata.json for $docId", e)
+                }
             }
+            null
         }
-        return@withContext null
     }
 
     private fun isPageMatch(page: PageMetadata, pageId: String, idx: Int, totalPages: Int): Boolean {

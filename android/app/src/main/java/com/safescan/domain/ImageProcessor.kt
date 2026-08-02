@@ -47,20 +47,18 @@ object ImageProcessor {
         try {
             src = Mat()
             Utils.bitmapToMat(bitmap, src)
+            Imgproc.cvtColor(src, src, Imgproc.COLOR_RGBA2BGR)
 
-            val tl = quad.topLeft
-            val tr = quad.topRight
-            val br = quad.bottomRight
-            val bl = quad.bottomLeft
+            val bw = bitmap.width.toDouble()
+            val bh = bitmap.height.toDouble()
+            val tl = CvPoint(quad.topLeft.x.coerceIn(0.0, bw), quad.topLeft.y.coerceIn(0.0, bh))
+            val tr = CvPoint(quad.topRight.x.coerceIn(0.0, bw), quad.topRight.y.coerceIn(0.0, bh))
+            val br = CvPoint(quad.bottomRight.x.coerceIn(0.0, bw), quad.bottomRight.y.coerceIn(0.0, bh))
+            val bl = CvPoint(quad.bottomLeft.x.coerceIn(0.0, bw), quad.bottomLeft.y.coerceIn(0.0, bh))
 
             ScannerDebugLogger.logWarp4Point(tl.toString(), tr.toString(), br.toString(), bl.toString())
 
-            ptsSrc = MatOfPoint2f(
-                CvPoint(tl.x, tl.y),
-                CvPoint(tr.x, tr.y),
-                CvPoint(br.x, br.y),
-                CvPoint(bl.x, bl.y)
-            )
+            ptsSrc = MatOfPoint2f(tl, tr, br, bl)
 
             // Calculate width and height of the destination image
             val widthA = kotlin.math.sqrt((br.x - bl.x).let { it * it } + (br.y - bl.y).let { it * it })
