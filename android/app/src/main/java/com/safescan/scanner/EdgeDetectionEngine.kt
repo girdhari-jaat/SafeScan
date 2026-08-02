@@ -6,8 +6,6 @@ import com.safescan.domain.model.Point
 import org.opencv.android.Utils
 import org.opencv.core.Core
 import org.opencv.core.Mat
-import org.opencv.core.MatOfPoint
-import org.opencv.core.Rect
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 
@@ -230,86 +228,12 @@ class EdgeDetectionEngine {
             if (finalPts == null) return null
 
             val originalPoints = finalPts.map { Point(it.x / scaleFactor, it.y / scaleFactor) }
-            val snappedPoints = originalPoints.map { snapToExactCorner(bitmap, it) }
-            return RansacHelper.orderPoints(snappedPoints)
+            return RansacHelper.orderPoints(originalPoints)
 
         } finally {
             src?.release(); resized?.release(); gray?.release()
             stretched?.release(); blurred?.release(); binary?.release(); closed?.release()
             gradX?.release(); gradY?.release()
-        }
-    }
-
-    @Synchronized
-    fun snapToExactCorner(bitmap: Bitmap, point: Point, roiRadius: Int = 40): Point {
-        if (bitmap.isRecycled) return point
-
-        var srcMat: Mat? = null
-        var roiMat: Mat? = null
-        var grayMat: Mat? = null
-        var cornersMat: MatOfPoint? = null
-
-        try {
-            srcMat = Mat()
-            Utils.bitmapToMat(bitmap, srcMat)
-
-            val x = point.x.toInt()
-            val y = point.y.toInt()
-
-            val left = (x - roiRadius).coerceIn(0, srcMat.cols() - 1)
-            val top = (y - roiRadius).coerceIn(0, srcMat.rows() - 1)
-            val width = (roiRadius * 2).coerceAtMost(srcMat.cols() - left)
-            val height = (roiRadius * 2).coerceAtMost(srcMat.rows() - top)
-
-            if (width <= 5 || height <= 5) return point
-
-            val rect = Rect(left, top, width, height)
-            roiMat = Mat(srcMat, rect)
-
-            grayMat = Mat()
-            Imgproc.cvtColor(roiMat, grayMat, Imgproc.COLOR_RGBA2GRAY)
-
-            cornersMat = MatOfPoint()
-            Imgproc.goodFeaturesToTrack(
-                grayMat,
-                cornersMat,
-                10,
-                0.05,
-                5.0,
-                Mat(),
-                3,
-                false,
-                0.04
-            )
-
-            val cornersArray = cornersMat.toArray()
-            if (cornersArray.isEmpty()) return point
-
-            val centerX = (x - left).toDouble()
-            val centerY = (y - top).toDouble()
-
-            var bestPoint = point
-            var minDistanceSq = Double.MAX_VALUE
-
-            for (pt in cornersArray) {
-                val dx = pt.x - centerX
-                val dy = pt.y - centerY
-                val distSq = dx * dx + dy * dy
-                if (distSq < minDistanceSq) {
-                    minDistanceSq = distSq
-                    bestPoint = Point((left + pt.x), (top + pt.y))
-                }
-            }
-
-            return if (Math.sqrt(minDistanceSq) <= roiRadius * 0.75) bestPoint else point
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in snapToExactCorner", e)
-            return point
-        } finally {
-            cornersMat?.release()
-            grayMat?.release()
-            roiMat?.release()
-            srcMat?.release()
         }
     }
 

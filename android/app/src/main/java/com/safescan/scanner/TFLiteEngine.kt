@@ -29,7 +29,6 @@ class TFLiteEngine(private val context: Context) {
     private var interpreter: Interpreter? = null
     private var gpuDelegate: GpuDelegate? = null
     private val executionLock = java.util.concurrent.locks.ReentrantLock()
-    private val edgeEngine = EdgeDetectionEngine()
     private val inputSize = 256 // Fairscan model input size
 
     // Zero-copy, high-performance pre-allocated buffers to prevent Garbage Collection (GC) thrashing
@@ -418,12 +417,7 @@ class TFLiteEngine(private val context: Context) {
                         val originalY = ((it.y - dyD) / scaleD).coerceIn(0.0, bitmap.height.toDouble())
                         Point(originalX, originalY)
                     }
-                    val snappedPoints = if (!isLive) {
-                        scaledPoints.map { edgeEngine.snapToExactCorner(bitmap, it) }
-                    } else {
-                        scaledPoints
-                    }
-                    val ordered = orderPoints(snappedPoints)
+                    val ordered = orderPoints(scaledPoints)
                     
                     if (isLive) {
                         if (lastStableCorners != null) {
