@@ -39,6 +39,13 @@ class ScannerSettingsHandler(
         }
     }
 
+    fun setFlashMode(mode: FlashMode) {
+        scope.launch {
+            settingsRepository.setFlashMode(mode)
+            DiagnosticsLogger.info("Flash mode set to: ${mode.name}")
+        }
+    }
+
     fun toggleFlash(enabled: Boolean) {
         scope.launch {
             settingsRepository.setFlashOn(enabled)

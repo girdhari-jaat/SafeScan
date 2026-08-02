@@ -345,6 +345,7 @@ class ScannerViewModel @Inject constructor(
     fun switchMode(mode: ScannerMode) = settingsHandler.switchMode(mode)
     fun toggleAutoCrop(enabled: Boolean) = settingsHandler.toggleAutoCrop(enabled)
     fun cycleFlashMode() = settingsHandler.cycleFlashMode(flashMode.value)
+    fun setFlashMode(mode: FlashMode) = settingsHandler.setFlashMode(mode)
     fun toggleFlash(enabled: Boolean) = settingsHandler.toggleFlash(enabled)
     fun toggleDoubleFocus(enabled: Boolean) = settingsHandler.toggleDoubleFocus(enabled)
     fun setFocusMode(mode: String) = settingsHandler.setFocusMode(mode)
