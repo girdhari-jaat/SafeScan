@@ -55,75 +55,72 @@ fun ScannerTopBar(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
             ) {
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Close Scanner",
-                        tint = Color.White
-                    )
-                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Close Scanner",
+                    tint = Color.White
+                )
+            }
 
-                IconButton(
-                    onClick = {
-                        isFlashMenuOpen = !isFlashMenuOpen
-                        if (isFlashMenuOpen) isHdMenuOpen = false
+            IconButton(
+                onClick = {
+                    isFlashMenuOpen = !isFlashMenuOpen
+                    if (isFlashMenuOpen) isHdMenuOpen = false
+                },
+                modifier = Modifier.background(
+                    if (flashMode != FlashMode.OFF) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.5f),
+                    CircleShape
+                )
+            ) {
+                Icon(
+                    imageVector = when (flashMode) {
+                        FlashMode.AUTO -> Icons.Default.FlashAuto
+                        FlashMode.ON -> Icons.Default.FlashOn
+                        FlashMode.TORCH -> Icons.Default.FlashOn
+                        else -> Icons.Default.FlashOff
                     },
-                    modifier = Modifier.background(
-                        if (flashMode != FlashMode.OFF) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.5f),
-                        CircleShape
-                    )
-                ) {
-                    Icon(
-                        imageVector = when (flashMode) {
-                            FlashMode.AUTO -> Icons.Default.FlashAuto
-                            FlashMode.ON -> Icons.Default.FlashOn
-                            FlashMode.TORCH -> Icons.Default.FlashOn
-                            else -> Icons.Default.FlashOff
-                        },
-                        contentDescription = "Toggle Flash",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                    contentDescription = "Toggle Flash",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
 
-                Box(
-                    modifier = Modifier
-                        .height(36.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isHdMenuOpen) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.5f)
-                        )
-                        .clickable {
-                            isHdMenuOpen = !isHdMenuOpen
-                            if (isHdMenuOpen) isFlashMenuOpen = false
-                        }
-                        .padding(horizontal = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val selectedLabel = when (hdMode.uppercase()) {
-                        "FAST" -> "Fast"
-                        "STANDARD" -> "Standard"
-                        "HIGH" -> "High"
-                        else -> hdMode
-                    }
-                    Text(
-                        text = selectedLabel,
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
+            Box(
+                modifier = Modifier
+                    .height(36.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isHdMenuOpen) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.5f)
                     )
+                    .clickable {
+                        isHdMenuOpen = !isHdMenuOpen
+                        if (isHdMenuOpen) isFlashMenuOpen = false
+                    }
+                    .padding(horizontal = 14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                val selectedLabel = when (hdMode.uppercase()) {
+                    "FAST" -> "Fast"
+                    "STANDARD" -> "Standard"
+                    "HIGH" -> "High"
+                    else -> hdMode
                 }
+                Text(
+                    text = selectedLabel,
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
 
             IconButton(
@@ -149,7 +146,7 @@ fun ScannerTopBar(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color(0xFF1E1E1E).copy(alpha = 0.95f))
-                    .padding(vertical = 6.dp, horizontal = 8.dp),
+                    .padding(vertical = 6.dp, horizontal = 6.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -164,6 +161,7 @@ fun ScannerTopBar(
                     val isSelected = flashMode == mode
                     Box(
                         modifier = Modifier
+                            .weight(1f)
                             .clip(RoundedCornerShape(8.dp))
                             .background(
                                 if (isSelected) Color(0xFF383838) else Color.Transparent
@@ -172,13 +170,13 @@ fun ScannerTopBar(
                                 viewModel.setFlashMode(mode)
                                 isFlashMenuOpen = false
                             }
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = label,
                             color = if (isSelected) Color(0xFF4DB6AC) else Color.White,
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                         )
                     }
@@ -197,7 +195,7 @@ fun ScannerTopBar(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color(0xFF1E1E1E).copy(alpha = 0.95f))
-                    .padding(vertical = 6.dp, horizontal = 8.dp),
+                    .padding(vertical = 6.dp, horizontal = 6.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -207,6 +205,7 @@ fun ScannerTopBar(
                     val isSelected = hdMode.equals(mode, ignoreCase = true)
                     Box(
                         modifier = Modifier
+                            .weight(1f)
                             .clip(RoundedCornerShape(8.dp))
                             .background(
                                 if (isSelected) Color(0xFF383838) else Color.Transparent
@@ -215,13 +214,13 @@ fun ScannerTopBar(
                                 viewModel.setHdMode(mode)
                                 isHdMenuOpen = false
                             }
-                            .padding(horizontal = 20.dp, vertical = 8.dp),
+                            .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = mode,
                             color = if (isSelected) Color(0xFF4DB6AC) else Color.White,
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                         )
                     }

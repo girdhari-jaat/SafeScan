@@ -84,8 +84,8 @@ fun CropScreen(viewModel: ScannerViewModel) {
 
     // Initialize corners once image size is known or when a new image is loaded
     LaunchedEffect(imageSize, croppingBitmap) {
-        if (imageSize.width > 0 && imageSize.height > 0 && croppingBitmap != null) {
-            val bmp = croppingBitmap!!
+        val bmp = croppingBitmap
+        if (imageSize.width > 0 && imageSize.height > 0 && bmp != null) {
             val savedCorners = viewModel.getCornersForCropping()
             if (savedCorners != null && savedCorners.size == 4) {
                 val scaleX = imageSize.width.toFloat() / bmp.width.toFloat()
@@ -160,8 +160,8 @@ fun CropScreen(viewModel: ScannerViewModel) {
                     }
                 },
                 onSave = {
-                    if (imageSize.width > 0 && imageSize.height > 0 && croppingBitmap != null) {
-                        val bmp = croppingBitmap!!
+                    val bmp = croppingBitmap
+                    if (imageSize.width > 0 && imageSize.height > 0 && bmp != null) {
                         val scaleX = bmp.width.toFloat() / imageSize.width
                         val scaleY = bmp.height.toFloat() / imageSize.height
                         
@@ -175,8 +175,8 @@ fun CropScreen(viewModel: ScannerViewModel) {
                     }
                 },
                 onNext = {
-                    if (imageSize.width > 0 && imageSize.height > 0 && croppingBitmap != null) {
-                        val bmp = croppingBitmap!!
+                    val bmp = croppingBitmap
+                    if (imageSize.width > 0 && imageSize.height > 0 && bmp != null) {
                         val scaleX = bmp.width.toFloat() / imageSize.width
                         val scaleY = bmp.height.toFloat() / imageSize.height
                         

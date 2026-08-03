@@ -200,7 +200,7 @@ fun SettingsScreen(
                                     expanded = filterExpanded,
                                     onDismissRequest = { filterExpanded = false }
                                 ) {
-                                    val filters = listOf("Original", "Magic", "Paper", "Card", "B&W", "Gray")
+                                    val filters = listOf("Original", "Magic", "Card", "Paper", "B&W", "Gray")
                                     filters.forEach { filter ->
                                         DropdownMenuItem(
                                             text = { Text(filter) },

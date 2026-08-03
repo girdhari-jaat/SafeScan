@@ -156,8 +156,9 @@ class ScannerStateMachine(
         missingFrameCount = 0
 
         // 5. Apply Exponential Moving Average (EMA) corner smoothing
-        if (lastQuadPoints != null) {
-            processedPoints = emaCorners(lastQuadPoints!!, processedPoints)
+        val prevQuad = lastQuadPoints
+        if (prevQuad != null) {
+            processedPoints = emaCorners(prevQuad, processedPoints)
         }
 
         if (processedPoints.size == 4) {
@@ -170,8 +171,8 @@ class ScannerStateMachine(
         }
 
         // 6. Stability Verification with dynamic 2-frame tolerance
-        if (lastQuadPoints != null) {
-            if (isStable(lastQuadPoints!!, processedPoints)) {
+        if (prevQuad != null) {
+            if (isStable(prevQuad, processedPoints)) {
                 unstableFrameCount = 0
                 stableFrameCount++
             } else {

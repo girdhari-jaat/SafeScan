@@ -281,9 +281,17 @@ class ScannerViewModel @Inject constructor(
     private val _autoCaptureEvent = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val autoCaptureEvent = _autoCaptureEvent.asSharedFlow()
 
+    private val isDetectingFrame = java.util.concurrent.atomic.AtomicBoolean(false)
+
     fun detectEdges(bitmap: Bitmap, onResult: (List<Point>?) -> Unit) {
         if (bitmap.isRecycled) {
             Log.e("ScannerViewModel", "detectEdges: Provided bitmap is recycled!")
+            onResult(null)
+            return
+        }
+
+        if (!isDetectingFrame.compareAndSet(false, true)) {
+            // Drop incoming frame if edge detection is currently busy
             onResult(null)
             return
         }
@@ -298,9 +306,10 @@ class ScannerViewModel @Inject constructor(
                 }
             } catch (e: Throwable) {
                 Log.e("ScannerViewModel", "detectEdges: OpenCV detection failed", e)
+            } finally {
+                isDetectingFrame.set(false)
+                _uiState.update { it.copy(isAutoRunning = false) }
             }
-
-            _uiState.update { it.copy(isAutoRunning = false) }
 
             withContext(Dispatchers.Main) {
                 try {
@@ -319,6 +328,12 @@ class ScannerViewModel @Inject constructor(
             return
         }
 
+        if (!isDetectingFrame.compareAndSet(false, true)) {
+            // Drop incoming frame if TFLite detection is currently busy
+            onResult(null)
+            return
+        }
+
         _uiState.update { it.copy(isAutoRunning = true) }
         viewModelScope.launch(Dispatchers.IO) {
             var points: List<Point>? = null
@@ -329,9 +344,10 @@ class ScannerViewModel @Inject constructor(
                 }
             } catch (e: Throwable) {
                 Log.e("ScannerViewModel", "detectEdgesWithTFLite: TFLite detection failed", e)
+            } finally {
+                isDetectingFrame.set(false)
+                _uiState.update { it.copy(isAutoRunning = false) }
             }
-
-            _uiState.update { it.copy(isAutoRunning = false) }
 
             withContext(Dispatchers.Main) {
                 try {
@@ -398,10 +414,8 @@ class ScannerViewModel @Inject constructor(
         originalBitmap: Bitmap? = null
     ) {
         DiagnosticsLogger.info("Processing captured image for slot $slotId...")
-        if (openedDocumentId == null) {
-            openedDocumentId = "doc_" + System.currentTimeMillis()
-        }
-        val docId = openedDocumentId!!
+        val activeDocId = openedDocumentId ?: ("doc_" + System.currentTimeMillis()).also { openedDocumentId = it }
+        val docId = activeDocId
 
         val currentSlots = slots.value.toMutableList()
         val index = currentSlots.indexOfFirst { it.id == slotId }
@@ -513,8 +527,8 @@ class ScannerViewModel @Inject constructor(
                 val title = getOrGenerateDocumentTitle(docId)
                 pagesData = buildPagesData(docId, tempBitmapsToRecycle)
                 
-                if (pagesData!!.isNotEmpty()) {
-                    saveDocumentUseCase.saveDocument(docId, title, currentMode.value.name, pagesData!!)
+                if (pagesData != null && pagesData.isNotEmpty()) {
+                    saveDocumentUseCase.saveDocument(docId, title, currentMode.value.name, pagesData)
                     reloadSavedDocuments()
                 }
                 
@@ -695,12 +709,13 @@ class ScannerViewModel @Inject constructor(
             }
 
             // Sync CropScreen state if currently cropping this index
-            if (croppingJpgIndex.value == index) {
+            val cropIdx = croppingJpgIndex.value
+            if (cropIdx == index) {
                 croppingJpgIndex.value = null
                 croppingBitmap.value = null
                 isCropping.value = false
-            } else if (croppingJpgIndex.value != null && croppingJpgIndex.value!! > index) {
-                croppingJpgIndex.value = croppingJpgIndex.value!! - 1
+            } else if (cropIdx != null && cropIdx > index) {
+                croppingJpgIndex.value = cropIdx - 1
             }
 
             openedDocumentId?.let { saveDocumentStateOffline(it) }

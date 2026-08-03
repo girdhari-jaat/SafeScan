@@ -338,16 +338,40 @@ class DocumentRepository @Inject constructor(
         }
     }
 
-    suspend fun loadOriginalBitmap(docId: String, pageId: String): Bitmap? = withContext(Dispatchers.IO) {
+    suspend fun loadOriginalBitmap(docId: String, pageId: String, maxDimension: Int? = null): Bitmap? = withContext(Dispatchers.IO) {
         val root = baseDir ?: return@withContext null
         val file = File(root, "$docId/pages/$pageId.jpg")
-        return@withContext if (file.exists()) BitmapFactory.decodeFile(file.absolutePath) else null
+        return@withContext if (file.exists()) decodeBitmapWithScale(file.absolutePath, maxDimension) else null
     }
 
-    suspend fun loadPreviewBitmap(docId: String, pageId: String): Bitmap? = withContext(Dispatchers.IO) {
+    suspend fun loadPreviewBitmap(docId: String, pageId: String, maxDimension: Int? = null): Bitmap? = withContext(Dispatchers.IO) {
         val root = baseDir ?: return@withContext null
         val file = File(root, "$docId/previews/$pageId.jpg")
-        return@withContext if (file.exists()) BitmapFactory.decodeFile(file.absolutePath) else null
+        return@withContext if (file.exists()) decodeBitmapWithScale(file.absolutePath, maxDimension) else null
+    }
+
+    private fun decodeBitmapWithScale(filePath: String, maxDimension: Int?): Bitmap? {
+        if (maxDimension == null || maxDimension <= 0) {
+            return BitmapFactory.decodeFile(filePath)
+        }
+        val boundsOptions = BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+        BitmapFactory.decodeFile(filePath, boundsOptions)
+        val outWidth = boundsOptions.outWidth
+        val outHeight = boundsOptions.outHeight
+        if (outWidth <= 0 || outHeight <= 0) return null
+
+        var sampleSize = 1
+        val maxDim = maxOf(outWidth, outHeight)
+        while (maxDim / sampleSize > maxDimension) {
+            sampleSize *= 2
+        }
+
+        val decodeOptions = BitmapFactory.Options().apply {
+            inSampleSize = sampleSize
+        }
+        return BitmapFactory.decodeFile(filePath, decodeOptions)
     }
 
     private fun saveBitmapToFile(bmp: Bitmap, file: File) {

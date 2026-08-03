@@ -308,9 +308,10 @@ class ScannerExportHelper(
                     openedDocumentId = docId
                 )
 
-                if (pagesData!!.isNotEmpty()) {
-                    saveDocumentUseCase.saveDocument(docId, title, currentMode.name, pagesData!!)
-                    DiagnosticsLogger.info("Saved document meta of ${pagesData!!.size} pages securely offline.")
+                val pagesDataRef = pagesData
+                if (pagesDataRef != null && pagesDataRef.isNotEmpty()) {
+                    saveDocumentUseCase.saveDocument(docId, title, currentMode.name, pagesDataRef)
+                    DiagnosticsLogger.info("Saved document meta of ${pagesDataRef.size} pages securely offline.")
                     reloadSavedDocuments()
                 } else {
                     saveDocumentUseCase.deleteDocument(docId)
@@ -537,9 +538,10 @@ class ScannerExportHelper(
                     openedDocumentId = docId
                 )
 
-                if (pagesData!!.isNotEmpty()) {
-                    saveDocumentUseCase.saveDocument(docId, title, currentMode.name, pagesData!!)
-                    DiagnosticsLogger.info("Saved document meta of ${pagesData!!.size} pages securely offline.")
+                val pagesDataRef = pagesData
+                if (pagesDataRef != null && pagesDataRef.isNotEmpty()) {
+                    saveDocumentUseCase.saveDocument(docId, title, currentMode.name, pagesDataRef)
+                    DiagnosticsLogger.info("Saved document meta of ${pagesDataRef.size} pages securely offline.")
                     reloadSavedDocuments()
                     withContext(Dispatchers.Main) {
                         endSession()

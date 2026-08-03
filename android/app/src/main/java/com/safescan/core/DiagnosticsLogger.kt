@@ -3,32 +3,28 @@ package com.safescan.core
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.text.SimpleDateFormat
-import java.util.ArrayDeque
-import java.util.Date
-import java.util.Locale
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.concurrent.ConcurrentLinkedQueue
 
 object DiagnosticsLogger {
-    private val buffer = ArrayDeque<String>(1005)
+    private val buffer = ConcurrentLinkedQueue<String>()
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
 
-    private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
+    private val timeFormatter: DateTimeFormatter = DateTimeFormatter
+        .ofPattern("HH:mm:ss.SSS")
+        .withZone(ZoneId.systemDefault())
 
     fun log(message: String) {
-        val timestamp = synchronized(timeFormat) {
-            timeFormat.format(Date())
-        }
+        val timestamp = timeFormatter.format(Instant.now())
         val formattedLog = "[$timestamp] $message"
-        val snapshot: List<String>
-        synchronized(buffer) {
-            if (buffer.size >= 1000) {
-                buffer.removeFirst()
-            }
-            buffer.addLast(formattedLog)
-            snapshot = ArrayList(buffer)
+        buffer.add(formattedLog)
+        while (buffer.size > 1000) {
+            buffer.poll()
         }
-        _logs.value = snapshot
+        _logs.value = buffer.toList()
     }
 
     fun info(message: String) {
@@ -44,10 +40,9 @@ object DiagnosticsLogger {
     }
 
     fun clear() {
-        synchronized(buffer) {
-            buffer.clear()
-        }
+        buffer.clear()
         _logs.value = emptyList()
     }
 }
+
 

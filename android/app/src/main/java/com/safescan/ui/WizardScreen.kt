@@ -238,7 +238,7 @@ fun WizardScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                val filters = listOf("Original", "Magic", "Paper", "Card", "B&W", "Gray")
+                val filters = listOf("Original", "Magic", "Card", "Paper", "B&W", "Gray")
                 filters.forEach { f ->
                     val selected = filter.equals(f, ignoreCase = true)
                     WizardSelectionButton(

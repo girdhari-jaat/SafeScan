@@ -66,18 +66,19 @@ object ExportHelper {
     }
 }
 
-class NativePdfWriter(private val out: java.io.OutputStream) {
+class NativePdfWriter(outStream: java.io.OutputStream) {
+    private val bufferedOut = if (outStream is java.io.BufferedOutputStream) outStream else java.io.BufferedOutputStream(outStream, 8192)
     private var bytesWritten = 0L
     private val objectOffsets = mutableListOf<Long>()
 
     fun write(str: String) {
         val bytes = str.toByteArray(Charsets.ISO_8859_1)
-        out.write(bytes)
+        bufferedOut.write(bytes)
         bytesWritten += bytes.size
     }
 
     fun write(bytes: ByteArray) {
-        out.write(bytes)
+        bufferedOut.write(bytes)
         bytesWritten += bytes.size
     }
 
@@ -114,6 +115,7 @@ class NativePdfWriter(private val out: java.io.OutputStream) {
         write("startxref\n")
         write("$xrefOffset\n")
         write("%%EOF\n")
+        bufferedOut.flush()
     }
 }
 

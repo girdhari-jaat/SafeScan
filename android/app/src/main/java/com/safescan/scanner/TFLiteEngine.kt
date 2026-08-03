@@ -156,13 +156,15 @@ class TFLiteEngine(private val context: Context) {
 
             try {
                 // Lazily initialize and reuse letterbox bitmap and canvas
-                if (letterboxedBitmap == null) {
-                    letterboxedBitmap = Bitmap.createBitmap(inputSize, inputSize, Bitmap.Config.ARGB_8888)
-                    canvas = Canvas(letterboxedBitmap!!)
+                var lbBitmap = letterboxedBitmap
+                if (lbBitmap == null) {
+                    lbBitmap = Bitmap.createBitmap(inputSize, inputSize, Bitmap.Config.ARGB_8888)
+                    letterboxedBitmap = lbBitmap
+                    canvas = Canvas(lbBitmap)
                 }
                 
-                val currentBitmap = letterboxedBitmap!!
-                val currentCanvas = canvas!!
+                val currentBitmap = lbBitmap
+                val currentCanvas = canvas ?: Canvas(currentBitmap)
                 
                 // Clear with black background
                 currentCanvas.drawColor(Color.BLACK)
@@ -420,8 +422,9 @@ class TFLiteEngine(private val context: Context) {
                     val ordered = orderPoints(scaledPoints)
                     
                     if (isLive) {
-                        if (lastStableCorners != null) {
-                            if (isSimilar(ordered, lastStableCorners!!, adaptiveTolerance)) {
+                        val prevCorners = lastStableCorners
+                        if (prevCorners != null) {
+                            if (isSimilar(ordered, prevCorners, adaptiveTolerance)) {
                                 stableFrameCount++
                             } else {
                                 // Graceful decay: decrement instead of resetting to 1 immediately to allow minor hand tremors

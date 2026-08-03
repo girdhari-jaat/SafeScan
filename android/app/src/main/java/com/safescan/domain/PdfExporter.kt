@@ -49,7 +49,8 @@ class PdfExporter(private val context: Context) {
             ScannerDebugLogger.logPdfAssemble(slots.size, pageSizeStr)
 
             val validSlots = slots.filter { 
-                (it.bitmapPath != null && File(it.bitmapPath).exists()) || (it.bitmap != null && !it.bitmap!!.isRecycled) 
+                val bmp = it.bitmap
+                (it.bitmapPath != null && File(it.bitmapPath).exists()) || (bmp != null && !bmp.isRecycled) 
             }
 
             val qualityInt = jpegQuality.toInt().coerceIn(10, 100)

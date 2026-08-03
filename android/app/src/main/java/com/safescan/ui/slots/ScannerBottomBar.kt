@@ -157,9 +157,10 @@ fun ScannerBottomActions(
                 },
             contentAlignment = Alignment.Center
         ) {
-            if (hasScans && uiState.lastCapturedThumbnail != null) {
+            val thumbnail = uiState.lastCapturedThumbnail
+            if (hasScans && thumbnail != null) {
                 Image(
-                    bitmap = uiState.lastCapturedThumbnail!!.asImageBitmap(),
+                    bitmap = thumbnail.asImageBitmap(),
                     contentDescription = "Last captured thumbnail",
                     modifier = Modifier.fillMaxSize().clip(CircleShape),
                     contentScale = ContentScale.Crop

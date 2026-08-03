@@ -100,6 +100,7 @@ class ImageCacheHelper(
         if (!dir.exists()) {
             dir.mkdirs()
         }
+        cleanupDiskCacheIfNeeded(dir)
         val file = File(dir, "${slotId}_${suffix}.jpg")
         return try {
             FileOutputStream(file).use { out ->
@@ -111,6 +112,26 @@ class ImageCacheHelper(
         } catch (e: Exception) {
             Log.e("ImageCacheHelper", "Failed to save high-res bitmap to disk", e)
             null
+        }
+    }
+
+    private fun cleanupDiskCacheIfNeeded(dir: File, maxSizeBytes: Long = 50 * 1024 * 1024L) {
+        try {
+            val files = dir.listFiles() ?: return
+            var totalSize = files.sumOf { it.length() }
+            if (totalSize > maxSizeBytes) {
+                val sorted = files.sortedBy { it.lastModified() }
+                val targetSize = (maxSizeBytes * 0.6).toLong()
+                for (f in sorted) {
+                    if (totalSize <= targetSize) break
+                    val len = f.length()
+                    if (f.delete()) {
+                        totalSize -= len
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("ImageCacheHelper", "Failed to cleanup disk cache", e)
         }
     }
 

@@ -27,4 +27,10 @@ object AppModule {
     fun providePdfExporter(@ApplicationContext context: Context): PdfExporter {
         return PdfExporter(context)
     }
+
+    @Provides
+    @Singleton
+    fun provideIoDispatcher(): kotlinx.coroutines.CoroutineDispatcher {
+        return kotlinx.coroutines.Dispatchers.IO
+    }
 }

@@ -61,7 +61,7 @@ import java.util.concurrent.TimeUnit
 class ScannerFragment : Fragment() {
 
     private var _binding: FragmentScannerBinding? = null
-    val binding get() = _binding!!
+    val binding get() = checkNotNull(_binding) { "FragmentScannerBinding is null. Accessing binding outside of view lifecycle." }
 
     val viewModel: ScannerViewModel by viewModels()
     val liveEdgeDetectionEngine by lazy { com.safescan.scanner.LiveEdgeDetectionEngine() }

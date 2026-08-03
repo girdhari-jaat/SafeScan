@@ -201,8 +201,8 @@ fun ExportModalDialog(
                         val filters = listOf(
                             FilterType.COLOR to "Original",
                             FilterType.MAGIC_COLOR to "Magic",
-                            FilterType.PAPER to "Paper",
                             FilterType.CARD to "Card",
+                            FilterType.PAPER to "Paper",
                             FilterType.BLACK_WHITE to "B&W",
                             FilterType.GRAYSCALE to "Gray"
                         )

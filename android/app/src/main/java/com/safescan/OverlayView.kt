@@ -30,20 +30,8 @@ class OverlayView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-
-        // Draw live edge detection polygon if corners are detected
-        corners?.let { pts ->
-            if (pts.size == 4) {
-                edgePath.reset()
-                edgePath.moveTo(pts[0].x, pts[0].y)
-                edgePath.lineTo(pts[1].x, pts[1].y)
-                edgePath.lineTo(pts[2].x, pts[2].y)
-                edgePath.lineTo(pts[3].x, pts[3].y)
-                edgePath.close()
-
-                // Dynamic green outline for live detected document boundary
-                canvas.drawPath(edgePath, strokePaint)
-            }
+        if (corners?.size == 4) {
+            canvas.drawPath(edgePath, strokePaint)
         }
     }
 
@@ -52,6 +40,16 @@ class OverlayView @JvmOverloads constructor(
     fun updateCorners(newCorners: List<PointF>?) {
         if (corners == newCorners) return
         corners = newCorners
+        edgePath.reset()
+        newCorners?.let { pts ->
+            if (pts.size == 4) {
+                edgePath.moveTo(pts[0].x, pts[0].y)
+                edgePath.lineTo(pts[1].x, pts[1].y)
+                edgePath.lineTo(pts[2].x, pts[2].y)
+                edgePath.lineTo(pts[3].x, pts[3].y)
+                edgePath.close()
+            }
+        }
         invalidate()
     }
 }
