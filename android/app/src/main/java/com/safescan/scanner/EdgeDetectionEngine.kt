@@ -113,24 +113,31 @@ class EdgeDetectionEngine {
             }
 
             // 5. Estimate Dynamic Gradient Threshold parameters based on distribution percentiles
-            val sampledX = ArrayList<Float>()
-            val sampledY = ArrayList<Float>()
-            val stride = Math.max(1, (sw * sh) / 600)
+            val sampleCap = 600
+            val sampledX = FloatArray(sampleCap)
+            val sampledY = FloatArray(sampleCap)
+            var countX = 0
+            var countY = 0
+            val stride = Math.max(1, (sw * sh) / sampleCap)
             for (i in 0 until sw * sh step stride) {
-                if (magnitudesX[i] > 5f) sampledX.add(magnitudesX[i])
-                if (magnitudesY[i] > 5f) sampledY.add(magnitudesY[i])
+                if (magnitudesX[i] > 5f && countX < sampleCap) {
+                    sampledX[countX++] = magnitudesX[i]
+                }
+                if (magnitudesY[i] > 5f && countY < sampleCap) {
+                    sampledY[countY++] = magnitudesY[i]
+                }
             }
 
             var thresholdX = 14.0
-            if (sampledX.size > 30) {
-                sampledX.sort()
-                thresholdX = sampledX[(sampledX.size * 0.84).toInt()].toDouble()
+            if (countX > 30) {
+                java.util.Arrays.sort(sampledX, 0, countX)
+                thresholdX = sampledX[(countX * 0.84).toInt()].toDouble()
             }
 
             var thresholdY = 14.0
-            if (sampledY.size > 30) {
-                sampledY.sort()
-                thresholdY = sampledY[(sampledY.size * 0.84).toInt()].toDouble()
+            if (countY > 30) {
+                java.util.Arrays.sort(sampledY, 0, countY)
+                thresholdY = sampledY[(countY * 0.84).toInt()].toDouble()
             }
 
             val meanBrightness = Core.mean(gray).`val`[0]
