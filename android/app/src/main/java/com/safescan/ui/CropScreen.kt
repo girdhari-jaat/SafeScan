@@ -472,4 +472,5 @@ fun CropScreen(viewModel: ScannerViewModel) {
         }
     }
 }
+}
 
