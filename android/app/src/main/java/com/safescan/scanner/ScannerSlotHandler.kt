@@ -3,6 +3,8 @@ package com.safescan.scanner
 import android.content.Context
 import com.safescan.data.DocumentMetadata
 import com.safescan.data.ScannerMode
+import com.safescan.data.ScannerUiState
+import com.safescan.data.SettingsRepository
 import com.safescan.data.Slot
 import com.safescan.domain.model.Point
 import com.safescan.domain.usecase.SaveDocumentUseCase

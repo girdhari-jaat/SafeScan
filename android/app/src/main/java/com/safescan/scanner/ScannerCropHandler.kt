@@ -3,6 +3,7 @@ package com.safescan.scanner
 import android.graphics.Bitmap
 import android.util.Log
 import com.safescan.data.ScannerMode
+import com.safescan.data.ScannerUiState
 import com.safescan.domain.model.Point
 import com.safescan.domain.usecase.DetectEdgesUseCase
 import kotlinx.coroutines.CoroutineScope
