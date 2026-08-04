@@ -359,7 +359,7 @@ fun WizardScreen(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 WizardSelectionButton(
-                    text = "Shadow Remove",
+                    text = "Auto Enhance",
                     selected = autoShadow,
                     modifier = Modifier.weight(1f),
                     onClick = {

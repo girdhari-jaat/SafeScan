@@ -188,7 +188,7 @@ fun ScannerSettingsPopover(
                     )
                     PopoverToggleRow(
                         icon = Icons.Default.BrightnessMedium,
-                        label = "Shadow Remove",
+                        label = "Auto Enhance",
                         checked = shadowRemove,
                         onCheckedChange = { viewModel.toggleShadowRemove(it) }
                     )

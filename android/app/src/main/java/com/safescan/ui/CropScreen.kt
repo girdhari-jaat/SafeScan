@@ -4,41 +4,30 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.platform.LocalView
-import android.view.HapticFeedbackConstants
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.unit.IntOffset
-import kotlin.math.roundToInt
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.font.FontWeight
 import com.safescan.data.ScannerMode
 import com.safescan.scanner.ScannerViewModel
 import com.safescan.domain.model.Point
 import com.safescan.domain.model.Quadrilateral
+import com.safescan.ui.crop.CornerHandle
+import com.safescan.ui.crop.CropMagnifierLens
+import com.safescan.ui.crop.CropTopBar
+import com.safescan.ui.crop.updateOffset
 import kotlinx.coroutines.launch
 import com.safescan.R
 
@@ -72,7 +61,6 @@ fun CropScreen(viewModel: ScannerViewModel) {
         }
     }
     
-    // IMPROVEMENT: Added SnackbarHostState and CoroutineScope to handle edge-detection errors gracefully
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     
@@ -469,260 +457,19 @@ fun CropScreen(viewModel: ScannerViewModel) {
 
                         // High-Precision Canvas Magnifier
                         draggingHandle?.let {
-                            val magnifierSize = 150.dp
-                            val magnifierPos = if (dragOffset.y < imageSize.height / 3) {
-                                Alignment.BottomCenter
-                            } else {
-                                Alignment.TopCenter
-                            }
-                            
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(16.dp),
-                                contentAlignment = magnifierPos
-                            ) {
-                                Card(
-                                    shape = CircleShape,
-                                    border = androidx.compose.foundation.BorderStroke(3.dp, Color(0xFF10B981)),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(magnifierSize)
-                                            .clip(CircleShape)
-                                    ) {
-                                        Canvas(modifier = Modifier.fillMaxSize()) {
-                                            val canvasW = size.width
-                                            val canvasH = size.height
-                                            val centerX = canvasW / 2f
-                                            val centerY = canvasH / 2f
-                                            val zoom = 3.5f
-
-                                            clipPath(Path().apply { addOval(Rect(0f, 0f, canvasW, canvasH)) }) {
-                                                // 1. Dark background for off-document boundary area
-                                                drawRect(Color(0xFF18181B))
-
-                                                // 2. Draw scaled image bitmap positioned exactly at dragOffset
-                                                if (imageSize.width > 0 && imageSize.height > 0) {
-                                                    val imgLeft = centerX - dragOffset.x * zoom
-                                                    val imgTop = centerY - dragOffset.y * zoom
-                                                    val imgWidth = imageSize.width.toFloat() * zoom
-                                                    val imgHeight = imageSize.height.toFloat() * zoom
-
-                                                    drawImage(
-                                                        image = imageBitmap,
-                                                        dstOffset = IntOffset(imgLeft.roundToInt(), imgTop.roundToInt()),
-                                                        dstSize = IntSize(imgWidth.roundToInt(), imgHeight.roundToInt())
-                                                    )
-                                                }
-
-                                                // 3. Helper to map crop points to magnifier coordinates
-                                                fun mapToMag(p: Offset): Offset {
-                                                    return Offset(
-                                                        centerX + (p.x - dragOffset.x) * zoom,
-                                                        centerY + (p.y - dragOffset.y) * zoom
-                                                    )
-                                                }
-
-                                                // 4. Overlay crop region polygon inside magnifier lens
-                                                val magTl = mapToMag(tl)
-                                                val magTr = mapToMag(tr)
-                                                val magBr = mapToMag(br)
-                                                val magBl = mapToMag(bl)
-
-                                                val cropPath = Path().apply {
-                                                    moveTo(magTl.x, magTl.y)
-                                                    lineTo(magTr.x, magTr.y)
-                                                    lineTo(magBr.x, magBr.y)
-                                                    lineTo(magBl.x, magBl.y)
-                                                    close()
-                                                }
-
-                                                drawPath(
-                                                    path = cropPath,
-                                                    color = Color.Cyan.copy(alpha = 0.2f)
-                                                )
-                                                drawPath(
-                                                    path = cropPath,
-                                                    color = Color.Cyan,
-                                                    style = Stroke(width = 2.dp.toPx())
-                                                )
-
-                                                // 5. Center Target Crosshair (Emerald brand color)
-                                                val crosshairColor = Color(0xFF10B981)
-                                                val lineLen = 18.dp.toPx()
-                                                
-                                                drawLine(
-                                                    color = crosshairColor,
-                                                    start = Offset(centerX - lineLen, centerY),
-                                                    end = Offset(centerX + lineLen, centerY),
-                                                    strokeWidth = 1.5.dp.toPx()
-                                                )
-                                                drawLine(
-                                                    color = crosshairColor,
-                                                    start = Offset(centerX, centerY - lineLen),
-                                                    end = Offset(centerX, centerY + lineLen),
-                                                    strokeWidth = 1.5.dp.toPx()
-                                                )
-                                                
-                                                // Center handle target dot
-                                                drawCircle(Color.White, radius = 5.dp.toPx(), center = Offset(centerX, centerY))
-                                                drawCircle(crosshairColor, radius = 3.dp.toPx(), center = Offset(centerX, centerY))
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            CropMagnifierLens(
+                                dragOffset = dragOffset,
+                                imageSize = imageSize,
+                                imageBitmap = imageBitmap,
+                                tl = tl,
+                                tr = tr,
+                                br = br,
+                                bl = bl
+                            )
                         }
                     }
             }
         }
     }
 }
-}
 
-private fun updateOffset(current: Offset, delta: Offset, bounds: IntSize): Offset {
-    val newX = (current.x + delta.x).coerceIn(0f, bounds.width.toFloat())
-    val newY = (current.y + delta.y).coerceIn(0f, bounds.height.toFloat())
-    return Offset(newX, newY)
-}
-
-@Composable
-fun CornerHandle(
-    key: Any? = null,
-    offset: Offset, 
-    size: androidx.compose.ui.unit.Dp = 48.dp,
-    onDragStart: () -> Unit = {},
-    onDragEnd: () -> Unit = {},
-    onDrag: (Offset) -> Unit
-) {
-    val currentOnDrag by rememberUpdatedState(onDrag)
-    val currentOnDragStart by rememberUpdatedState(onDragStart)
-    val currentOnDragEnd by rememberUpdatedState(onDragEnd)
-    
-    val view = LocalView.current
-    Box(
-        modifier = Modifier
-            .offset(
-                x = with(androidx.compose.ui.platform.LocalDensity.current) { offset.x.toDp() - size / 2 },
-                y = with(androidx.compose.ui.platform.LocalDensity.current) { offset.y.toDp() - size / 2 }
-            )
-            .size(size)
-            .pointerInput(key ?: Unit) {
-                detectDragGestures(
-                    onDragStart = { 
-                        com.safescan.utils.HapticFeedbackHelper.triggerHaptic(view)
-                        currentOnDragStart() 
-                    },
-                    onDragEnd = { currentOnDragEnd() },
-                    onDragCancel = { currentOnDragEnd() }
-                ) { change, dragAmount ->
-                    change.consume()
-                    currentOnDrag(dragAmount)
-                }
-            }
-    )
-}
-
-@Composable
-fun CropTopBar(
-    isAutoRunning: Boolean,
-    hasNext: Boolean,
-    onCancel: () -> Unit,
-    onFull: () -> Unit,
-    onAiDetect: () -> Unit,
-    onAutoDetect: () -> Unit,
-    onSave: () -> Unit,
-    onNext: () -> Unit
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 3.dp,
-        shadowElevation = 4.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .height(56.dp)
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 1. Cancel
-            IconButton(
-                modifier = Modifier.weight(1f),
-                enabled = !isAutoRunning,
-                onClick = onCancel
-            ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(id = R.string.cancel))
-            }
-
-            // 2. Full
-            TextButton(
-                modifier = Modifier.weight(1f),
-                enabled = !isAutoRunning,
-                onClick = onFull
-            ) {
-                Text(stringResource(id = R.string.full), color = MaterialTheme.colorScheme.onSurface)
-            }
-
-            // 3a. TF Auto (TFLite Model based detection)
-            TextButton(
-                modifier = Modifier.weight(1f),
-                enabled = !isAutoRunning,
-                onClick = onAiDetect
-            ) {
-                if (isAutoRunning) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text("AI", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                }
-            }
-
-            // 3. Auto
-            TextButton(
-                modifier = Modifier.weight(1f),
-                enabled = !isAutoRunning,
-                onClick = onAutoDetect
-            ) {
-                if (isAutoRunning) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text(stringResource(id = R.string.auto), color = MaterialTheme.colorScheme.onSurface)
-                }
-            }
-
-            // 4. Save
-            IconButton(
-                modifier = Modifier.weight(1f),
-                enabled = !isAutoRunning,
-                onClick = onSave
-            ) {
-                Icon(Icons.Default.Check, stringResource(id = R.string.save))
-            }
-
-            // 5. Next
-            if (hasNext) {
-                TextButton(
-                    modifier = Modifier.weight(1f),
-                    enabled = !isAutoRunning,
-                    onClick = onNext
-                ) {
-                    Text(stringResource(id = R.string.next), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                }
-            } else {
-                Spacer(modifier = Modifier.weight(1f))
-            }
-        }
-    }
-}

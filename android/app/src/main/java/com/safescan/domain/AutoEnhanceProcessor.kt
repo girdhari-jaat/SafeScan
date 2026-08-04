@@ -31,6 +31,8 @@ object AutoEnhanceProcessor {
         var srcBgr: Mat? = null
         var grayMat: Mat? = null
         var laplacianMat: Mat? = null
+        var hsvMat: Mat? = null
+        val hsvChannels = ArrayList<Mat>(3)
         var labMat: Mat? = null
         var processL: Mat? = null
         var dilated: Mat? = null
@@ -45,6 +47,8 @@ object AutoEnhanceProcessor {
 
         var meanStdDevMean: MatOfDouble? = null
         var meanStdDevStd: MatOfDouble? = null
+        var satMeanDev: MatOfDouble? = null
+        var satStdDev: MatOfDouble? = null
 
         val labChannels = ArrayList<Mat>(3)
 
@@ -91,7 +95,26 @@ object AutoEnhanceProcessor {
             val blurScore = stdDev * stdDev
 
             // ----------------------------------------------------
-            // 3. LAB Conversion
+            // 3. Color Saturation & Variance Analysis (B&W vs Color)
+            // ----------------------------------------------------
+            hsvMat = Mat()
+            Imgproc.cvtColor(srcBgr, hsvMat, Imgproc.COLOR_BGR2HSV)
+            Core.split(hsvMat, hsvChannels)
+            val sChannel = hsvChannels[1]
+
+            satMeanDev = MatOfDouble()
+            satStdDev = MatOfDouble()
+            Core.meanStdDev(sChannel, satMeanDev, satStdDev)
+
+            val meanSat = satMeanDev.get(0, 0)[0] // 0..255 scale in OpenCV
+            val stdSat = satStdDev.get(0, 0)[0]
+            val varSat = stdSat * stdSat
+
+            // B&W / Handwriting Paper check: Low saturation mean and low variance
+            val isMonochromeDoc = (meanSat < 28.0 && varSat < 200.0) || (meanSat < 18.0)
+
+            // ----------------------------------------------------
+            // 4. LAB Conversion
             // ----------------------------------------------------
             labMat = Mat()
 
@@ -108,8 +131,14 @@ object AutoEnhanceProcessor {
 
             val lChannel = labChannels[0]
 
+            // If it's a B&W / handwriting document, remove chromatic color noise by zeroing out A & B (setting to neutral 128)
+            if (isMonochromeDoc) {
+                labChannels[1].setTo(Scalar(128.0)) // A channel neutral
+                labChannels[2].setTo(Scalar(128.0)) // B channel neutral
+            }
+
             // ----------------------------------------------------
-            // 4. Dynamic Parameters
+            // 5. Dynamic Parameters
             // ----------------------------------------------------
             val megapixels =
                 (srcBgr.cols().toDouble() * srcBgr.rows().toDouble()) /
@@ -172,7 +201,7 @@ object AutoEnhanceProcessor {
                 scaledBlur.coerceAtLeast(5)
 
             // ----------------------------------------------------
-            // 5. Shadow Removal
+            // 6. Shadow Removal / Background Illumination
             // ----------------------------------------------------
             kernel =
                 Imgproc.getStructuringElement(
@@ -215,7 +244,7 @@ object AutoEnhanceProcessor {
             }
 
             // ----------------------------------------------------
-            // 6. Illumination Normalization
+            // 7. Illumination Normalization
             // ----------------------------------------------------
             lFloat = Mat()
             bgFloat = Mat()
@@ -247,32 +276,55 @@ object AutoEnhanceProcessor {
                 bgFloat
             )
 
-            Core.divide(
-                lFloat,
-                bgFloat,
-                lFloat,
-                meanBg
-            )
-
-            lFloat.convertTo(
-                lChannel,
-                CvType.CV_8U
-            )
-
-            // ----------------------------------------------------
-            // 7. CLAHE
-            // ----------------------------------------------------
-            if (meanBg < 180.0) {
-                clahe =
-                    Imgproc.createCLAHE(
-                        if (megapixels > 8) 1.8 else 2.0,
-                        Size(8.0, 8.0)
-                    )
-
-                clahe.apply(
-                    lChannel,
-                    lChannel
+            if (isMonochromeDoc) {
+                // For B&W / Handwriting paper:
+                // Normalize against target paper brightness (245.0) to remove background lighting gradients cleanly
+                Core.divide(
+                    lFloat,
+                    bgFloat,
+                    lFloat,
+                    245.0
                 )
+
+                lFloat.convertTo(
+                    lChannel,
+                    CvType.CV_8U
+                )
+
+                // Contrast stretch for paper background whitening while keeping thin handwriting strokes deep
+                // Shift paper highlights (>= 205) to pure white (255)
+                lChannel.convertTo(
+                    lChannel,
+                    -1,
+                    1.15,
+                    -18.0
+                )
+            } else {
+                // For Color documents / Cards:
+                Core.divide(
+                    lFloat,
+                    bgFloat,
+                    lFloat,
+                    meanBg
+                )
+
+                lFloat.convertTo(
+                    lChannel,
+                    CvType.CV_8U
+                )
+
+                if (meanBg < 180.0) {
+                    clahe =
+                        Imgproc.createCLAHE(
+                            if (megapixels > 8) 1.8 else 2.0,
+                            Size(8.0, 8.0)
+                        )
+
+                    clahe.apply(
+                        lChannel,
+                        lChannel
+                    )
+                }
             }
 
             Core.merge(
@@ -287,21 +339,25 @@ object AutoEnhanceProcessor {
             )
 
             // ----------------------------------------------------
-            // 8. Adaptive Sharpen
+            // 8. Adaptive Sharpen (Fine handwriting strokes & text enhancement)
             // ----------------------------------------------------
-            if (blurScore < 150.0) {
-                val (alpha, beta) =
-                    when {
-                        blurScore < 60.0 ->
-                            Pair(1.60, -0.60)
+            val sharpAlpha = if (isMonochromeDoc) {
+                when {
+                    blurScore < 60.0 -> 1.70
+                    blurScore < 120.0 -> 1.50
+                    else -> 1.30
+                }
+            } else {
+                when {
+                    blurScore < 60.0 -> 1.60
+                    blurScore < 100.0 -> 1.40
+                    else -> 1.20
+                }
+            }
 
-                        blurScore < 100.0 ->
-                            Pair(1.40, -0.40)
+            val sharpBeta = 1.0 - sharpAlpha
 
-                        else ->
-                            Pair(1.20, -0.20)
-                    }
-
+            if (blurScore < 180.0 || isMonochromeDoc) {
                 blurredSrc = Mat()
 
                 Imgproc.GaussianBlur(
@@ -313,9 +369,9 @@ object AutoEnhanceProcessor {
 
                 Core.addWeighted(
                     srcBgr,
-                    alpha,
+                    sharpAlpha,
                     blurredSrc,
-                    beta,
+                    sharpBeta,
                     0.0,
                     srcBgr
                 )
@@ -353,10 +409,14 @@ object AutoEnhanceProcessor {
             labChannels.forEach(::safeRelease)
             labChannels.clear()
 
+            hsvChannels.forEach(::safeRelease)
+            hsvChannels.clear()
+
             safeRelease(srcRgba)
             safeRelease(srcBgr)
             safeRelease(grayMat)
             safeRelease(laplacianMat)
+            safeRelease(hsvMat)
             safeRelease(labMat)
             safeRelease(processL)
             safeRelease(dilated)
@@ -370,6 +430,8 @@ object AutoEnhanceProcessor {
 
             meanStdDevMean?.release()
             meanStdDevStd?.release()
+            satMeanDev?.release()
+            satStdDev?.release()
 
             try {
                 clahe?.collectGarbage()
@@ -378,3 +440,4 @@ object AutoEnhanceProcessor {
         }
     }
 }
+

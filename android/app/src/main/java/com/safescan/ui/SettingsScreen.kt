@@ -173,7 +173,7 @@ fun SettingsScreen(
                             val shadowRemove by viewModel.shadowRemove.collectAsState()
                             SettingsToggleItem(
                                 icon = Icons.Default.Brightness6,
-                                title = "Shadow Removal",
+                                title = "Auto Enhance",
                                 description = "Flatten lighting for cleaner documents",
                                 checked = shadowRemove,
                                 onCheckedChange = { viewModel.toggleShadowRemove(it) }

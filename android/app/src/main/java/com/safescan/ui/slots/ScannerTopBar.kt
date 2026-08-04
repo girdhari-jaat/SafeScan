@@ -63,12 +63,15 @@ fun ScannerTopBar(
         ) {
             IconButton(
                 onClick = onClose,
-                modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Close Scanner",
-                    tint = Color.White
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
@@ -77,10 +80,12 @@ fun ScannerTopBar(
                     isFlashMenuOpen = !isFlashMenuOpen
                     if (isFlashMenuOpen) isHdMenuOpen = false
                 },
-                modifier = Modifier.background(
-                    if (flashMode != FlashMode.OFF) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.5f),
-                    CircleShape
-                )
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(
+                        if (flashMode != FlashMode.OFF) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.5f),
+                        CircleShape
+                    )
             ) {
                 Icon(
                     imageVector = when (flashMode) {
@@ -106,7 +111,7 @@ fun ScannerTopBar(
                         isHdMenuOpen = !isHdMenuOpen
                         if (isHdMenuOpen) isFlashMenuOpen = false
                     }
-                    .padding(horizontal = 14.dp),
+                    .padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
                 val selectedLabel = when (hdMode.uppercase()) {
@@ -123,14 +128,39 @@ fun ScannerTopBar(
                 )
             }
 
+            // Paper / Card Mood Toggle Button
+            Box(
+                modifier = Modifier
+                    .height(36.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .clickable {
+                        val nextMode = if (currentMode == ScannerMode.CARD) ScannerMode.DOCUMENT else ScannerMode.CARD
+                        viewModel.switchMode(nextMode)
+                    }
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                val modeText = if (currentMode == ScannerMode.CARD) "Card" else "Paper"
+                Text(
+                    text = modeText,
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
             IconButton(
                 onClick = onSettingsClick,
-                modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
             ) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = "Settings",
-                    tint = Color.White
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
@@ -222,43 +252,6 @@ fun ScannerTopBar(
                             color = if (isSelected) Color(0xFF4DB6AC) else Color.White,
                             fontSize = 14.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                        )
-                    }
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFF121212))
-                    .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
-                    .padding(2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                listOf(
-                    ScannerMode.DOCUMENT to "Paper",
-                    ScannerMode.CARD to "Card"
-                ).forEach { (mode, label) ->
-                    val isSelected = currentMode == mode
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
-                            .clickable { viewModel.switchMode(mode) }
-                            .padding(horizontal = 14.dp, vertical = 6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = label,
-                            color = if (isSelected) Color.Black else Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
                         )
                     }
                 }

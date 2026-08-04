@@ -175,6 +175,10 @@ class ScannerViewModel @Inject constructor(
 
     val imageCacheHelper = ImageCacheHelper(context, saveDocumentUseCase)
     val exportHelper = ScannerExportHelper(saveDocumentUseCase, exportPdfUseCase, documentScanner, imageCacheHelper)
+    val ocrHandler = ScannerOcrHandler(context)
+    val slotHandler = ScannerSlotHandler(context, saveDocumentUseCase, settingsRepository, imageCacheHelper)
+    val cropHandler = ScannerCropHandler(detectEdgesUseCase)
+    val editorHandler = ScannerEditorHandler()
 
     init {
         viewModelScope.launch {
@@ -226,7 +230,6 @@ class ScannerViewModel @Inject constructor(
     val editorState: MutableStateFlow<com.safescan.data.EditorState> = MutableStateFlow(com.safescan.data.EditorState())
 
     // OCR & Text Recognition States
-    private val ocrEngine = com.safescan.scanner.OcrEngine(context)
     val recognizedText: MutableStateFlow<String?> = MutableStateFlow(null)
     val isOcrRunning: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val isBarcodeRunning: MutableStateFlow<Boolean> = MutableStateFlow(false)
@@ -281,82 +284,12 @@ class ScannerViewModel @Inject constructor(
     private val _autoCaptureEvent = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val autoCaptureEvent = _autoCaptureEvent.asSharedFlow()
 
-    private val isDetectingFrame = java.util.concurrent.atomic.AtomicBoolean(false)
-
     fun detectEdges(bitmap: Bitmap, onResult: (List<Point>?) -> Unit) {
-        if (bitmap.isRecycled) {
-            Log.e("ScannerViewModel", "detectEdges: Provided bitmap is recycled!")
-            onResult(null)
-            return
-        }
-
-        if (!isDetectingFrame.compareAndSet(false, true)) {
-            // Drop incoming frame if edge detection is currently busy
-            onResult(null)
-            return
-        }
-
-        _uiState.update { it.copy(isAutoRunning = true) }
-        viewModelScope.launch(Dispatchers.IO) {
-            var points: List<Point>? = null
-            try {
-                if (!bitmap.isRecycled) {
-                    points = detectEdgesUseCase.detectWithOpenCV(bitmap, currentMode.value, isManualCrop = true)
-                    Log.d("ScannerViewModel", "detectEdges: Successfully detected corners using OpenCV")
-                }
-            } catch (e: Throwable) {
-                Log.e("ScannerViewModel", "detectEdges: OpenCV detection failed", e)
-            } finally {
-                isDetectingFrame.set(false)
-                _uiState.update { it.copy(isAutoRunning = false) }
-            }
-
-            withContext(Dispatchers.Main) {
-                try {
-                    onResult(points)
-                } catch (e: Throwable) {
-                    Log.e("ScannerViewModel", "detectEdges: Callback onResult failed", e)
-                }
-            }
-        }
+        cropHandler.detectEdges(bitmap, currentMode, _uiState, viewModelScope, onResult)
     }
 
     fun detectEdgesWithTFLite(bitmap: Bitmap, onResult: (List<Point>?) -> Unit) {
-        if (bitmap.isRecycled) {
-            Log.e("ScannerViewModel", "detectEdgesWithTFLite: Provided bitmap is recycled!")
-            onResult(null)
-            return
-        }
-
-        if (!isDetectingFrame.compareAndSet(false, true)) {
-            // Drop incoming frame if TFLite detection is currently busy
-            onResult(null)
-            return
-        }
-
-        _uiState.update { it.copy(isAutoRunning = true) }
-        viewModelScope.launch(Dispatchers.IO) {
-            var points: List<Point>? = null
-            try {
-                if (!bitmap.isRecycled) {
-                    points = detectEdgesUseCase.detectWithTFLite(bitmap)
-                    Log.d("ScannerViewModel", "detectEdgesWithTFLite: Successfully detected corners using TFLite")
-                }
-            } catch (e: Throwable) {
-                Log.e("ScannerViewModel", "detectEdgesWithTFLite: TFLite detection failed", e)
-            } finally {
-                isDetectingFrame.set(false)
-                _uiState.update { it.copy(isAutoRunning = false) }
-            }
-
-            withContext(Dispatchers.Main) {
-                try {
-                    onResult(points)
-                } catch (e: Throwable) {
-                    Log.e("ScannerViewModel", "detectEdgesWithTFLite: Callback onResult failed", e)
-                }
-            }
-        }
+        cropHandler.detectEdgesWithTFLite(bitmap, _uiState, viewModelScope, onResult)
     }
 
     fun switchMode(mode: ScannerMode) = settingsHandler.switchMode(mode)
@@ -1303,60 +1236,21 @@ class ScannerViewModel @Inject constructor(
     }
 
     fun applyAutoEnhance() {
-        viewModelScope.launch(Dispatchers.IO) {
-            editingBitmapOriginal.value?.let { bmp ->
-                val enhanced = com.safescan.domain.ImageProcessor.autoEnhance(bmp)
-                editingBitmapPreview.value = enhanced
-                editorState.value = com.safescan.data.EditorState()
-                recognizedText.value = null // reset OCR if image changes
-            }
-        }
+        editorHandler.applyAutoEnhance(
+            editingBitmapOriginal = editingBitmapOriginal,
+            editingBitmapPreview = editingBitmapPreview,
+            editorState = editorState,
+            recognizedText = recognizedText,
+            scope = viewModelScope
+        )
     }
 
     fun runOcrOnCurrentBitmap() {
-        val bmp = editingBitmapPreview.value ?: return
-        isOcrRunning.value = true
-        recognizedText.value = null
-        DiagnosticsLogger.info("Starting Text Recognition (OCR) off-thread...")
-        viewModelScope.launch(Dispatchers.IO) {
-            val result = ocrEngine.recognizeText(bmp)
-            withContext(Dispatchers.Main) {
-                isOcrRunning.value = false
-                when (result) {
-                    is com.safescan.core.AppResult.Success -> {
-                        recognizedText.value = result.data.joinToString("\n")
-                        DiagnosticsLogger.info("OCR completed successfully. Recognized ${result.data.size} lines.")
-                    }
-                    is com.safescan.core.AppResult.Error -> {
-                        recognizedText.value = "Error: ${result.message}"
-                        DiagnosticsLogger.error("OCR recognition error: ${result.message}")
-                    }
-                }
-            }
-        }
+        ocrHandler.runOcrOnCurrentBitmap(editingBitmapPreview.value, isOcrRunning, recognizedText, viewModelScope)
     }
 
     fun runBarcodeOnCurrentBitmap() {
-        val bmp = editingBitmapPreview.value ?: return
-        isBarcodeRunning.value = true
-        recognizedText.value = null
-        DiagnosticsLogger.info("Scanning for Barcode/QR Code...")
-        viewModelScope.launch(Dispatchers.IO) {
-            val result = ocrEngine.scanQR(bmp)
-            withContext(Dispatchers.Main) {
-                isBarcodeRunning.value = false
-                when (result) {
-                    is com.safescan.core.AppResult.Success -> {
-                        recognizedText.value = result.data ?: "No QR/Barcode found."
-                        DiagnosticsLogger.info("QR/Barcode scan completed: ${result.data}")
-                    }
-                    is com.safescan.core.AppResult.Error -> {
-                        recognizedText.value = "Error: ${result.message}"
-                        DiagnosticsLogger.error("QR/Barcode scan error: ${result.message}")
-                    }
-                }
-            }
-        }
+        ocrHandler.runBarcodeOnCurrentBitmap(editingBitmapPreview.value, isBarcodeRunning, recognizedText, viewModelScope)
     }
 
     fun exportPdf(
@@ -1450,82 +1344,37 @@ class ScannerViewModel @Inject constructor(
     }
 
     fun loadDocumentIntoSlots(doc: com.safescan.data.DocumentMetadata) {
-        _uiState.update { it.copy(isLoading = true, error = null) }
-        isDocumentOpenedFromLibrary.value = true
-        openedDocumentId = doc.id
-        initialDocumentTitle = doc.title
-        capturedJpgFiles.clear()
-        originalJpgBitmaps.clear()
-        jpgCorners.clear()
-        viewModelScope.launch(Dispatchers.IO) {
-            val loadedSlots = doc.pages.map { page ->
-                val originalBmp = saveDocumentUseCase.loadOriginalBitmap(doc.id, page.id)
-                val previewBmp = saveDocumentUseCase.loadPreviewBitmap(doc.id, page.id) ?: originalBmp
-                
-                var originalPath: String? = null
-                var processedPath: String? = null
-                
-                if (originalBmp != null) {
-                    originalPath = saveHighResToDisk(originalBmp, page.id, "original")
-                    imageCacheHelper.put("${page.id}_original", originalBmp)
-                }
-                if (previewBmp != null) {
-                    if (previewBmp === originalBmp && originalPath != null) {
-                        val procFile = java.io.File(context.cacheDir, "temp_scans/${page.id}_processed.jpg")
-                        try {
-                            java.io.File(originalPath).copyTo(procFile, overwrite = true)
-                            processedPath = procFile.absolutePath
-                        } catch (e: Exception) {
-                            processedPath = saveHighResToDisk(previewBmp, page.id, "processed")
-                        }
-                    } else {
-                        processedPath = saveHighResToDisk(previewBmp, page.id, "processed")
-                    }
-                    imageCacheHelper.put("${page.id}_processed", previewBmp)
-                }
-
-                // Generate downsampled lightweight thumbnail
-                val thumbnail = previewBmp?.let { generateThumbnail(it, 360) }
-
-                Slot(
-                    id = page.id,
-                    label = "Page ${page.id}",
-                    bitmap = thumbnail,
-                    originalBitmap = null,
-                    corners = page.corners,
-                    bitmapPath = processedPath,
-                    originalBitmapPath = originalPath
-                )
+        slotHandler.loadDocumentIntoSlots(
+            doc = doc,
+            scope = viewModelScope,
+            uiState = _uiState,
+            isDocumentOpenedFromLibrary = isDocumentOpenedFromLibrary,
+            slots = slots,
+            capturedJpgFiles = capturedJpgFiles,
+            originalJpgBitmaps = originalJpgBitmaps,
+            jpgCorners = jpgCorners,
+            saveHighResToDisk = { bmp, pageId, type -> saveHighResToDisk(bmp, pageId, type) },
+            generateThumbnail = { bmp, maxDim -> generateThumbnail(bmp, maxDim) },
+            onDocumentOpened = { id, title ->
+                openedDocumentId = id
+                initialDocumentTitle = title
             }
-            withContext(Dispatchers.Main) {
-                val mode = try {
-                    ScannerMode.valueOf(doc.mode)
-                } catch (e: Exception) {
-                    ScannerMode.DOCUMENT
-                }
-                settingsRepository.setScannerMode(mode)
-                // Let collect trigger but instantly override slots with actual persistent files
-                slots.value = loadedSlots
-                _uiState.update { it.copy(isLoading = false, error = null) }
-            }
-        }
+        )
     }
 
     fun deleteDocument(docId: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            saveDocumentUseCase.deleteDocument(docId)
-            reloadSavedDocuments()
-        }
+        slotHandler.deleteDocument(docId, viewModelScope) { reloadSavedDocuments() }
     }
 
     fun renameDocument(docId: String, newTitle: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            saveDocumentUseCase.renameDocument(docId, newTitle)
-            reloadSavedDocuments()
-            if (openedDocumentId == docId) {
-                initialDocumentTitle = newTitle
-            }
-        }
+        slotHandler.renameDocument(
+            docId = docId,
+            newTitle = newTitle,
+            scope = viewModelScope,
+            openedDocumentId = openedDocumentId,
+            onTitleUpdated = { initialDocumentTitle = it },
+            reloadSavedDocuments = { reloadSavedDocuments() }
+        )
     }
 
     private fun applyEdits() {
@@ -1719,64 +1568,26 @@ class ScannerViewModel @Inject constructor(
     }
 
     fun moveCapturedJpgFile(fromIndex: Int, toIndex: Int) {
-        if (fromIndex in capturedJpgFiles.indices && toIndex in capturedJpgFiles.indices) {
-            val file = capturedJpgFiles.removeAt(fromIndex)
-            capturedJpgFiles.add(toIndex, file)
-
-            // Reorder maps to stay in sync
-            val maxIndex = maxOf(
-                capturedJpgFiles.size,
-                originalJpgBitmaps.keys.maxOrNull() ?: 0,
-                jpgCorners.keys.maxOrNull() ?: 0
-            ) + 2
-
-            // Reorder originalJpgBitmaps
-            val originalBmpList = (0..maxIndex).map { originalJpgBitmaps[it] }.toMutableList()
-            if (fromIndex in originalBmpList.indices && toIndex in originalBmpList.indices) {
-                val item = originalBmpList.removeAt(fromIndex)
-                originalBmpList.add(toIndex, item)
-                originalJpgBitmaps.clear()
-                originalBmpList.forEachIndexed { idx, bmp ->
-                    if (bmp != null) {
-                        originalJpgBitmaps[idx] = bmp
-                    }
-                }
-            }
-
-            // Reorder jpgCorners
-            val cornersList = (0..maxIndex).map { jpgCorners[it] }.toMutableList()
-            if (fromIndex in cornersList.indices && toIndex in cornersList.indices) {
-                val item = cornersList.removeAt(fromIndex)
-                cornersList.add(toIndex, item)
-                jpgCorners.clear()
-                cornersList.forEachIndexed { idx, list ->
-                    if (list != null) {
-                        jpgCorners[idx] = list
-                    }
-                }
-            }
-
-            // Also update the underlying slots list if they are in sync
-            val currentSlots = slots.value.toMutableList()
-            if (fromIndex in currentSlots.indices && toIndex in currentSlots.indices) {
-                val slot = currentSlots.removeAt(fromIndex)
-                currentSlots.add(toIndex, slot)
-                slots.value = currentSlots
-            }
-
-            openedDocumentId?.let { saveDocumentStateOffline(it) }
-        }
+        slotHandler.moveCapturedJpgFile(
+            fromIndex = fromIndex,
+            toIndex = toIndex,
+            capturedJpgFiles = capturedJpgFiles,
+            originalJpgBitmaps = originalJpgBitmaps,
+            jpgCorners = jpgCorners,
+            slots = slots,
+            openedDocumentId = openedDocumentId,
+            saveDocumentStateOffline = { saveDocumentStateOffline(it) }
+        )
     }
 
     fun moveSlot(fromIndex: Int, toIndex: Int) {
-        val currentSlots = slots.value.toMutableList()
-        if (fromIndex in currentSlots.indices && toIndex in currentSlots.indices) {
-            val slot = currentSlots.removeAt(fromIndex)
-            currentSlots.add(toIndex, slot)
-            slots.value = currentSlots
-
-            openedDocumentId?.let { saveDocumentStateOffline(it) }
-        }
+        slotHandler.moveSlot(
+            fromIndex = fromIndex,
+            toIndex = toIndex,
+            slots = slots,
+            openedDocumentId = openedDocumentId,
+            saveDocumentStateOffline = { saveDocumentStateOffline(it) }
+        )
     }
 
     override fun onCleared() {
