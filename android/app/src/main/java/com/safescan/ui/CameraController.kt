@@ -329,15 +329,9 @@ class CameraController(
         val dx: Float
         val dy: Float
 
-        if (frameRatio > viewRatio) {
-            scale = viewWidth / rotatedWidth
-            dx = 0f
-            dy = (viewHeight - rotatedHeight * scale) / 2f
-        } else {
-            scale = viewHeight / rotatedHeight
-            dx = (viewWidth - rotatedWidth * scale) / 2f
-            dy = 0f
-        }
+        val scale = maxOf(viewWidth / rotatedWidth, viewHeight / rotatedHeight)
+        val dx = (viewWidth - rotatedWidth * scale) / 2f
+        val dy = (viewHeight - rotatedHeight * scale) / 2f
 
         return points.map { pt ->
             val normX = pt.x.toFloat() / bitmapWidth
