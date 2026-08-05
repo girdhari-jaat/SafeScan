@@ -39,7 +39,8 @@ class DocumentRepository @Inject constructor(
      */
     suspend fun saveJpgToScans(bitmap: Bitmap, quality: Int): File? = withContext(Dispatchers.IO) {
         fileMutex.withLock {
-            val scansDir = context.getExternalFilesDir("Scans") ?: return@withLock null
+            val baseMediaDir = context.externalMediaDirs.firstOrNull() ?: context.getExternalFilesDir("Scans") ?: return@withLock null
+            val scansDir = if (baseMediaDir.name == "Scans") baseMediaDir else File(baseMediaDir, "Scans")
             if (!scansDir.exists()) {
                 scansDir.mkdirs()
             }
@@ -148,18 +149,26 @@ class DocumentRepository @Inject constructor(
                 val prevFile = File(previewsDir, "${page.id}.jpg")
 
                 if (!origFile.exists()) {
-                    if (page.originalFile != null && page.originalFile.exists()) {
+                    if (page.originalFile != null && page.originalFile.exists() && page.originalFile.canonicalPath != origFile.canonicalPath) {
                         page.originalFile.copyTo(origFile, overwrite = true)
                     } else if (page.originalBitmap != null) {
                         saveBitmapToFile(page.originalBitmap, origFile)
                     }
                 }
                 
-                // Save/update preview bitmap on disk
-                if (page.previewFile != null && page.previewFile.exists()) {
-                    page.previewFile.copyTo(prevFile, overwrite = true)
-                } else if (page.previewBitmap != null) {
-                    saveBitmapToFile(page.previewBitmap, prevFile)
+                // Save/update preview bitmap on disk only if prevFile doesn't exist or a new preview was generated
+                if (!prevFile.exists()) {
+                    if (page.previewFile != null && page.previewFile.exists()) {
+                        if (page.previewFile.canonicalPath != prevFile.canonicalPath) {
+                            page.previewFile.copyTo(prevFile, overwrite = true)
+                        }
+                    } else if (page.previewBitmap != null) {
+                        saveBitmapToFile(page.previewBitmap, prevFile)
+                    }
+                } else {
+                    if (page.previewFile != null && page.previewFile.exists() && page.previewFile.canonicalPath != prevFile.canonicalPath) {
+                        page.previewFile.copyTo(prevFile, overwrite = true)
+                    }
                 }
 
                 val pageIndex = pagesData.indexOf(page)
@@ -191,7 +200,9 @@ class DocumentRepository @Inject constructor(
                 pages = pagesMetaList
             )
 
-            writeMetaFile(docFolder, meta)
+            if (existingMeta == null || existingMeta != meta) {
+                writeMetaFile(docFolder, meta)
+            }
         }
     }
 

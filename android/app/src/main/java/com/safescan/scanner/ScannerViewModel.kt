@@ -1408,8 +1408,8 @@ class ScannerViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             ScannerDebugLogger.logEnter("ScannerViewModel.onCapture")
 
-            // Save the raw captured JPG asynchronously in background to avoid blocking capture pipeline
-            if (saveJpg.value) {
+            // Save the raw captured JPG asynchronously in background to avoid blocking capture pipeline (skip if imported from gallery)
+            if (saveJpg.value && !isGalleryImport) {
                 val quality = jpegQuality.value.toInt()
                 viewModelScope.launch(Dispatchers.IO) {
                     val savedFile = saveDocumentUseCase.saveJpgToScans(bitmap, quality)
