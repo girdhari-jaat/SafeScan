@@ -325,18 +325,32 @@ class CameraController(
         val frameRatio = rotatedWidth / rotatedHeight
         val viewRatio = viewWidth / viewHeight
 
+        val isFillCenter = binding.previewView.scaleType == androidx.camera.view.PreviewView.ScaleType.FILL_CENTER
+
         val scale: Float
         val dx: Float
         val dy: Float
 
-        if (frameRatio > viewRatio) {
-            scale = viewWidth / rotatedWidth
-            dx = 0f
-            dy = (viewHeight - rotatedHeight * scale) / 2f
+        if (isFillCenter) {
+            if (frameRatio > viewRatio) {
+                scale = viewHeight / rotatedHeight
+                dx = (viewWidth - rotatedWidth * scale) / 2f
+                dy = 0f
+            } else {
+                scale = viewWidth / rotatedWidth
+                dx = 0f
+                dy = (viewHeight - rotatedHeight * scale) / 2f
+            }
         } else {
-            scale = viewHeight / rotatedHeight
-            dx = (viewWidth - rotatedWidth * scale) / 2f
-            dy = 0f
+            if (frameRatio > viewRatio) {
+                scale = viewWidth / rotatedWidth
+                dx = 0f
+                dy = (viewHeight - rotatedHeight * scale) / 2f
+            } else {
+                scale = viewHeight / rotatedHeight
+                dx = (viewWidth - rotatedWidth * scale) / 2f
+                dy = 0f
+            }
         }
 
         return points.map { pt ->
