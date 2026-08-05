@@ -1018,7 +1018,13 @@ class ScannerViewModel @Inject constructor(
         index: Int? = editingJpgIndex.value,
         currentState: com.safescan.data.EditorState = editorState.value
     ) {
-        processed?.let { processedBmp ->
+        val originalFullRes = editingBitmapOriginal.value
+        val targetBitmap = if (originalFullRes != null && !originalFullRes.isRecycled) {
+            com.safescan.domain.ImageProcessor.apply(originalFullRes, currentState)
+        } else {
+            processed
+        }
+        targetBitmap?.let { processedBmp ->
             val docId = openedDocumentId ?: ("doc_" + System.currentTimeMillis()).also { openedDocumentId = it }
             slotId?.let { sId ->
                 captureToSlot(processedBmp, sId)
@@ -1107,6 +1113,35 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    private var editingBitmapPreviewSource: Bitmap? = null
+
+    private fun getOrCreatePreviewSource(original: Bitmap): Bitmap {
+        val currentSource = editingBitmapPreviewSource
+        if (currentSource != null && !currentSource.isRecycled) {
+            return currentSource
+        }
+        val maxDim = 1280
+        val src = if (original.width <= maxDim && original.height <= maxDim) {
+            original
+        } else {
+            val scale = maxDim.toFloat() / Math.max(original.width, original.height)
+            val w = (original.width * scale).toInt().coerceAtLeast(1)
+            val h = (original.height * scale).toInt().coerceAtLeast(1)
+            Bitmap.createScaledBitmap(original, w, h, true)
+        }
+        editingBitmapPreviewSource = src
+        return src
+    }
+
+    private fun clearPreviewSource() {
+        editingBitmapPreviewSource?.let {
+            if (!it.isRecycled && it != editingBitmapOriginal.value) {
+                try { it.recycle() } catch (e: Exception) {}
+            }
+        }
+        editingBitmapPreviewSource = null
+    }
+
     fun closeEditor(save: Boolean) {
         if (save) {
             commitActiveEditorChanges()
@@ -1116,6 +1151,7 @@ class ScannerViewModel @Inject constructor(
         editingJpgIndex.value = null
         editingBitmapOriginal.value = null
         editingBitmapPreview.value = null
+        clearPreviewSource()
         recognizedText.value = null
         isOcrRunning.value = false
     }
@@ -1382,8 +1418,9 @@ class ScannerViewModel @Inject constructor(
         editingJob = viewModelScope.launch(Dispatchers.IO) {
             val original = editingBitmapOriginal.value ?: return@launch
             val state = editorState.value
-            kotlinx.coroutines.delay(16) // ~1 frame delay to allow cancellation if slider is moving rapidly
-            val processed = com.safescan.domain.ImageProcessor.apply(original, state)
+            kotlinx.coroutines.delay(35) // ~35ms debounce for smooth slider drag
+            val previewSource = getOrCreatePreviewSource(original)
+            val processed = com.safescan.domain.ImageProcessor.apply(previewSource, state)
             editingBitmapPreview.value = processed
         }
     }
@@ -1408,8 +1445,8 @@ class ScannerViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             ScannerDebugLogger.logEnter("ScannerViewModel.onCapture")
 
-            // Save the raw captured JPG asynchronously in background to avoid blocking capture pipeline
-            if (saveJpg.value) {
+            // Save the raw captured JPG asynchronously in background to avoid blocking capture pipeline (skipped for gallery imports to avoid duplicate files)
+            if (saveJpg.value && !isGalleryImport) {
                 val quality = jpegQuality.value.toInt()
                 viewModelScope.launch(Dispatchers.IO) {
                     val savedFile = saveDocumentUseCase.saveJpgToScans(bitmap, quality)
@@ -1561,6 +1598,7 @@ class ScannerViewModel @Inject constructor(
         val matrix = android.graphics.Matrix().apply { postRotate(degrees) }
         val rotated = Bitmap.createBitmap(original, 0, 0, original.width, original.height, matrix, true)
         editingBitmapOriginal.value = rotated
+        clearPreviewSource()
         val currentRot = editorState.value.rotation
         val newRot = (currentRot + degrees.toInt()) % 360
         editorState.value = editorState.value.copy(rotation = if (newRot < 0) newRot + 360 else newRot)

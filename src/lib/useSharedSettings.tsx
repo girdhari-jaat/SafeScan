@@ -64,6 +64,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   uiLanguage: "en",
   offlineMode: true,
   useNativeScanner: true,
+  saveJpg: true,
 };
 
 const getInitialSettings = (): AppSettings => {
@@ -86,6 +87,7 @@ const getInitialSettings = (): AppSettings => {
     "hasSeededTutorial",
     "offlineMode",
     "useNativeScanner",
+    "saveJpg",
   ];
 
   booleanKeys.forEach((key) => {

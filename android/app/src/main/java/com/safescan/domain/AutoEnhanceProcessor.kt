@@ -66,6 +66,29 @@ object AutoEnhanceProcessor {
             srcRgba = null
 
             // ----------------------------------------------------
+            // 1.5. Gray World White Balance Correction (Fix Warm/Yellow Lighting)
+            // ----------------------------------------------------
+            val bgrChannels = ArrayList<Mat>(3)
+            Core.split(srcBgr, bgrChannels)
+            val meanB = Core.mean(bgrChannels[0]).`val`[0]
+            val meanG = Core.mean(bgrChannels[1]).`val`[0]
+            val meanR = Core.mean(bgrChannels[2]).`val`[0]
+            val meanGray = (meanB + meanG + meanR) / 3.0
+
+            if (meanB > 2.0 && meanG > 2.0 && meanR > 2.0) {
+                val gainB = (meanGray / meanB).coerceIn(0.65, 1.50)
+                val gainG = (meanGray / meanG).coerceIn(0.65, 1.50)
+                val gainR = (meanGray / meanR).coerceIn(0.65, 1.50)
+
+                bgrChannels[0].convertTo(bgrChannels[0], -1, gainB, 0.0)
+                bgrChannels[1].convertTo(bgrChannels[1], -1, gainG, 0.0)
+                bgrChannels[2].convertTo(bgrChannels[2], -1, gainR, 0.0)
+                Core.merge(bgrChannels, srcBgr)
+            }
+            bgrChannels.forEach(::safeRelease)
+            bgrChannels.clear()
+
+            // ----------------------------------------------------
             // 2. Blur Detection
             // ----------------------------------------------------
             grayMat = Mat()
@@ -278,12 +301,12 @@ object AutoEnhanceProcessor {
 
             if (isMonochromeDoc) {
                 // For B&W / Handwriting paper:
-                // Normalize against target paper brightness (245.0) to remove background lighting gradients cleanly
+                // Normalize against target paper brightness (250.0) to remove background lighting gradients cleanly
                 Core.divide(
                     lFloat,
                     bgFloat,
                     lFloat,
-                    245.0
+                    250.0
                 )
 
                 lFloat.convertTo(
@@ -292,12 +315,12 @@ object AutoEnhanceProcessor {
                 )
 
                 // Contrast stretch for paper background whitening while keeping thin handwriting strokes deep
-                // Shift paper highlights (>= 205) to pure white (255)
+                // Shift paper highlights (>= 195) to pure white (255)
                 lChannel.convertTo(
                     lChannel,
                     -1,
-                    1.15,
-                    -18.0
+                    1.22,
+                    -25.0
                 )
             } else {
                 // For Color documents / Cards:
@@ -305,12 +328,20 @@ object AutoEnhanceProcessor {
                     lFloat,
                     bgFloat,
                     lFloat,
-                    meanBg
+                    meanBg * 1.05
                 )
 
                 lFloat.convertTo(
                     lChannel,
                     CvType.CV_8U
+                )
+
+                // Light paper highlight boost for color documents to reduce gray background tint
+                lChannel.convertTo(
+                    lChannel,
+                    -1,
+                    1.12,
+                    -12.0
                 )
 
                 if (meanBg < 180.0) {

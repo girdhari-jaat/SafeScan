@@ -453,6 +453,13 @@ const Settings: React.FC<SettingsProps> = ({ onClose, onCloseToDefault, onInstal
             <Section title={(t as any).smartProcessingAndOptics || "Smart Processing & Optics"} icon={Activity}>
               <div className="space-y-2.5">
                 <Toggle 
+                  label={(t as any).saveJpg || "Save Raw JPG to Media"} 
+                  description={(t as any).saveJpgDesc || "Automatically save original camera captures as JPG in device media/scans (skips gallery imports to avoid duplicates)"} 
+                  value={settings.saveJpg} 
+                  onToggle={() => updateSetting('saveJpg', !settings.saveJpg)}
+                  icon={Download}
+                />
+                <Toggle 
                   label={(t as any).useNativeScanner || "Use Native Scanner"} 
                   description={(t as any).useNativeScannerDesc || "Use Google ML Kit Native Scanner for document capture on Android."} 
                   value={settings.useNativeScanner} 
