@@ -203,7 +203,14 @@ class DocumentRepository @Inject constructor(
             if (existingMeta == null || existingMeta != meta) {
                 writeMetaFile(docFolder, meta)
             }
+            true
         }
+    }
+
+    fun getPreviewFile(docId: String, pageId: String): File? {
+        val root = baseDir ?: return null
+        val file = File(root, "$docId/previews/$pageId.jpg")
+        return if (file.exists()) file else null
     }
 
     /**

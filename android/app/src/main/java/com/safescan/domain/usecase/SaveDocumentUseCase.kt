@@ -60,6 +60,10 @@ class SaveDocumentUseCase @Inject constructor(
         return documentRepository.saveJpgToScans(bitmap, quality)
     }
 
+    fun getPreviewFile(docId: String, pageId: String): File? {
+        return documentRepository.getPreviewFile(docId, pageId)
+    }
+
     suspend fun getDocuments(): List<DocumentMetadata> {
         return documentRepository.getDocuments()
     }

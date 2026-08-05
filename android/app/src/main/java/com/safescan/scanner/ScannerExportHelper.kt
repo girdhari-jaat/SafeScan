@@ -67,8 +67,10 @@ class ScannerExportHelper(
                 val corners = jpgCorners[idx]
                 val cornersList = corners ?: existingPage?.corners
 
+                val originalBmp = originalJpgBitmaps[idx]
                 var tempPreviewFile: File? = null
-                val existingPath = (if (idx < slots.size) slots[idx].bitmapPath else null) ?: existingPage?.previewPath
+                val existingPath = (if (idx < slots.size) slots[idx].bitmapPath else null) 
+                    ?: (if (openedDocumentId != null && existingPage != null) saveDocumentUseCase.getPreviewFile(openedDocumentId, existingPage.id)?.absolutePath else null)
                 if (!isEditingThisJpg && overrideFilter == null && existingPath != null) {
                     val existingFile = File(existingPath)
                     if (existingFile.exists() && existingFile.length() > 0) {
@@ -77,22 +79,22 @@ class ScannerExportHelper(
                 }
 
                 if (tempPreviewFile == null) {
-                    val bmp = BitmapFactory.decodeFile(file.absolutePath)
-                    val originalBmp = originalJpgBitmaps[idx] ?: bmp
+                    val bmp = if (originalBmp == null) BitmapFactory.decodeFile(file.absolutePath) else null
+                    val srcBmp = originalBmp ?: bmp
 
-                    var processedBmp: Bitmap? = if (originalBmp != null && cornersList != null && cornersList.size == 4) {
+                    var processedBmp: Bitmap? = if (srcBmp != null && cornersList != null && cornersList.size == 4) {
                         val quad = Quadrilateral(cornersList[0], cornersList[1], cornersList[2], cornersList[3])
                         try {
-                            documentScanner.cropAndTransform(originalBmp, quad, currentMode.name, flatCrop = isFlatWarp)
-                        } catch (e: Exception) { originalBmp }
+                            documentScanner.cropAndTransform(srcBmp, quad, currentMode.name, flatCrop = isFlatWarp)
+                        } catch (e: Exception) { srcBmp }
                     } else {
-                        originalBmp
+                        srcBmp
                     }
 
                     if (processedBmp != null && rotation != 0) {
                         val matrix = Matrix().apply { postRotate(rotation.toFloat()) }
                         val rotated = Bitmap.createBitmap(processedBmp, 0, 0, processedBmp.width, processedBmp.height, matrix, true)
-                        if (rotated !== processedBmp && processedBmp !== originalBmp && processedBmp !== bmp) processedBmp.recycle()
+                        if (rotated !== processedBmp && processedBmp !== srcBmp && processedBmp !== bmp) processedBmp.recycle()
                         processedBmp = rotated
                     }
 
@@ -106,18 +108,18 @@ class ScannerExportHelper(
                             filter = filterEnum
                         )
                         val applied = ImageProcessor.apply(processedBmp, state)
-                        if (applied !== processedBmp && processedBmp !== originalBmp && processedBmp !== bmp) processedBmp.recycle()
+                        if (applied !== processedBmp && processedBmp !== srcBmp && processedBmp !== bmp) processedBmp.recycle()
                         processedBmp = applied
                     }
 
                     if (processedBmp != null) {
                         val tempPath = imageCacheHelper.saveHighResToDisk(processedBmp, pageId, "build_temp_${System.currentTimeMillis()}")
                         if (tempPath != null) tempPreviewFile = File(tempPath)
-                        if (processedBmp !== originalBmp && processedBmp !== bmp) {
+                        if (processedBmp !== srcBmp && processedBmp !== bmp) {
                             processedBmp.recycle()
                         }
                     }
-                    if (bmp != null && bmp !== originalBmp && !bmp.isRecycled) {
+                    if (bmp != null && bmp !== srcBmp && !bmp.isRecycled) {
                         bmp.recycle()
                     }
                 }
@@ -154,7 +156,8 @@ class ScannerExportHelper(
                 val cornersList = slot.corners ?: existingPage?.corners
 
                 var tempPreviewFile: File? = null
-                val existingPath = slot.bitmapPath ?: existingPage?.previewPath
+                val existingPath = slot.bitmapPath 
+                    ?: (if (openedDocumentId != null && existingPage != null) saveDocumentUseCase.getPreviewFile(openedDocumentId, existingPage.id)?.absolutePath else null)
                 if (!isEditingThisSlot && overrideFilter == null && existingPath != null) {
                     val existingFile = File(existingPath)
                     if (existingFile.exists() && existingFile.length() > 0) {
