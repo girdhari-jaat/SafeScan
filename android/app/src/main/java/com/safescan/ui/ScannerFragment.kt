@@ -134,7 +134,9 @@ class ScannerFragment : Fragment() {
                             if (exifRotation != 0) {
                                 val matrix = android.graphics.Matrix().apply { postRotate(exifRotation.toFloat()) }
                                 val rotated = android.graphics.Bitmap.createBitmap(importedBitmap, 0, 0, importedBitmap.width, importedBitmap.height, matrix, true)
-                                importedBitmap.recycle()
+                                if (rotated !== importedBitmap) {
+                                    importedBitmap.recycle()
+                                }
                                 importedBitmap = rotated
                             }
                             // If Auto-Rotation is enabled, apply intelligent mode-based aspect ratio correction
@@ -186,7 +188,9 @@ class ScannerFragment : Fragment() {
                                 if (exifRotation != 0) {
                                     val matrix = android.graphics.Matrix().apply { postRotate(exifRotation.toFloat()) }
                                     val rotated = android.graphics.Bitmap.createBitmap(scanBitmap, 0, 0, scanBitmap.width, scanBitmap.height, matrix, true)
-                                    scanBitmap.recycle()
+                                    if (rotated !== scanBitmap) {
+                                        scanBitmap.recycle()
+                                    }
                                     scanBitmap = rotated
                                 }
                                 // If Auto-Rotation is enabled, apply intelligent mode-based aspect ratio correction

@@ -128,6 +128,7 @@ object ScannerImageUtils {
     }
 
     fun autoRotateForMode(bitmap: Bitmap, mode: ScannerMode): Bitmap {
+        if (bitmap.isRecycled) return bitmap
         val isLandscape = bitmap.width > bitmap.height
         val needsRotation = when (mode) {
             ScannerMode.DOCUMENT -> isLandscape // DOCUMENT should be portrait
@@ -141,7 +142,9 @@ object ScannerImageUtils {
             ScannerDebugLogger.logAutoRotation(angle)
             val matrix = Matrix().apply { postRotate(angle) }
             val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-            bitmap.recycle()
+            if (rotated !== bitmap) {
+                bitmap.recycle()
+            }
             rotated
         } else {
             ScannerDebugLogger.logAutoRotation(0f)
