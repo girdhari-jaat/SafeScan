@@ -149,26 +149,18 @@ class DocumentRepository @Inject constructor(
                 val prevFile = File(previewsDir, "${page.id}.jpg")
 
                 if (!origFile.exists()) {
-                    if (page.originalFile != null && page.originalFile.exists() && page.originalFile.canonicalPath != origFile.canonicalPath) {
+                    if (page.originalFile != null && page.originalFile.exists()) {
                         page.originalFile.copyTo(origFile, overwrite = true)
                     } else if (page.originalBitmap != null) {
                         saveBitmapToFile(page.originalBitmap, origFile)
                     }
                 }
                 
-                // Save/update preview bitmap on disk only if prevFile doesn't exist or a new preview was generated
-                if (!prevFile.exists()) {
-                    if (page.previewFile != null && page.previewFile.exists()) {
-                        if (page.previewFile.canonicalPath != prevFile.canonicalPath) {
-                            page.previewFile.copyTo(prevFile, overwrite = true)
-                        }
-                    } else if (page.previewBitmap != null) {
-                        saveBitmapToFile(page.previewBitmap, prevFile)
-                    }
-                } else {
-                    if (page.previewFile != null && page.previewFile.exists() && page.previewFile.canonicalPath != prevFile.canonicalPath) {
-                        page.previewFile.copyTo(prevFile, overwrite = true)
-                    }
+                // Save/update preview bitmap on disk
+                if (page.previewFile != null && page.previewFile.exists()) {
+                    page.previewFile.copyTo(prevFile, overwrite = true)
+                } else if (page.previewBitmap != null) {
+                    saveBitmapToFile(page.previewBitmap, prevFile)
                 }
 
                 val pageIndex = pagesData.indexOf(page)
@@ -200,17 +192,8 @@ class DocumentRepository @Inject constructor(
                 pages = pagesMetaList
             )
 
-            if (existingMeta == null || existingMeta != meta) {
-                writeMetaFile(docFolder, meta)
-            }
-            true
+            writeMetaFile(docFolder, meta)
         }
-    }
-
-    fun getPreviewFile(docId: String, pageId: String): File? {
-        val root = baseDir ?: return null
-        val file = File(root, "$docId/previews/$pageId.jpg")
-        return if (file.exists()) file else null
     }
 
     /**
