@@ -96,6 +96,7 @@ class ImageCacheHelper(
     }
 
     fun saveHighResToDisk(bitmap: Bitmap, slotId: String, suffix: String): String? {
+        if (bitmap.isRecycled) return null
         val dir = File(context.cacheDir, "temp_scans")
         if (!dir.exists()) {
             dir.mkdirs()
@@ -136,17 +137,23 @@ class ImageCacheHelper(
     }
 
     fun generateThumbnail(bitmap: Bitmap, maxDimension: Int = 360): Bitmap {
-        val width = bitmap.width
-        val height = bitmap.height
-        val ratio = kotlin.math.min(maxDimension.toFloat() / width, maxDimension.toFloat() / height)
-        return if (ratio < 1f) {
-            Bitmap.createScaledBitmap(
-                bitmap,
-                (width * ratio).toInt(),
-                (height * ratio).toInt(),
-                true
-            )
-        } else {
+        if (bitmap.isRecycled) return bitmap
+        return try {
+            val width = bitmap.width
+            val height = bitmap.height
+            val ratio = kotlin.math.min(maxDimension.toFloat() / width, maxDimension.toFloat() / height)
+            if (ratio < 1f) {
+                Bitmap.createScaledBitmap(
+                    bitmap,
+                    (width * ratio).toInt().coerceAtLeast(1),
+                    (height * ratio).toInt().coerceAtLeast(1),
+                    true
+                )
+            } else {
+                bitmap
+            }
+        } catch (e: Exception) {
+            Log.e("ImageCacheHelper", "Failed to generate thumbnail: ${e.message}")
             bitmap
         }
     }

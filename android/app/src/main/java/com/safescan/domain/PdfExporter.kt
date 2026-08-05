@@ -89,21 +89,26 @@ class PdfExporter(private val context: Context) {
                             val (currentWidth, currentHeight) = ExportHelper.getPageDimensions(pageSizeStr, rawBmp)
 
                             val isBmpLandscape = rawBmp != null && rawBmp.width > rawBmp.height
-                            val finalWidth = when (pdfOrientation) {
-                                "Portrait" -> minOf(currentWidth, currentHeight)
-                                "Landscape" -> maxOf(currentWidth, currentHeight)
-                                else -> { // Auto
-                                    if (isBmpLandscape) maxOf(currentWidth, currentHeight)
-                                    else minOf(currentWidth, currentHeight)
+                            val (finalWidth, finalHeight) = if (pageSizeStr.equals("Original", ignoreCase = true) && rawBmp != null) {
+                                Pair(rawBmp.width, rawBmp.height)
+                            } else {
+                                val fw = when (pdfOrientation) {
+                                    "Portrait" -> minOf(currentWidth, currentHeight)
+                                    "Landscape" -> maxOf(currentWidth, currentHeight)
+                                    else -> { // Auto
+                                        if (isBmpLandscape) maxOf(currentWidth, currentHeight)
+                                        else minOf(currentWidth, currentHeight)
+                                    }
                                 }
-                            }
-                            val finalHeight = when (pdfOrientation) {
-                                "Portrait" -> maxOf(currentWidth, currentHeight)
-                                "Landscape" -> minOf(currentWidth, currentHeight)
-                                else -> { // Auto
-                                    if (isBmpLandscape) minOf(currentWidth, currentHeight)
-                                    else maxOf(currentWidth, currentHeight)
+                                val fh = when (pdfOrientation) {
+                                    "Portrait" -> maxOf(currentWidth, currentHeight)
+                                    "Landscape" -> minOf(currentWidth, currentHeight)
+                                    else -> { // Auto
+                                        if (isBmpLandscape) minOf(currentWidth, currentHeight)
+                                        else maxOf(currentWidth, currentHeight)
+                                    }
                                 }
+                                Pair(fw, fh)
                             }
 
                             val targetWidth = if (pageSizeStr.equals("Original", ignoreCase = true)) {

@@ -169,7 +169,9 @@ object ImageProcessor {
             // Apply Filter
             outMat = ImageFilterEngine.applyFilter(src, state.filter)
 
-            val resultBitmap = Bitmap.createBitmap(outMat.cols(), outMat.rows(), Bitmap.Config.ARGB_8888)
+            val width = outMat.cols().coerceAtLeast(1)
+            val height = outMat.rows().coerceAtLeast(1)
+            val resultBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val finalOutMat = if (outMat.type() == org.opencv.core.CvType.CV_8UC1) {
                 val temp = Mat()
                 Imgproc.cvtColor(outMat, temp, Imgproc.COLOR_GRAY2RGBA)
