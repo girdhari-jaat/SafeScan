@@ -884,6 +884,7 @@ class ScannerViewModel @Inject constructor(
     }
 
     fun openEditor(slotId: String) {
+        clearPreviewSource()
         val slot = slots.value.find { it.id == slotId }
         if (slot != null) {
             val docId = openedDocumentId
@@ -946,6 +947,7 @@ class ScannerViewModel @Inject constructor(
     }
 
     fun openEditorForJpg(index: Int) {
+        clearPreviewSource()
         val file = capturedJpgFiles.getOrNull(index) ?: return
         try {
             val originalBmp = originalJpgBitmaps[index] ?: android.graphics.BitmapFactory.decodeFile(file.absolutePath)
@@ -1431,7 +1433,11 @@ class ScannerViewModel @Inject constructor(
             val state = editorState.value
             kotlinx.coroutines.delay(35) // ~35ms debounce for smooth slider drag
             if (original.isRecycled) return@launch
-            val previewSource = getOrCreatePreviewSource(original)
+            
+            // Re-fetch original as it might have changed due to rotate/save actions
+            val currentOriginal = editingBitmapOriginal.value ?: return@launch
+            val previewSource = getOrCreatePreviewSource(currentOriginal)
+            
             if (previewSource.isRecycled) return@launch
             try {
                 val processed = com.safescan.domain.ImageProcessor.apply(previewSource, state)

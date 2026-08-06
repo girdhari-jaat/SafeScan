@@ -238,6 +238,9 @@ class CameraController(
                     val width = imageProxy.width
                     val height = imageProxy.height
 
+                    val rotatedWidth = if (rotationDegrees == 90 || rotationDegrees == 270) height else width
+                    val rotatedHeight = if (rotationDegrees == 90 || rotationDegrees == 270) width else height
+
                     Log.d("LiveEdgeDetection", "Analyzer received frame: ${width}x${height}, rot=$rotationDegrees")
 
                     fragment.liveEdgeDetectionEngine.process(imageProxy, viewModel.documentScanner, viewModel.uiState.value.currentEngine, viewModel.currentMode.value) { corners, sharpness ->

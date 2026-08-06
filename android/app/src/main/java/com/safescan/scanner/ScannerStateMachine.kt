@@ -37,9 +37,9 @@ class ScannerStateMachine(
     private val COOLDOWN_DURATION_MS = 5500L // 5.5 seconds (5–6 second auto-capture cooldown)
 
     private val MAX_MISSING_FRAMES = 10
-    private val STABLE_FRAME_THRESHOLD = 8
-    private val REQUIRED_STABLE_FRAMES_FOR_OVERLAY = 4
-    private val EMA_ALPHA = 0.6f
+    private val STABLE_FRAME_THRESHOLD = 5
+    private val REQUIRED_STABLE_FRAMES_FOR_OVERLAY = 1
+    private val EMA_ALPHA = 0.8f
 
     var isFocusing = false
         get() = synchronized(lock) { field }
@@ -125,11 +125,11 @@ class ScannerStateMachine(
 
         var processedPoints = points
 
-        // 3. Edge margin validation (reject documents within 2% of screen boundaries)
+        // 3. Edge margin validation (reject documents within 1% of screen boundaries)
         var touchesEdge = false
         if (processedPoints != null && processedPoints.size == 4 && frameWidth > 0 && frameHeight > 0) {
-            val marginX = frameWidth * 0.02
-            val marginY = frameHeight * 0.02
+            val marginX = frameWidth * 0.01
+            val marginY = frameHeight * 0.01
             for (p in processedPoints) {
                 if (p.x < marginX || p.x > (frameWidth - marginX) || p.y < marginY || p.y > (frameHeight - marginY)) {
                     touchesEdge = true
