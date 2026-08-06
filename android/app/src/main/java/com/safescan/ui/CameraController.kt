@@ -238,9 +238,6 @@ class CameraController(
                     val width = imageProxy.width
                     val height = imageProxy.height
 
-                    val rotatedWidth = if (rotationDegrees == 90 || rotationDegrees == 270) height else width
-                    val rotatedHeight = if (rotationDegrees == 90 || rotationDegrees == 270) width else height
-
                     Log.d("LiveEdgeDetection", "Analyzer received frame: ${width}x${height}, rot=$rotationDegrees")
 
                     fragment.liveEdgeDetectionEngine.process(imageProxy, viewModel.documentScanner, viewModel.uiState.value.currentEngine, viewModel.currentMode.value) { corners, sharpness ->
@@ -328,32 +325,18 @@ class CameraController(
         val frameRatio = rotatedWidth / rotatedHeight
         val viewRatio = viewWidth / viewHeight
 
-        val isFillCenter = binding.previewView.scaleType == androidx.camera.view.PreviewView.ScaleType.FILL_CENTER
-
         val scale: Float
         val dx: Float
         val dy: Float
 
-        if (isFillCenter) {
-            if (frameRatio > viewRatio) {
-                scale = viewHeight / rotatedHeight
-                dx = (viewWidth - rotatedWidth * scale) / 2f
-                dy = 0f
-            } else {
-                scale = viewWidth / rotatedWidth
-                dx = 0f
-                dy = (viewHeight - rotatedHeight * scale) / 2f
-            }
+        if (frameRatio > viewRatio) {
+            scale = viewWidth / rotatedWidth
+            dx = 0f
+            dy = (viewHeight - rotatedHeight * scale) / 2f
         } else {
-            if (frameRatio > viewRatio) {
-                scale = viewWidth / rotatedWidth
-                dx = 0f
-                dy = (viewHeight - rotatedHeight * scale) / 2f
-            } else {
-                scale = viewHeight / rotatedHeight
-                dx = (viewWidth - rotatedWidth * scale) / 2f
-                dy = 0f
-            }
+            scale = viewHeight / rotatedHeight
+            dx = (viewWidth - rotatedWidth * scale) / 2f
+            dy = 0f
         }
 
         return points.map { pt ->

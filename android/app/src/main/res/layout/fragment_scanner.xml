@@ -11,14 +11,14 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        app:layout_constraintGuide_begin="102dp" />
+        app:layout_constraintGuide_begin="104dp" />
 
     <androidx.constraintlayout.widget.Guideline
         android:id="@+id/guidelineBottom"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        app:layout_constraintGuide_end="102dp" />
+        app:layout_constraintGuide_end="104dp" />
 
     <androidx.camera.view.PreviewView
         android:id="@+id/previewView"
@@ -28,7 +28,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/guidelineTop"
-        app:scaleType="fillCenter" />
+        app:scaleType="fitCenter" />
 
     <ImageView
         android:id="@+id/resultImageView"

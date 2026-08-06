@@ -67,8 +67,8 @@ class TFLiteEngine(private val context: Context) {
     private var contourIntBuffer = IntArray(1024)
 
     // Pre-allocated thresholds prioritized from tighter high-confidence boundaries to fallback levels
-    private val liveThresholds = doubleArrayOf(0.50, 0.40, 0.60, 0.35)
-    private val batchThresholds = doubleArrayOf(0.60, 0.70, 0.50, 0.40, 0.35)
+    private val liveThresholds = doubleArrayOf(0.70, 0.80, 0.60)
+    private val batchThresholds = doubleArrayOf(0.70, 0.75, 0.80, 0.85, 0.60, 0.50)
 
     val isGpuAccelerated: Boolean
         get() = gpuDelegate != null
@@ -209,14 +209,12 @@ class TFLiteEngine(private val context: Context) {
                     if (v > maxConfidence) {
                         maxConfidence = v
                     }
-                    if (v > 0.35f) {
+                    if (v > 0.50f) {
                         confidentPixelsCount++
                     }
                 }
-                val minConf = if (isLive) 0.35f else 0.50f
-                val minPixels = if (isLive) 500 else 1966
-                // Ensure minimum peak confidence is met AND the mask covers at least minimum pixels
-                if (maxConfidence < minConf || confidentPixelsCount < minPixels) {
+                // Ensure minimum peak confidence is met AND the mask covers at least 3% of the 256x256 image (1966 pixels)
+                if (maxConfidence < 0.50f || confidentPixelsCount < 1966) {
                     lastStableCorners = null
                     stableFrameCount = 0
                     return null
@@ -234,7 +232,7 @@ class TFLiteEngine(private val context: Context) {
                 var bestQuadPoints: List<Point>? = null
                 var bestScore = -Double.MAX_VALUE
                 
-                val minArea256 = if (isLive) (inputSize * inputSize * 0.015) else (inputSize * inputSize * 0.04)
+                val minArea256 = inputSize * inputSize * 0.05 // Upgraded minimum area to 5% of the 256x256 canvas to filter out small noisy blobs
                 
                 for (thr in thresholds) {
                     Imgproc.threshold(probmapSmooth, bin, thr * 255.0, 255.0, Imgproc.THRESH_BINARY)
