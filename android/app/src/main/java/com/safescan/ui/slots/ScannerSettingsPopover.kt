@@ -41,7 +41,6 @@ fun ScannerSettingsPopover(
     val autoRotation by viewModel.autoRotation.collectAsState()
     val usePhoneCamera by viewModel.usePhoneCamera.collectAsState()
     val useNativeScanner by viewModel.useNativeScanner.collectAsState()
-    val hdMode by viewModel.hdMode.collectAsState()
 
     Box(
         modifier = Modifier
@@ -228,42 +227,6 @@ fun ScannerSettingsPopover(
                         checked = usePhoneCamera,
                         onCheckedChange = { viewModel.toggleUsePhoneCamera(it) }
                     )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp)
-                        .height(1.dp)
-                        .background(Color.White.copy(alpha = 0.1f))
-                )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
-                        .padding(2.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    listOf("Fast", "Standard", "High").forEach { mode ->
-                        val active = hdMode == mode
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(if (active) MaterialTheme.colorScheme.primary else Color.Transparent)
-                                .clickable { viewModel.setHdMode(mode) }
-                                .padding(vertical = 4.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = mode,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = if (active) Color.White else Color.Gray
-                            )
-                        }
-                    }
                 }
             }
         }

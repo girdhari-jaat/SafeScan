@@ -312,63 +312,14 @@ class CameraController(
         val viewHeight = binding.previewView.height.toFloat()
         if (viewWidth == 0f || viewHeight == 0f) return emptyList()
 
-        val rotatedWidth: Float
-        val rotatedHeight: Float
-        if (rotationDegrees == 90 || rotationDegrees == 270) {
-            rotatedWidth = bitmapHeight.toFloat()
-            rotatedHeight = bitmapWidth.toFloat()
-        } else {
-            rotatedWidth = bitmapWidth.toFloat()
-            rotatedHeight = bitmapHeight.toFloat()
-        }
-
-        val frameRatio = rotatedWidth / rotatedHeight
-        val viewRatio = viewWidth / viewHeight
-
-        val scale: Float
-        val dx: Float
-        val dy: Float
-
-        if (frameRatio > viewRatio) {
-            scale = viewWidth / rotatedWidth
-            dx = 0f
-            dy = (viewHeight - rotatedHeight * scale) / 2f
-        } else {
-            scale = viewHeight / rotatedHeight
-            dx = (viewWidth - rotatedWidth * scale) / 2f
-            dy = 0f
-        }
-
-        return points.map { pt ->
-            val normX = pt.x.toFloat() / bitmapWidth
-            val normY = pt.y.toFloat() / bitmapHeight
-
-            val rotatedX: Float
-            val rotatedY: Float
-            when (rotationDegrees) {
-                90 -> {
-                    rotatedX = 1f - normY
-                    rotatedY = normX
-                }
-                180 -> {
-                    rotatedX = 1f - normX
-                    rotatedY = 1f - normY
-                }
-                270 -> {
-                    rotatedX = normY
-                    rotatedY = 1f - normX
-                }
-                else -> {
-                    rotatedX = normX
-                    rotatedY = normY
-                }
-            }
-
-            val screenX = dx + (rotatedX * rotatedWidth * scale)
-            val screenY = dy + (rotatedY * rotatedHeight * scale)
-
-            PointF(screenX, screenY)
-        }
+        return ScannerImageUtils.mapPointsToPreviewView(
+            points,
+            bitmapWidth,
+            bitmapHeight,
+            rotationDegrees,
+            viewWidth,
+            viewHeight
+        )
     }
 
     fun unbindAll() {
