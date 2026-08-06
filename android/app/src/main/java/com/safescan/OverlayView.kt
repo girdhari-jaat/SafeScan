@@ -12,9 +12,21 @@ class OverlayView @JvmOverloads constructor(
     private val strokePaint = Paint().apply {
         color = Color.parseColor("#FF10B981") // Emerald green
         style = Paint.Style.STROKE
-        strokeWidth = 6f
+        strokeWidth = context.resources.displayMetrics.density * 3.5f
         strokeJoin = Paint.Join.ROUND
         strokeCap = Paint.Cap.ROUND
+        isAntiAlias = true
+    }
+
+    private val fillPaint = Paint().apply {
+        color = Color.parseColor("#3310B981") // Semi-transparent emerald green (20% opacity)
+        style = Paint.Style.FILL
+        isAntiAlias = true
+    }
+
+    private val cornerPaint = Paint().apply {
+        color = Color.parseColor("#FF10B981") // Emerald green
+        style = Paint.Style.FILL
         isAntiAlias = true
     }
 
@@ -24,14 +36,25 @@ class OverlayView @JvmOverloads constructor(
     fun clear() {
         if (corners != null) {
             corners = null
+            edgePath.reset()
             invalidate()
         }
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (corners?.size == 4) {
-            canvas.drawPath(edgePath, strokePaint)
+        corners?.let { pts ->
+            if (pts.size == 4) {
+                // Draw semi-transparent green polygon fill
+                canvas.drawPath(edgePath, fillPaint)
+                // Draw green outline
+                canvas.drawPath(edgePath, strokePaint)
+                // Draw corner dots
+                val dotRadius = context.resources.displayMetrics.density * 4f
+                for (pt in pts) {
+                    canvas.drawCircle(pt.x, pt.y, dotRadius, cornerPaint)
+                }
+            }
         }
     }
 
