@@ -419,13 +419,12 @@ object ImageFilterEngine {
             smallV = Mat()
             val maxDim = maxOf(gray.cols(), gray.rows())
             val scale = if (maxDim > 0) (320.0 / maxDim).coerceAtMost(0.4) else 0.2
-            Imgproc.resize(gray, smallV, Size(), scale, scale, Imgproc.INTER_LINEAR)
+            Imgproc.resize(gray, smallV, Size(), scale, scale, Imgproc.INTER_AREA)
 
             bgSmall = Mat()
-            // Using a larger morphological closing/dilation at downscaled size to eliminate text
-            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(15.0, 15.0))
+            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(21.0, 21.0))
             Imgproc.dilate(smallV, bgSmall, kernel)
-            Imgproc.GaussianBlur(bgSmall, bgSmall, Size(25.0, 25.0), 0.0)
+            Imgproc.GaussianBlur(bgSmall, bgSmall, Size(31.0, 31.0), 0.0)
 
             bg = Mat()
             Imgproc.resize(bgSmall, bg, gray.size(), 0.0, 0.0, Imgproc.INTER_LINEAR)
@@ -436,7 +435,7 @@ object ImageFilterEngine {
             bg.convertTo(bgFloat, CvType.CV_32F)
 
             Core.add(bgFloat, org.opencv.core.Scalar(1.0), bgFloat)
-            Core.max(bgFloat, org.opencv.core.Scalar(110.0), bgFloat)
+            Core.max(bgFloat, org.opencv.core.Scalar(95.0), bgFloat)
 
             div = Mat()
             Core.divide(grayFloat, bgFloat, div)
@@ -445,7 +444,8 @@ object ImageFilterEngine {
             div.convertTo(result, CvType.CV_8U)
 
             // Whiten light paper background to eliminate gray shadow patches around text
-            result.convertTo(result, -1, 1.15, -20.0)
+            Imgproc.threshold(result, result, 215.0, 255.0, Imgproc.THRESH_TRUNC)
+            Core.normalize(result, result, 0.0, 255.0, Core.NORM_MINMAX)
         } catch (e: Exception) {
             result.release()
             throw e
@@ -487,12 +487,12 @@ object ImageFilterEngine {
             smallV = Mat()
             val maxDim = maxOf(originalV.cols(), originalV.rows())
             val scale = if (maxDim > 0) (320.0 / maxDim).coerceAtMost(0.4) else 0.2
-            Imgproc.resize(originalV, smallV, Size(), scale, scale, Imgproc.INTER_LINEAR)
+            Imgproc.resize(originalV, smallV, Size(), scale, scale, Imgproc.INTER_AREA)
 
             bgSmall = Mat()
-            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(15.0, 15.0))
+            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(21.0, 21.0))
             Imgproc.dilate(smallV, bgSmall, kernel)
-            Imgproc.GaussianBlur(bgSmall, bgSmall, Size(21.0, 21.0), 0.0)
+            Imgproc.GaussianBlur(bgSmall, bgSmall, Size(31.0, 31.0), 0.0)
 
             bgIllum = Mat()
             Imgproc.resize(bgSmall, bgIllum, originalV.size(), 0.0, 0.0, Imgproc.INTER_LINEAR)
@@ -503,7 +503,7 @@ object ImageFilterEngine {
             bgFloat = Mat()
             bgIllum.convertTo(bgFloat, CvType.CV_32F)
             Core.add(bgFloat, org.opencv.core.Scalar(1.0), bgFloat)
-            Core.max(bgFloat, org.opencv.core.Scalar(110.0), bgFloat)
+            Core.max(bgFloat, org.opencv.core.Scalar(95.0), bgFloat)
             
             div = Mat()
             Core.divide(vFloat, bgFloat, div)
@@ -513,9 +513,16 @@ object ImageFilterEngine {
             div.convertTo(vOut, CvType.CV_8U)
             
             // Whiten light paper background to eliminate residual gray shadow patches around text
-            vOut.convertTo(vOut, -1, 1.15, -20.0)
+            Imgproc.threshold(vOut, vOut, 215.0, 255.0, Imgproc.THRESH_TRUNC)
+            Core.normalize(vOut, vOut, 0.0, 255.0, Core.NORM_MINMAX)
 
             channels[2] = vOut
+
+            // Desaturate paper background (V >= 210) so residual paper texture / shadow spots become clean white
+            val paperMask = Mat()
+            Imgproc.threshold(vOut, paperMask, 210.0, 255.0, Imgproc.THRESH_BINARY)
+            channels[1].setTo(org.opencv.core.Scalar(0.0), paperMask)
+            paperMask.release()
             
             mergedHsv = Mat()
             Core.merge(channels, mergedHsv)

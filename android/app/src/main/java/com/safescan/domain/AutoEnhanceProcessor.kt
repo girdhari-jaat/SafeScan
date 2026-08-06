@@ -154,120 +154,57 @@ object AutoEnhanceProcessor {
 
             val lChannel = labChannels[0]
 
-            // If it's a B&W / handwriting document, remove chromatic color noise by zeroing out A & B (setting to neutral 128)
-            if (isMonochromeDoc) {
-                labChannels[1].setTo(Scalar(128.0)) // A channel neutral
-                labChannels[2].setTo(Scalar(128.0)) // B channel neutral
-            }
-
             // ----------------------------------------------------
-            // 5. Dynamic Parameters
+            // 5. Smooth Illumination Map for Shadow Removal
             // ----------------------------------------------------
-            val megapixels =
-                (srcBgr.cols().toDouble() * srcBgr.rows().toDouble()) /
-                        1_000_000.0
+            // Fixed small size for consistent, fast, and smooth background estimation
+            val maxDim = maxOf(lChannel.cols(), lChannel.rows())
+            val scale = if (maxDim > 0) (320.0 / maxDim).coerceAtMost(0.4) else 0.2
 
-            val scaleFactor =
-                sqrt(megapixels / 2.0)
-                    .coerceAtLeast(0.5)
+            processL = Mat()
+            Imgproc.resize(
+                lChannel,
+                processL,
+                Size(),
+                scale,
+                scale,
+                Imgproc.INTER_AREA
+            )
 
-            var kernelSize =
-                round(15.0 * scaleFactor).toInt()
-
-            if (kernelSize % 2 == 0) kernelSize++
-
-            kernelSize = kernelSize.coerceIn(11, 41)
-
-            var blurSize =
-                round(kernelSize * 1.4).toInt()
-
-            if (blurSize % 2 == 0) blurSize++
-
-            blurSize = blurSize.coerceIn(15, 51)
-
-            val downscaleFactor = when {
-                megapixels > 6.0 -> 0.25
-                megapixels > 1.5 -> 0.4
-                else -> 1.0
-            }
-
-            val targetL =
-                if (downscaleFactor < 1.0) {
-                    processL = Mat()
-                    Imgproc.resize(
-                        lChannel,
-                        processL,
-                        Size(),
-                        downscaleFactor,
-                        downscaleFactor,
-                        Imgproc.INTER_AREA
-                    )
-                    processL
-                } else {
-                    lChannel
-                }
-
-            var scaledKernel =
-                round(kernelSize * downscaleFactor).toInt()
-
-            if (scaledKernel % 2 == 0) scaledKernel++
-
-            scaledKernel =
-                scaledKernel.coerceAtLeast(3)
-
-            var scaledBlur =
-                round(blurSize * downscaleFactor).toInt()
-
-            if (scaledBlur % 2 == 0) scaledBlur++
-
-            scaledBlur =
-                scaledBlur.coerceAtLeast(5)
-
-            // ----------------------------------------------------
-            // 6. Shadow Removal / Background Illumination
-            // ----------------------------------------------------
-            kernel =
-                Imgproc.getStructuringElement(
-                    Imgproc.MORPH_RECT,
-                    Size(
-                        scaledKernel.toDouble(),
-                        scaledKernel.toDouble()
-                    )
-                )
+            // Dilation to erase text strokes and leave background paper lighting
+            kernel = Imgproc.getStructuringElement(
+                Imgproc.MORPH_RECT,
+                Size(21.0, 21.0)
+            )
 
             dilated = Mat()
-
             Imgproc.dilate(
-                targetL,
+                processL,
                 dilated,
                 kernel
             )
 
+            // Heavy Gaussian blur to create a perfectly smooth illumination gradient without splotches or halos
             bgIllumSmall = Mat()
-
-            Imgproc.medianBlur(
+            Imgproc.GaussianBlur(
                 dilated,
                 bgIllumSmall,
-                scaledBlur
+                Size(31.0, 31.0),
+                0.0
             )
 
             bgIllum = Mat()
-
-            if (downscaleFactor < 1.0) {
-                Imgproc.resize(
-                    bgIllumSmall,
-                    bgIllum,
-                    lChannel.size(),
-                    0.0,
-                    0.0,
-                    Imgproc.INTER_LINEAR
-                )
-            } else {
-                bgIllumSmall.copyTo(bgIllum)
-            }
+            Imgproc.resize(
+                bgIllumSmall,
+                bgIllum,
+                lChannel.size(),
+                0.0,
+                0.0,
+                Imgproc.INTER_LINEAR
+            )
 
             // ----------------------------------------------------
-            // 7. Illumination Normalization
+            // 6. Illumination Normalization & Division
             // ----------------------------------------------------
             lFloat = Mat()
             bgFloat = Mat()
@@ -282,11 +219,7 @@ object AutoEnhanceProcessor {
                 CvType.CV_32F
             )
 
-            val meanBg =
-                Core.mean(bgIllum)
-                    .`val`[0]
-                    .coerceIn(110.0, 220.0)
-
+            // Prevent division by zero and clamp dark shadow floor
             Core.add(
                 bgFloat,
                 Scalar(1.0),
@@ -295,68 +228,62 @@ object AutoEnhanceProcessor {
 
             Core.max(
                 bgFloat,
-                Scalar(110.0),
+                Scalar(95.0),
                 bgFloat
             )
 
-            if (isMonochromeDoc) {
-                // For B&W / Handwriting paper:
-                // Normalize against target paper brightness (250.0) to remove background lighting gradients cleanly
-                Core.divide(
-                    lFloat,
-                    bgFloat,
-                    lFloat,
-                    250.0
-                )
+            // Divide lightness by background illumination map
+            Core.divide(
+                lFloat,
+                bgFloat,
+                lFloat,
+                255.0
+            )
 
-                lFloat.convertTo(
-                    lChannel,
-                    CvType.CV_8U
-                )
+            lFloat.convertTo(
+                lChannel,
+                CvType.CV_8U
+            )
 
-                // Contrast stretch for paper background whitening while keeping thin handwriting strokes deep
-                // Shift paper highlights (>= 195) to pure white (255)
-                lChannel.convertTo(
-                    lChannel,
-                    -1,
-                    1.22,
-                    -25.0
-                )
-            } else {
-                // For Color documents / Cards:
-                Core.divide(
-                    lFloat,
-                    bgFloat,
-                    lFloat,
-                    meanBg * 1.05
-                )
+            // ----------------------------------------------------
+            // 7. Paper Background Whitening & Ink Contrast Curve
+            // ----------------------------------------------------
+            // Truncate paper highlights (>= 215) so background becomes pure white
+            Imgproc.threshold(
+                lChannel,
+                lChannel,
+                215.0,
+                255.0,
+                Imgproc.THRESH_TRUNC
+            )
 
-                lFloat.convertTo(
-                    lChannel,
-                    CvType.CV_8U
-                )
+            // Stretch lightness range to [0..255]
+            Core.normalize(
+                lChannel,
+                lChannel,
+                0.0,
+                255.0,
+                Core.NORM_MINMAX
+            )
 
-                // Light paper highlight boost for color documents to reduce gray background tint
-                lChannel.convertTo(
-                    lChannel,
-                    -1,
-                    1.12,
-                    -12.0
-                )
+            // ----------------------------------------------------
+            // 7.5. Selective Paper Background Desaturation
+            // ----------------------------------------------------
+            // For paper background regions (L >= 210), set A and B channels to neutral 128
+            // so residual color casts, paper texture, and shadow spots become clean white.
+            // Handwriting ink (L < 210) retains vibrant blue/red/black ink colors.
+            val paperMask = Mat()
+            Imgproc.threshold(
+                lChannel,
+                paperMask,
+                210.0,
+                255.0,
+                Imgproc.THRESH_BINARY
+            )
 
-                if (meanBg < 180.0) {
-                    clahe =
-                        Imgproc.createCLAHE(
-                            if (megapixels > 8) 1.8 else 2.0,
-                            Size(8.0, 8.0)
-                        )
-
-                    clahe.apply(
-                        lChannel,
-                        lChannel
-                    )
-                }
-            }
+            labChannels[1].setTo(Scalar(128.0), paperMask)
+            labChannels[2].setTo(Scalar(128.0), paperMask)
+            safeRelease(paperMask)
 
             Core.merge(
                 labChannels,

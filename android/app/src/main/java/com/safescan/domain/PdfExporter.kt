@@ -86,32 +86,37 @@ class PdfExporter(private val context: Context) {
                     for ((idx, slot) in slotsToProcess.withIndex()) {
                         val rawBmp = if (slot != null) loadBitmap(slot) else null
                         try {
-                            val (currentWidth, currentHeight) = ExportHelper.getPageDimensions(pageSizeStr, rawBmp)
-
-                            val isBmpLandscape = rawBmp != null && rawBmp.width > rawBmp.height
-                            val finalWidth = when (pdfOrientation) {
-                                "Portrait" -> minOf(currentWidth, currentHeight)
-                                "Landscape" -> maxOf(currentWidth, currentHeight)
-                                else -> { // Auto
-                                    if (isBmpLandscape) maxOf(currentWidth, currentHeight)
-                                    else minOf(currentWidth, currentHeight)
+                            val isOriginalSize = pageSizeStr.equals("Original", ignoreCase = true)
+                            val (finalWidth, finalHeight) = if (isOriginalSize && rawBmp != null) {
+                                Pair(rawBmp.width, rawBmp.height)
+                            } else {
+                                val (currentWidth, currentHeight) = ExportHelper.getPageDimensions(pageSizeStr, rawBmp)
+                                val isBmpLandscape = rawBmp != null && rawBmp.width > rawBmp.height
+                                val fw = when (pdfOrientation) {
+                                    "Portrait" -> minOf(currentWidth, currentHeight)
+                                    "Landscape" -> maxOf(currentWidth, currentHeight)
+                                    else -> { // Auto
+                                        if (isBmpLandscape) maxOf(currentWidth, currentHeight)
+                                        else minOf(currentWidth, currentHeight)
+                                    }
                                 }
-                            }
-                            val finalHeight = when (pdfOrientation) {
-                                "Portrait" -> maxOf(currentWidth, currentHeight)
-                                "Landscape" -> minOf(currentWidth, currentHeight)
-                                else -> { // Auto
-                                    if (isBmpLandscape) minOf(currentWidth, currentHeight)
-                                    else maxOf(currentWidth, currentHeight)
+                                val fh = when (pdfOrientation) {
+                                    "Portrait" -> maxOf(currentWidth, currentHeight)
+                                    "Landscape" -> minOf(currentWidth, currentHeight)
+                                    else -> { // Auto
+                                        if (isBmpLandscape) minOf(currentWidth, currentHeight)
+                                        else maxOf(currentWidth, currentHeight)
+                                    }
                                 }
+                                Pair(fw, fh)
                             }
 
-                            val targetWidth = if (pageSizeStr.equals("Original", ignoreCase = true)) {
+                            val targetWidth = if (isOriginalSize) {
                                 rawBmp?.width ?: finalWidth
                             } else {
                                 (finalWidth * (dpi / 72f)).toInt()
                             }
-                            val targetHeight = if (pageSizeStr.equals("Original", ignoreCase = true)) {
+                            val targetHeight = if (isOriginalSize) {
                                 rawBmp?.height ?: finalHeight
                             } else {
                                 (finalHeight * (dpi / 72f)).toInt()
@@ -119,8 +124,8 @@ class PdfExporter(private val context: Context) {
 
                             val (imgBytes, imgWidth, imgHeight) = if (rawBmp != null) {
                                 val jpegData = compressToJpegBytes(rawBmp, qualityInt, targetWidth, targetHeight)
-                                val actualW = if (targetWidth > 0 && !pageSizeStr.equals("Original", ignoreCase = true)) targetWidth else rawBmp.width
-                                val actualH = if (targetHeight > 0 && !pageSizeStr.equals("Original", ignoreCase = true)) targetHeight else rawBmp.height
+                                val actualW = if (isOriginalSize) rawBmp.width else if (targetWidth > 0) targetWidth else rawBmp.width
+                                val actualH = if (isOriginalSize) rawBmp.height else if (targetHeight > 0) targetHeight else rawBmp.height
                                 Triple(jpegData, actualW, actualH)
                             } else {
                                 val emptyBmp = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
@@ -133,7 +138,7 @@ class PdfExporter(private val context: Context) {
                                 Triple(jpegData, targetWidth, targetHeight)
                             }
 
-                            val dstRect = if (pageSizeStr.equals("Original", ignoreCase = true)) {
+                            val dstRect = if (isOriginalSize) {
                                 android.graphics.RectF(0f, 0f, finalWidth.toFloat(), finalHeight.toFloat())
                             } else {
                                 ExportHelper.calculateBitmapDrawingRects(imgWidth, imgHeight, finalWidth, finalHeight, pageSizeStr)
@@ -207,15 +212,24 @@ class PdfExporter(private val context: Context) {
                     // CARD or GRID mode (Single composite page)
                     val referenceBitmap = slots.firstOrNull { it.bitmap != null }?.bitmap
                     val (pageWidth, pageHeight) = ExportHelper.getPageDimensions(pageSizeStr, referenceBitmap)
-                    val finalWidth = when (pdfOrientation) {
-                        "Portrait" -> minOf(pageWidth, pageHeight)
-                        "Landscape" -> maxOf(pageWidth, pageHeight)
-                        else -> pageWidth
+                    val isOriginalSize = pageSizeStr.equals("Original", ignoreCase = true)
+                    val finalWidth = if (isOriginalSize && referenceBitmap != null) {
+                        referenceBitmap.width
+                    } else {
+                        when (pdfOrientation) {
+                            "Portrait" -> minOf(pageWidth, pageHeight)
+                            "Landscape" -> maxOf(pageWidth, pageHeight)
+                            else -> pageWidth
+                        }
                     }
-                    val finalHeight = when (pdfOrientation) {
-                        "Portrait" -> maxOf(pageWidth, pageHeight)
-                        "Landscape" -> minOf(pageWidth, pageHeight)
-                        else -> pageHeight
+                    val finalHeight = if (isOriginalSize && referenceBitmap != null) {
+                        referenceBitmap.height
+                    } else {
+                        when (pdfOrientation) {
+                            "Portrait" -> maxOf(pageWidth, pageHeight)
+                            "Landscape" -> minOf(pageWidth, pageHeight)
+                            else -> pageHeight
+                        }
                     }
 
                     // Render high-res composite bitmap canvas using target DPI

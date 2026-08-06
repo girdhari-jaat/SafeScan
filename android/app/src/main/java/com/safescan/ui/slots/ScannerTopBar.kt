@@ -103,6 +103,7 @@ fun ScannerTopBar(
             Box(
                 modifier = Modifier
                     .height(36.dp)
+                    .widthIn(min = 72.dp)
                     .clip(CircleShape)
                     .background(
                         if (isHdMenuOpen) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.5f)
@@ -132,6 +133,7 @@ fun ScannerTopBar(
             Box(
                 modifier = Modifier
                     .height(36.dp)
+                    .widthIn(min = 68.dp)
                     .clip(CircleShape)
                     .background(Color.Black.copy(alpha = 0.5f))
                     .clickable {

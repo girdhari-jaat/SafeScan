@@ -93,8 +93,8 @@ fun SlotsScreen(
                 onSettingsClick = { isSettingsPopoverOpen = !isSettingsPopoverOpen }
             )
 
-            // B. Center Overlay Instructions
-            ScannerCenterInstructions(viewModel = viewModel)
+            // Flexible Spacer between top bar and bottom area
+            Spacer(modifier = Modifier.weight(1f))
 
             // C. Bottom Carousel & Actions Area
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -110,6 +110,20 @@ fun SlotsScreen(
                     onCaptureClick = onCaptureClick
                 )
             }
+        }
+
+        // ------------------------------------------------------
+        // Center Overlay Instructions (Centered across both modes)
+        // ------------------------------------------------------
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            ScannerCenterInstructions(viewModel = viewModel)
         }
 
         // ------------------------------------------------------

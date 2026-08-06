@@ -38,8 +38,7 @@ class ScannerStateMachine(
 
     private val MAX_MISSING_FRAMES = 10
     private val STABLE_FRAME_THRESHOLD = 8
-    private val REQUIRED_STABLE_FRAMES_FOR_OVERLAY = 4
-    private val EMA_ALPHA = 0.6f
+    private val REQUIRED_STABLE_FRAMES_FOR_OVERLAY = 1
 
     var isFocusing = false
         get() = synchronized(lock) { field }
@@ -228,11 +227,25 @@ class ScannerStateMachine(
     }
 
     private fun emaCorners(old: List<Point>, new: List<Point>): List<Point> {
+        var dist = 0.0
+        for (i in 0..3) {
+            val dx = old[i].x - new[i].x
+            val dy = old[i].y - new[i].y
+            dist += sqrt((dx * dx + dy * dy).toDouble())
+        }
+        // Adaptive alpha: If moving (>50px shift), alpha is high (0.85) for instant tracking.
+        // When almost static (<=15px shift), alpha is lower (0.50) to filter camera jitter.
+        val alpha = when {
+            dist > 60.0 -> 0.90f
+            dist > 25.0 -> 0.75f
+            else -> 0.50f
+        }
+
         val result = ArrayList<Point>(4)
         for (i in 0..3) {
             result.add(Point(
-                old[i].x + EMA_ALPHA * (new[i].x - old[i].x),
-                old[i].y + EMA_ALPHA * (new[i].y - old[i].y)
+                old[i].x + alpha * (new[i].x - old[i].x),
+                old[i].y + alpha * (new[i].y - old[i].y)
             ))
         }
         return result
