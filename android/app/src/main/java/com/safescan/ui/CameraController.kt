@@ -238,18 +238,15 @@ class CameraController(
                     val width = imageProxy.width
                     val height = imageProxy.height
 
-                    val rotatedWidth = if (rotationDegrees == 90 || rotationDegrees == 270) height else width
-                    val rotatedHeight = if (rotationDegrees == 90 || rotationDegrees == 270) width else height
-
-                    Log.d("LiveEdgeDetection", "Analyzer received frame: ${width}x${height}, rot=$rotationDegrees, rotated: ${rotatedWidth}x${rotatedHeight}")
+                    Log.d("LiveEdgeDetection", "Analyzer received frame: ${width}x${height}, rot=$rotationDegrees")
 
                     fragment.liveEdgeDetectionEngine.process(imageProxy, viewModel.documentScanner, viewModel.uiState.value.currentEngine, viewModel.currentMode.value) { corners, sharpness ->
                         val isStable = motionDetector?.isDeviceStable ?: true
-                        scannerStateMachine.processFrame(corners, sharpness, viewModel.autoCapture.value, isStable, rotatedWidth, rotatedHeight)
+                        scannerStateMachine.processFrame(corners, sharpness, viewModel.autoCapture.value, isStable, width, height)
 
                         val activeQuad = scannerStateMachine.getHeldPoints()
                         val mappedPoints = if (activeQuad != null && activeQuad.isNotEmpty()) {
-                            val mapped = mapPointsToPreviewView(activeQuad, rotatedWidth, rotatedHeight, 0)
+                            val mapped = mapPointsToPreviewView(activeQuad, width, height, rotationDegrees)
                             if (mapped.size == 4) mapped else null
                         } else {
                             null

@@ -43,13 +43,15 @@ object ScannerImageUtils {
         val dy: Float
 
         if (frameRatio > viewRatio) {
-            scale = viewWidth / rotatedWidth
-            dx = 0f
-            dy = (viewHeight - rotatedHeight * scale) / 2f
-        } else {
+            // Frame is wider than view. To fill, match height.
             scale = viewHeight / rotatedHeight
             dx = (viewWidth - rotatedWidth * scale) / 2f
             dy = 0f
+        } else {
+            // Frame is narrower than view. To fill, match width.
+            scale = viewWidth / rotatedWidth
+            dx = 0f
+            dy = (viewHeight - rotatedHeight * scale) / 2f
         }
 
         Log.d("LiveEdgeDetection", "mapPointsToPreviewView: dx=$dx dy=$dy scale=$scale viewW=$viewWidth viewH=$viewHeight rot=$rotationDegrees")

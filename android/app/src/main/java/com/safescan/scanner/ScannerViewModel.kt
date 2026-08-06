@@ -1618,6 +1618,7 @@ class ScannerViewModel @Inject constructor(
                         }
                     }
                 }
+            }
             } finally {
                 pendingSlotIds.remove(slotId)
             }
