@@ -18,25 +18,48 @@ class ImageCacheHelper(
     private val saveDocumentUseCase: SaveDocumentUseCase
 ) {
     private val maxCacheMemoryKb = (Runtime.getRuntime().maxMemory() / 1024 / 8).toInt().coerceAtLeast(16 * 1024)
+    private val bitmapSizes = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
     private val highResCache = object : LruCache<String, Bitmap>(maxCacheMemoryKb) {
         override fun sizeOf(key: String, value: Bitmap): Int {
-            return (value.allocationByteCount / 1024).coerceAtLeast(1)
+            return bitmapSizes[key] ?: try {
+                if (!value.isRecycled) (value.allocationByteCount / 1024).coerceAtLeast(1) else 1
+            } catch (e: Exception) {
+                1
+            }
         }
         override fun entryRemoved(evicted: Boolean, key: String?, oldValue: Bitmap?, newValue: Bitmap?) {
+            if (key != null) {
+                bitmapSizes.remove(key)
+            }
             Log.d("ImageCacheHelper", "Disk-Backed Hybrid LRU Cache evicted high-res bitmap for key: $key")
         }
     }
 
+    @Synchronized
     fun get(key: String): Bitmap? = highResCache.get(key)
 
+    @Synchronized
     fun put(key: String, bitmap: Bitmap) {
+        val sizeKb = try {
+            if (!bitmap.isRecycled) (bitmap.allocationByteCount / 1024).coerceAtLeast(1) else 1
+        } catch (e: Exception) {
+            1
+        }
+        bitmapSizes[key] = sizeKb
         highResCache.put(key, bitmap)
     }
 
-    fun remove(key: String): Bitmap? = highResCache.remove(key)
+    @Synchronized
+    fun remove(key: String): Bitmap? {
+        bitmapSizes.remove(key)
+        return highResCache.remove(key)
+    }
 
+    @Synchronized
     fun evictAll() {
         highResCache.evictAll()
+        bitmapSizes.clear()
     }
 
     fun snapshot(): Map<String, Bitmap> = highResCache.snapshot()
@@ -151,15 +174,21 @@ class ImageCacheHelper(
         }
     }
 
+    @Synchronized
     fun clearAndRecycle() {
         try {
             val snap = highResCache.snapshot()
+            highResCache.evictAll()
+            bitmapSizes.clear()
             for (bitmap in snap.values) {
                 if (bitmap != null && !bitmap.isRecycled) {
-                    bitmap.recycle()
+                    try {
+                        bitmap.recycle()
+                    } catch (e: Exception) {
+                        Log.e("ImageCacheHelper", "Failed to recycle bitmap", e)
+                    }
                 }
             }
-            highResCache.evictAll()
         } catch (e: Exception) {
             Log.e("ImageCacheHelper", "Failed to clear highResCache", e)
         }

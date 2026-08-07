@@ -432,7 +432,22 @@ class ScannerExportHelper(
                         }
 
                         if (originalRes != null && originalRes !== slot.bitmap && !originalRes.isRecycled) {
-                            originalRes.recycle()
+                            val cacheKeyOrig = "${slot.id}_original"
+                            val cacheKeyEffOrig = "${effectivePageId}_original"
+                            val cacheKeyProc = "${slot.id}_processed"
+                            if (imageCacheHelper.get(cacheKeyOrig) === originalRes) {
+                                imageCacheHelper.remove(cacheKeyOrig)
+                            }
+                            if (imageCacheHelper.get(cacheKeyEffOrig) === originalRes) {
+                                imageCacheHelper.remove(cacheKeyEffOrig)
+                            }
+                            if (imageCacheHelper.get(cacheKeyProc) === originalRes) {
+                                imageCacheHelper.remove(cacheKeyProc)
+                            }
+                            val isKeep = originalJpgBitmaps.values.any { it === originalRes } || slots.any { it.bitmap === originalRes }
+                            if (!isKeep) {
+                                try { originalRes.recycle() } catch (e: Exception) {}
+                            }
                         }
 
                         slot.copy(bitmap = null, bitmapPath = tempPath ?: slot.bitmapPath)
