@@ -473,6 +473,8 @@ object ImageFilterEngine {
         var bgFloat: Mat? = null
         var div: Mat? = null
         var vOut: Mat? = null
+        var brightMask: Mat? = null
+        var paperMask: Mat? = null
         var mergedHsv: Mat? = null
         val outBGR = Mat()
         
@@ -483,6 +485,13 @@ object ImageFilterEngine {
             Core.split(hsv, channels)
             
             originalV = channels[2]
+
+            // 1. Calculate mean saturation in non-dark regions (V > 70) to detect if document is colored
+            brightMask = Mat()
+            Imgproc.threshold(originalV, brightMask, 70.0, 255.0, Imgproc.THRESH_BINARY)
+            val meanSatScalar = Core.mean(channels[1], brightMask)
+            val meanSat = meanSatScalar.`val`[0]
+            val isColoredDocument = meanSat > 28.0
             
             smallV = Mat()
             val maxDim = maxOf(originalV.cols(), originalV.rows())
@@ -512,17 +521,21 @@ object ImageFilterEngine {
             vOut = Mat()
             div.convertTo(vOut, CvType.CV_8U)
             
-            // Whiten light paper background to eliminate residual gray shadow patches around text
-            Imgproc.threshold(vOut, vOut, 215.0, 255.0, Imgproc.THRESH_TRUNC)
-            Core.normalize(vOut, vOut, 0.0, 255.0, Core.NORM_MINMAX)
+            if (isColoredDocument) {
+                // Colored card/document: Preserve original color background without forced whitening/desaturation
+                vOut.convertTo(vOut, -1, 1.05, 0.0)
+            } else {
+                // White paper document: Whiten light paper background to eliminate residual gray shadow patches
+                Imgproc.threshold(vOut, vOut, 215.0, 255.0, Imgproc.THRESH_TRUNC)
+                Core.normalize(vOut, vOut, 0.0, 255.0, Core.NORM_MINMAX)
+
+                // Desaturate paper background (V >= 210) so residual paper texture / shadow spots become clean white
+                paperMask = Mat()
+                Imgproc.threshold(vOut, paperMask, 210.0, 255.0, Imgproc.THRESH_BINARY)
+                channels[1].setTo(org.opencv.core.Scalar(0.0), paperMask)
+            }
 
             channels[2] = vOut
-
-            // Desaturate paper background (V >= 210) so residual paper texture / shadow spots become clean white
-            val paperMask = Mat()
-            Imgproc.threshold(vOut, paperMask, 210.0, 255.0, Imgproc.THRESH_BINARY)
-            channels[1].setTo(org.opencv.core.Scalar(0.0), paperMask)
-            paperMask.release()
             
             mergedHsv = Mat()
             Core.merge(channels, mergedHsv)
@@ -532,6 +545,8 @@ object ImageFilterEngine {
             outBGR.release()
             throw e
         } finally {
+            brightMask?.release()
+            paperMask?.release()
             hsv?.release()
             originalV?.release()
             smallV?.release()

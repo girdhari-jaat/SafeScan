@@ -79,8 +79,8 @@ object ScannerImageUtils {
                 }
             }
 
-            val screenX = (rotatedX * rotatedWidth * scale) + dx
-            val screenY = (rotatedY * rotatedHeight * scale) + dy
+            val screenX = ((rotatedX * rotatedWidth * scale) + dx).coerceIn(0f, viewWidth)
+            val screenY = ((rotatedY * rotatedHeight * scale) + dy).coerceIn(0f, viewHeight)
 
             PointF(screenX, screenY)
         }

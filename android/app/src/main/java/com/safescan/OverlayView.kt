@@ -31,7 +31,16 @@ class OverlayView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (corners?.size == 4) {
-            canvas.drawPath(edgePath, strokePaint)
+            val viewW = width.toFloat()
+            val viewH = height.toFloat()
+            if (viewW > 0 && viewH > 0) {
+                canvas.save()
+                canvas.clipRect(0f, 0f, viewW, viewH)
+                canvas.drawPath(edgePath, strokePaint)
+                canvas.restore()
+            } else {
+                canvas.drawPath(edgePath, strokePaint)
+            }
         }
     }
 
@@ -43,10 +52,13 @@ class OverlayView @JvmOverloads constructor(
         edgePath.reset()
         newCorners?.let { pts ->
             if (pts.size == 4) {
-                edgePath.moveTo(pts[0].x, pts[0].y)
-                edgePath.lineTo(pts[1].x, pts[1].y)
-                edgePath.lineTo(pts[2].x, pts[2].y)
-                edgePath.lineTo(pts[3].x, pts[3].y)
+                val viewW = width.toFloat().let { if (it > 0) it else Float.MAX_VALUE }
+                val viewH = height.toFloat().let { if (it > 0) it else Float.MAX_VALUE }
+
+                edgePath.moveTo(pts[0].x.coerceIn(0f, viewW), pts[0].y.coerceIn(0f, viewH))
+                edgePath.lineTo(pts[1].x.coerceIn(0f, viewW), pts[1].y.coerceIn(0f, viewH))
+                edgePath.lineTo(pts[2].x.coerceIn(0f, viewW), pts[2].y.coerceIn(0f, viewH))
+                edgePath.lineTo(pts[3].x.coerceIn(0f, viewW), pts[3].y.coerceIn(0f, viewH))
                 edgePath.close()
             }
         }
