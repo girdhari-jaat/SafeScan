@@ -161,7 +161,7 @@ object RansacHelper {
         val secondWorst = devs[1]
 
         val skewRatio = worst.dev / Math.max(0.5, secondWorst.dev)
-        if (worst.dev > 5.5 && (skewRatio > 1.35 || secondWorst.dev < 6.5)) {
+        if (worst.dev > 4.5 && (skewRatio > 1.25 || secondWorst.dev < 5.5)) {
             val result = pts.toMutableList()
             when (worst.index) {
                 0 -> result[0] = Point(tr.x + bl.x - br.x, tr.y + bl.y - br.y)
@@ -486,7 +486,7 @@ object RansacHelper {
             // Bottom transition scan
             var maxScoreB = -1.0
             var foundYB = -1
-            for (y in searchBottomEnd - 1 downTo searchBottomStart) {
+            for (y in searchBottomStart until searchBottomEnd) {
                 val valY = magnitudesY[y * sw + x].toDouble()
                 val valX = magnitudesX[y * sw + x].toDouble()
                 if (valX > valY * 1.5 && valY < thresholdY * 0.8) continue

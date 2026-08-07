@@ -69,8 +69,14 @@ object ScannerImageUtils {
                 }
             }
 
-            val screenX = ((rotatedX * rotatedWidth * scale) + dx).coerceIn(0f, viewWidth)
-            val screenY = ((rotatedY * rotatedHeight * scale) + dy).coerceIn(0f, viewHeight)
+            val margin = 8f
+            val minX = margin
+            val minY = margin
+            val maxX = (viewWidth - margin).coerceAtLeast(minX)
+            val maxY = (viewHeight - margin).coerceAtLeast(minY)
+
+            val screenX = ((rotatedX * rotatedWidth * scale) + dx).coerceIn(minX, maxX)
+            val screenY = ((rotatedY * rotatedHeight * scale) + dy).coerceIn(minY, maxY)
 
             PointF(screenX, screenY)
         }
