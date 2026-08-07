@@ -38,10 +38,6 @@ object ScannerImageUtils {
         val frameRatio = rotatedWidth / rotatedHeight
         val viewRatio = viewWidth / viewHeight
 
-        val scale: Float
-        val dx: Float
-        val dy: Float
-
         val scale = maxOf(viewWidth / rotatedWidth, viewHeight / rotatedHeight)
         val dx = (viewWidth - rotatedWidth * scale) / 2f
         val dy = (viewHeight - rotatedHeight * scale) / 2f
