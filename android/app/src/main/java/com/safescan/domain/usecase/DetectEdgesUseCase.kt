@@ -16,11 +16,12 @@ class DetectEdgesUseCase @Inject constructor(
     fun detectWithOpenCV(
         bitmap: Bitmap?,
         mode: ScannerMode,
-        isManualCrop: Boolean
+        isManualCrop: Boolean,
+        attemptIndex: Int = 0
     ): List<Point>? {
         if (bitmap == null || bitmap.isRecycled) return null
         return try {
-            edgeDetectionEngine.detectEdges(bitmap, mode)
+            edgeDetectionEngine.detectEdges(bitmap, mode, attemptIndex)
         } catch (e: Exception) {
             null
         }

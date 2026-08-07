@@ -25,6 +25,7 @@ class ScannerCropHandler(
         currentMode: StateFlow<ScannerMode>,
         uiState: MutableStateFlow<ScannerUiState>,
         scope: CoroutineScope,
+        attemptIndex: Int = 0,
         onResult: (List<Point>?) -> Unit
     ) {
         if (bitmap.isRecycled) {
@@ -43,8 +44,8 @@ class ScannerCropHandler(
             var points: List<Point>? = null
             try {
                 if (!bitmap.isRecycled) {
-                    points = detectEdgesUseCase.detectWithOpenCV(bitmap, currentMode.value, isManualCrop = true)
-                    Log.d("ScannerCropHandler", "detectEdges: Successfully detected corners using OpenCV")
+                    points = detectEdgesUseCase.detectWithOpenCV(bitmap, currentMode.value, isManualCrop = true, attemptIndex = attemptIndex)
+                    Log.d("ScannerCropHandler", "detectEdges: Successfully detected corners using OpenCV (attempt: $attemptIndex)")
                 }
             } catch (e: Throwable) {
                 Log.e("ScannerCropHandler", "detectEdges: OpenCV detection failed", e)

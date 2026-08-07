@@ -48,6 +48,7 @@
 │           │           │   ├── AppModule.kt
 │           │           │   └── ScannerModule.kt
 │           │           ├── domain
+│           │           │   ├── AutoEnhanceProcessor.kt
 │           │           │   ├── ExportHelper.kt
 │           │           │   ├── ImageFilterEngine.kt
 │           │           │   ├── ImageProcessor.kt
@@ -73,9 +74,13 @@
 │           │           │   ├── OcrEngine.kt
 │           │           │   ├── RansacHelper.kt
 │           │           │   ├── RansacHelper.kt.bak
+│           │           │   ├── ScannerCropHandler.kt
+│           │           │   ├── ScannerEditorHandler.kt
 │           │           │   ├── ScannerExportHelper.kt
 │           │           │   ├── ScannerExportUtils.kt
+│           │           │   ├── ScannerOcrHandler.kt
 │           │           │   ├── ScannerSettingsHandler.kt
+│           │           │   ├── ScannerSlotHandler.kt
 │           │           │   ├── ScannerStateMachine.kt
 │           │           │   ├── ScannerTitleUtils.kt
 │           │           │   ├── ScannerViewModel.kt
@@ -100,6 +105,10 @@
 │           │           │   ├── SlotsScreen.kt
 │           │           │   ├── WizardScreen.kt
 │           │           │   ├── ZoomableImage.kt
+│           │           │   ├── crop
+│           │           │   │   ├── CornerHandle.kt
+│           │           │   │   ├── CropMagnifierLens.kt
+│           │           │   │   └── CropTopBar.kt
 │           │           │   ├── editor
 │           │           │   │   ├── EditorBottomToolbar.kt
 │           │           │   │   ├── EditorEnhancementPanel.kt

@@ -35,9 +35,6 @@ object ScannerImageUtils {
             rotatedHeight = bitmapHeight.toFloat()
         }
 
-        val frameRatio = rotatedWidth / rotatedHeight
-        val viewRatio = viewWidth / viewHeight
-
         val scale = maxOf(viewWidth / rotatedWidth, viewHeight / rotatedHeight)
         val dx = (viewWidth - rotatedWidth * scale) / 2f
         val dy = (viewHeight - rotatedHeight * scale) / 2f
@@ -69,14 +66,8 @@ object ScannerImageUtils {
                 }
             }
 
-            val margin = 8f
-            val minX = margin
-            val minY = margin
-            val maxX = (viewWidth - margin).coerceAtLeast(minX)
-            val maxY = (viewHeight - margin).coerceAtLeast(minY)
-
-            val screenX = ((rotatedX * rotatedWidth * scale) + dx).coerceIn(minX, maxX)
-            val screenY = ((rotatedY * rotatedHeight * scale) + dy).coerceIn(minY, maxY)
+            val screenX = (rotatedX * rotatedWidth * scale) + dx
+            val screenY = (rotatedY * rotatedHeight * scale) + dy
 
             PointF(screenX, screenY)
         }

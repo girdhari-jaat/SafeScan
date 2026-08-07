@@ -111,10 +111,23 @@ object RansacHelper {
 
     fun orderPoints(pts: List<Point>): List<Point> {
         if (pts.size != 4) return pts
-        val s = pts.sortedBy { it.y }
-        val t = s.subList(0, 2).sortedBy { it.x }
-        val b = s.subList(2, 4).sortedBy { it.x }
-        return listOf(t[0], t[1], b[1], b[0])
+
+        val cx = pts.sumOf { it.x } / 4.0
+        val cy = pts.sumOf { it.y } / 4.0
+
+        val sortedByAngle = pts.sortedBy { Math.atan2(it.y - cy, it.x - cx) }
+
+        val tlIndex = sortedByAngle.indices.minByOrNull { i ->
+            val p = sortedByAngle[i]
+            p.x + p.y
+        } ?: 0
+
+        val tl = sortedByAngle[tlIndex]
+        val tr = sortedByAngle[(tlIndex + 1) % 4]
+        val br = sortedByAngle[(tlIndex + 2) % 4]
+        val bl = sortedByAngle[(tlIndex + 3) % 4]
+
+        return listOf(tl, tr, br, bl)
     }
 
     fun getAngle(p: Point, a: Point, b: Point): Double {
@@ -386,8 +399,9 @@ object RansacHelper {
         val targetTop = sh * topPct
         val targetBottom = sh * bottomPct
 
-        val marginX = Math.round(sw * 0.15f)
-        val marginY = Math.round(sh * 0.12f)
+        val isLandscape = sw > sh
+        val marginX = if (isLandscape) Math.round(sw * 0.18f) else Math.round(sw * 0.15f)
+        val marginY = if (isLandscape) Math.round(sh * 0.18f) else Math.round(sh * 0.12f)
 
         val searchLeftStart = Math.max(borderX + 2, Math.round(targetLeft - marginX).toInt())
         val searchLeftEnd = Math.min(sw - borderX - 2, Math.round(targetLeft + marginX).toInt())
@@ -483,10 +497,10 @@ object RansacHelper {
                 topPoints.add(Point(x.toDouble(), foundYT.toDouble()))
             }
 
-            // Bottom transition scan
+            // Bottom transition scan (Bottom to Top - Outside in)
             var maxScoreB = -1.0
             var foundYB = -1
-            for (y in searchBottomStart until searchBottomEnd) {
+            for (y in searchBottomEnd - 1 downTo searchBottomStart) {
                 val valY = magnitudesY[y * sw + x].toDouble()
                 val valX = magnitudesX[y * sw + x].toDouble()
                 if (valX > valY * 1.5 && valY < thresholdY * 0.8) continue

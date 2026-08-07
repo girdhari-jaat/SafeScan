@@ -69,6 +69,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
     var tr by remember(croppingBitmap) { mutableStateOf(Offset(300f, 50f)) }
     var br by remember(croppingBitmap) { mutableStateOf(Offset(300f, 400f)) }
     var bl by remember(croppingBitmap) { mutableStateOf(Offset(50f, 400f)) }
+    var autoAttemptIndex by remember(croppingBitmap) { mutableStateOf(0) }
 
     // Initialize corners once image size is known or when a new image is loaded
     LaunchedEffect(imageSize, croppingBitmap) {
@@ -131,7 +132,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
                 onAutoDetect = {
                     val currentBmp = croppingBitmap
                     if (imageSize.width > 0 && imageSize.height > 0 && currentBmp != null) {
-                        viewModel.detectEdges(currentBmp) { points ->
+                        viewModel.detectEdges(currentBmp, attemptIndex = autoAttemptIndex) { points ->
                             if (points != null && points.size == 4) {
                                 val scaleX = imageSize.width.toFloat() / currentBmp.width.toFloat()
                                 val scaleY = imageSize.height.toFloat() / currentBmp.height.toFloat()
@@ -144,6 +145,7 @@ fun CropScreen(viewModel: ScannerViewModel) {
                                     snackbarHostState.showSnackbar(docNotFoundMsg)
                                 }
                             }
+                            autoAttemptIndex = (autoAttemptIndex + 1) % 3
                         }
                     }
                 },

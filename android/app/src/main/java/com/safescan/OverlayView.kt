@@ -55,16 +55,10 @@ class OverlayView @JvmOverloads constructor(
                 val viewW = width.toFloat().let { if (it > 0) it else Float.MAX_VALUE }
                 val viewH = height.toFloat().let { if (it > 0) it else Float.MAX_VALUE }
 
-                val margin = (strokePaint.strokeWidth / 2f) + 4f
-                val minX = margin
-                val minY = margin
-                val maxX = if (viewW != Float.MAX_VALUE) (viewW - margin).coerceAtLeast(minX) else Float.MAX_VALUE
-                val maxY = if (viewH != Float.MAX_VALUE) (viewH - margin).coerceAtLeast(minY) else Float.MAX_VALUE
-
-                edgePath.moveTo(pts[0].x.coerceIn(minX, maxX), pts[0].y.coerceIn(minY, maxY))
-                edgePath.lineTo(pts[1].x.coerceIn(minX, maxX), pts[1].y.coerceIn(minY, maxY))
-                edgePath.lineTo(pts[2].x.coerceIn(minX, maxX), pts[2].y.coerceIn(minY, maxY))
-                edgePath.lineTo(pts[3].x.coerceIn(minX, maxX), pts[3].y.coerceIn(minY, maxY))
+                edgePath.moveTo(pts[0].x, pts[0].y)
+                edgePath.lineTo(pts[1].x, pts[1].y)
+                edgePath.lineTo(pts[2].x, pts[2].y)
+                edgePath.lineTo(pts[3].x, pts[3].y)
                 edgePath.close()
             }
         }

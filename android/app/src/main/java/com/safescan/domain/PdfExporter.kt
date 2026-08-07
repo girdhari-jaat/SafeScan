@@ -465,7 +465,7 @@ class PdfExporter(private val context: Context) {
             }
         }
 
-        val baos = ByteArrayOutputStream()
+        val baos = ByteArrayOutputStream(256 * 1024)
         try {
             scaledBmp.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(10, 100), baos)
         } finally {

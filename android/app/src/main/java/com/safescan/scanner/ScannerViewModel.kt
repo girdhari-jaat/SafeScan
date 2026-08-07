@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
@@ -43,6 +44,8 @@ class ScannerViewModel @Inject constructor(
     private val manageSlotsUseCase: com.safescan.domain.usecase.ManageSlotsUseCase,
     private val saveDocumentUseCase: com.safescan.domain.usecase.SaveDocumentUseCase
 ) : ViewModel() {
+
+    private val captureMutex = Mutex()
 
     // IMPROVEMENT: Using ScannerUiState with isAutoRunning
     private val _uiState = MutableStateFlow(ScannerUiState())
@@ -284,8 +287,8 @@ class ScannerViewModel @Inject constructor(
     private val _autoCaptureEvent = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val autoCaptureEvent = _autoCaptureEvent.asSharedFlow()
 
-    fun detectEdges(bitmap: Bitmap, onResult: (List<Point>?) -> Unit) {
-        cropHandler.detectEdges(bitmap, currentMode, _uiState, viewModelScope, onResult)
+    fun detectEdges(bitmap: Bitmap, attemptIndex: Int = 0, onResult: (List<Point>?) -> Unit) {
+        cropHandler.detectEdges(bitmap, currentMode, _uiState, viewModelScope, attemptIndex, onResult)
     }
 
     fun detectEdgesWithTFLite(bitmap: Bitmap, onResult: (List<Point>?) -> Unit) {
@@ -1444,6 +1447,11 @@ class ScannerViewModel @Inject constructor(
         forceSkipEditor: Boolean = false,
         isGalleryImport: Boolean = false
     ) {
+        if (bitmap.isRecycled || bitmap.width <= 0 || bitmap.height <= 0) {
+            _uiState.update { it.copy(isLoading = false, error = "Invalid bitmap") }
+            return
+        }
+
         val now = System.currentTimeMillis()
         if (now - lastCaptureTimestampMs < 500L && !forceSkipEditor && !isGalleryImport && !isNativeScanned) {
             DiagnosticsLogger.info("[Capture] Ignored duplicate capture request within ${now - lastCaptureTimestampMs}ms")
@@ -1454,148 +1462,154 @@ class ScannerViewModel @Inject constructor(
         _uiState.update { it.copy(isLoading = true, error = null) }
         
         viewModelScope.launch(Dispatchers.IO) {
-            ScannerDebugLogger.logEnter("ScannerViewModel.onCapture")
+            captureMutex.withLock {
+                ScannerDebugLogger.logEnter("ScannerViewModel.onCapture")
 
-            // Save the raw captured JPG asynchronously in background to avoid blocking capture pipeline (skipped for gallery imports to avoid duplicate files)
-            if (saveJpg.value && !isGalleryImport) {
-                val quality = jpegQuality.value.toInt()
-                viewModelScope.launch(Dispatchers.IO) {
-                    val savedFile = saveDocumentUseCase.saveJpgToScans(bitmap, quality)
-                    if (savedFile != null) {
-                        DiagnosticsLogger.info("[Save] Raw captured JPG saved to Scans folder: ${savedFile.absolutePath}")
+                // Save the raw captured JPG asynchronously in background to avoid blocking capture pipeline (skipped for gallery imports to avoid duplicate files)
+                if (saveJpg.value && !isGalleryImport) {
+                    val quality = jpegQuality.value.toInt()
+                    viewModelScope.launch(Dispatchers.IO) {
+                        val savedFile = saveDocumentUseCase.saveJpgToScans(bitmap, quality)
+                        if (savedFile != null) {
+                            DiagnosticsLogger.info("[Save] Raw captured JPG saved to Scans folder: ${savedFile.absolutePath}")
+                        }
                     }
-                }
-            }
-            
-            // Dynamically scale the image based on our negotiated CameraHardwareConfig constraints (supporting Fast, Standard, High, and high-megapixel modes)
-            val currentModeVal = currentMode.value
-            val hdModeStr = hdMode.value
-            val captureSettings = com.safescan.scanner.CameraHardwareConfig.getCaptureSettings(null, currentModeVal, hdModeStr)
-            val maxResolution = kotlin.math.max(captureSettings.targetSize.width.toFloat(), captureSettings.targetSize.height.toFloat())
-            
-            val ratio = kotlin.math.min(maxResolution / bitmap.width, maxResolution / bitmap.height)
-            val resizedBitmap = if (ratio < 1) {
-                android.graphics.Bitmap.createScaledBitmap(
-                    bitmap, 
-                    (bitmap.width * ratio).toInt(), 
-                    (bitmap.height * ratio).toInt(), 
-                    true
-                )
-            } else bitmap
-
-            val processedBitmap = if (shadowRemove.value) {
-                try {
-                    com.safescan.domain.ImageProcessor.autoEnhance(resizedBitmap)
-                } catch (e: Exception) {
-                    resizedBitmap
-                }
-            } else {
-                resizedBitmap
-            }
-
-            val isAutoCropOff = !autoCrop.value
-            var slotId = selectedSlotId.value ?: slots.value.firstOrNull { it.bitmap == null }?.id
-            if (slotId == null) {
-                var candidateIndex = slots.value.size + 1
-                var candidateId = "p$candidateIndex"
-                while (slots.value.any { it.id == candidateId }) {
-                    candidateIndex++
-                    candidateId = "p$candidateIndex"
-                }
-                slots.value = slots.value + Slot(candidateId, "Page $candidateIndex")
-                slotId = candidateId
-            }
-
-            ScannerDebugLogger.logCapture(slotId ?: "unknown")
-            val ratioStr = "${processedBitmap.width}:${processedBitmap.height}"
-            ScannerDebugLogger.logOrientation(ratioStr, pageSize.value)
-
-            if (isNativeScanned || isAutoCropOff) {
-                if (slotId != null) {
-                    captureToSlot(processedBitmap, slotId, isCapture = true)
-                    selectedSlotId.value = null
                 }
                 
-                _uiState.update { 
-                    it.copy(
-                        isLoading = false,
-                        scannedBitmap = null,
-                        lastCapturedThumbnail = processedBitmap,
-                        capturedCount = it.capturedCount + 1,
-                        error = null
+                // Dynamically scale the image based on our negotiated CameraHardwareConfig constraints (supporting Fast, Standard, High, and high-megapixel modes)
+                val currentModeVal = currentMode.value
+                val hdModeStr = hdMode.value
+                val captureSettings = com.safescan.scanner.CameraHardwareConfig.getCaptureSettings(null, currentModeVal, hdModeStr)
+                val maxResolution = kotlin.math.max(captureSettings.targetSize.width.toFloat(), captureSettings.targetSize.height.toFloat())
+                
+                val ratio = kotlin.math.min(maxResolution / bitmap.width, maxResolution / bitmap.height)
+                val resizedBitmap = if (ratio < 1) {
+                    android.graphics.Bitmap.createScaledBitmap(
+                        bitmap, 
+                        (bitmap.width * ratio).toInt(), 
+                        (bitmap.height * ratio).toInt(), 
+                        true
                     )
+                } else bitmap
+
+                val processedBitmap = if (shadowRemove.value) {
+                    try {
+                        com.safescan.domain.ImageProcessor.autoEnhance(resizedBitmap)
+                    } catch (e: Exception) {
+                        resizedBitmap
+                    }
+                } else {
+                    resizedBitmap
                 }
 
-                if (!forceSkipEditor && !batchScan.value && slotId != null) {
-                    withContext(Dispatchers.Main) {
-                        openEditor(slotId)
-                    }
+                if (resizedBitmap !== bitmap && processedBitmap !== resizedBitmap && !resizedBitmap.isRecycled) {
+                    resizedBitmap.recycle()
                 }
-            } else {
-                val isFlat = wizardWarp.value == "Flat" || wizardWarp.value == "Flat Crop Only"
-                when (val result = scannerEngine.scanDocument(processedBitmap, flatCrop = isFlat)) {
-                    is com.safescan.core.AppResult.Success -> {
-                        if (slotId != null) {
-                            captureToSlot(result.data.bitmap, slotId, isCapture = true, corners = result.data.corners, originalBitmap = processedBitmap)
-                            selectedSlotId.value = null
-                        }
-                        
-                        _uiState.update { 
-                            it.copy(
-                                isLoading = false,
-                                scannedBitmap = null,
-                                lastCapturedThumbnail = result.data.bitmap,
-                                capturedCount = it.capturedCount + 1,
-                                error = null
-                            )
-                        }
 
-                        if (!forceSkipEditor && !batchScan.value && slotId != null) {
-                            withContext(Dispatchers.Main) {
-                                openEditor(slotId)
-                            }
+                val isAutoCropOff = !autoCrop.value
+                var slotId = selectedSlotId.value ?: slots.value.firstOrNull { it.bitmap == null }?.id
+                if (slotId == null) {
+                    var candidateIndex = slots.value.size + 1
+                    var candidateId = "p$candidateIndex"
+                    while (slots.value.any { it.id == candidateId }) {
+                        candidateIndex++
+                        candidateId = "p$candidateIndex"
+                    }
+                    slots.value = slots.value + Slot(candidateId, "Page $candidateIndex")
+                    slotId = candidateId
+                }
+
+                ScannerDebugLogger.logCapture(slotId ?: "unknown")
+                val ratioStr = "${processedBitmap.width}:${processedBitmap.height}"
+                ScannerDebugLogger.logOrientation(ratioStr, pageSize.value)
+
+                if (isNativeScanned || isAutoCropOff) {
+                    if (slotId != null) {
+                        captureToSlot(processedBitmap, slotId, isCapture = true)
+                        selectedSlotId.value = null
+                    }
+                    
+                    _uiState.update { 
+                        it.copy(
+                            isLoading = false,
+                            scannedBitmap = null,
+                            lastCapturedThumbnail = processedBitmap,
+                            capturedCount = it.capturedCount + 1,
+                            error = null
+                        )
+                    }
+
+                    if (!forceSkipEditor && !batchScan.value && slotId != null) {
+                        withContext(Dispatchers.Main) {
+                            openEditor(slotId)
                         }
                     }
-                    is com.safescan.core.AppResult.Error -> {
-                        if (result.message == "CORNERS_NOT_FOUND") {
-                            // Fallback to manual crop! Place uncropped image in the slot
+                } else {
+                    val isFlat = wizardWarp.value == "Flat" || wizardWarp.value == "Flat Crop Only"
+                    when (val result = scannerEngine.scanDocument(processedBitmap, flatCrop = isFlat)) {
+                        is com.safescan.core.AppResult.Success -> {
                             if (slotId != null) {
-                                captureToSlot(processedBitmap, slotId, isCapture = true)
+                                captureToSlot(result.data.bitmap, slotId, isCapture = true, corners = result.data.corners, originalBitmap = processedBitmap)
                                 selectedSlotId.value = null
                             }
-
+                            
                             _uiState.update { 
                                 it.copy(
                                     isLoading = false,
                                     scannedBitmap = null,
-                                    lastCapturedThumbnail = processedBitmap,
+                                    lastCapturedThumbnail = result.data.bitmap,
                                     capturedCount = it.capturedCount + 1,
-                                    error = null // Clear error since we gracefully fall back to manual crop
+                                    error = null
                                 )
                             }
 
-                            if (slotId != null) {
+                            if (!forceSkipEditor && !batchScan.value && slotId != null) {
                                 withContext(Dispatchers.Main) {
-                                    if (!forceSkipEditor && !batchScan.value) {
-                                        android.widget.Toast.makeText(context, "No document found. Opening manual crop.", android.widget.Toast.LENGTH_SHORT).show()
-                                        openCrop(slotId)
-                                    } else {
-                                        android.widget.Toast.makeText(context, "No document found on some pages.", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
+                                    openEditor(slotId)
                                 }
                             }
-                        } else {
-                            _uiState.update {
-                                it.copy(
-                                    isLoading = false,
-                                    error = result.message
-                                )
+                        }
+                        is com.safescan.core.AppResult.Error -> {
+                            if (result.message == "CORNERS_NOT_FOUND") {
+                                // Fallback to manual crop! Place uncropped image in the slot
+                                if (slotId != null) {
+                                    captureToSlot(processedBitmap, slotId, isCapture = true)
+                                    selectedSlotId.value = null
+                                }
+
+                                _uiState.update { 
+                                    it.copy(
+                                        isLoading = false,
+                                        scannedBitmap = null,
+                                        lastCapturedThumbnail = processedBitmap,
+                                        capturedCount = it.capturedCount + 1,
+                                        error = null // Clear error since we gracefully fall back to manual crop
+                                    )
+                                }
+
+                                if (slotId != null) {
+                                    withContext(Dispatchers.Main) {
+                                        if (!forceSkipEditor && !batchScan.value) {
+                                            android.widget.Toast.makeText(context, "No document found. Opening manual crop.", android.widget.Toast.LENGTH_SHORT).show()
+                                            openCrop(slotId)
+                                        } else {
+                                            android.widget.Toast.makeText(context, "No document found on some pages.", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            } else {
+                                _uiState.update {
+                                    it.copy(
+                                        isLoading = false,
+                                        error = result.message
+                                    )
+                                }
                             }
                         }
                     }
                 }
+                ScannerDebugLogger.logExit("ScannerViewModel.onCapture")
             }
-            ScannerDebugLogger.logExit("ScannerViewModel.onCapture")
         }
     }
 

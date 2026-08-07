@@ -431,6 +431,10 @@ class ScannerExportHelper(
                             }
                         }
 
+                        if (originalRes != null && originalRes !== slot.bitmap && !originalRes.isRecycled) {
+                            originalRes.recycle()
+                        }
+
                         slot.copy(bitmap = null, bitmapPath = tempPath ?: slot.bitmapPath)
                     }
                 }

@@ -17,12 +17,12 @@ class EdgeDetectionEngine {
     }
 
     @Synchronized
-    fun detectEdgesSafe(bitmap: Bitmap, mode: com.safescan.data.ScannerMode? = null): List<Point> {
-        return detectEdges(bitmap, mode) ?: getFallbackQuad(bitmap.width.toDouble(), bitmap.height.toDouble())
+    fun detectEdgesSafe(bitmap: Bitmap, mode: com.safescan.data.ScannerMode? = null, attemptIndex: Int = 0): List<Point> {
+        return detectEdges(bitmap, mode, attemptIndex) ?: getFallbackQuad(bitmap.width.toDouble(), bitmap.height.toDouble())
     }
 
     @Synchronized
-    fun detectEdges(bitmap: Bitmap, mode: com.safescan.data.ScannerMode? = null): List<Point>? {
+    fun detectEdges(bitmap: Bitmap, mode: com.safescan.data.ScannerMode? = null, attemptIndex: Int = 0): List<Point>? {
         if (bitmap.isRecycled) return null
 
         Log.d(TAG, "Starting Offline modern RANSAC + Outside-In edge detection")
@@ -147,7 +147,7 @@ class EdgeDetectionEngine {
                 thresholdY *= 0.70
             }
 
-            // 6. Scanning strategies
+            // 6. Scanning strategies based on attemptIndex
             val isManualCrop = mode?.name?.startsWith("MANUAL") == true
             val isCardMode = mode == com.safescan.data.ScannerMode.CARD
 
@@ -155,81 +155,98 @@ class EdgeDetectionEngine {
             val borderX = Math.round(sw * 0.02f)
 
             var finalPts: List<Point>? = null
+            val cycleAttempt = (attemptIndex % 3 + 3) % 3
 
-            val est = RansacHelper.estimateForegroundPercentages(closedData, sw, sh)
-            if (est != null) {
-                finalPts = RansacHelper.scanTarget(
-                    sw, sh,
-                    est.leftPct, est.rightPct, est.topPct, est.bottomPct,
-                    borderX, borderY,
-                    closedData,
-                    magnitudesX, magnitudesY,
-                    thresholdX, thresholdY,
-                    isManualCrop, isCardMode
+            if (cycleAttempt == 1) {
+                // Strategy 2 (2nd click): Robust Foreground Contour Bounding Box with straight edges
+                finalPts = RansacHelper.findRobustForegroundBoundingBox(closedData, sw, sh)
+            } else if (cycleAttempt == 2) {
+                // Strategy 3 (3rd click): Adaptive Inset Margin Quad (95% clean frame)
+                val px = sw * 0.035
+                val py = sh * 0.035
+                finalPts = listOf(
+                    Point(px, py),
+                    Point(sw - px, py),
+                    Point(sw - px, sh - py),
+                    Point(px, sh - py)
                 )
-
-                if (finalPts == null) {
-                    val paddingX = Math.min(0.06, (est.rightPct - est.leftPct) * 0.08)
-                    val paddingY = Math.min(0.06, (est.bottomPct - est.topPct) * 0.08)
-
+            } else {
+                // Strategy 1 (1st click): Precision RANSAC + Outside-In Edge Detection
+                val est = RansacHelper.estimateForegroundPercentages(closedData, sw, sh)
+                if (est != null) {
                     finalPts = RansacHelper.scanTarget(
                         sw, sh,
-                        Math.max(0.01, est.leftPct - paddingX),
-                        Math.min(0.99, est.rightPct + paddingX),
-                        Math.max(0.01, est.topPct - paddingY),
-                        Math.min(0.99, est.bottomPct + paddingY),
+                        est.leftPct, est.rightPct, est.topPct, est.bottomPct,
                         borderX, borderY,
                         closedData,
                         magnitudesX, magnitudesY,
                         thresholdX, thresholdY,
                         isManualCrop, isCardMode
                     )
-                }
-            }
 
-            if (finalPts == null) {
-                if (isCardMode) {
-                    val steps = listOf(
-                        listOf(0.025, 0.975, 0.225, 0.775),
-                        listOf(0.075, 0.925, 0.250, 0.750),
-                        listOf(0.125, 0.875, 0.275, 0.725),
-                        listOf(0.175, 0.825, 0.300, 0.700)
-                    )
-                    for (step in steps) {
+                    if (finalPts == null) {
+                        val paddingX = Math.min(0.06, (est.rightPct - est.leftPct) * 0.08)
+                        val paddingY = Math.min(0.06, (est.bottomPct - est.topPct) * 0.08)
+
                         finalPts = RansacHelper.scanTarget(
                             sw, sh,
-                            step[0], step[1], step[2], step[3],
+                            Math.max(0.01, est.leftPct - paddingX),
+                            Math.min(0.99, est.rightPct + paddingX),
+                            Math.max(0.01, est.topPct - paddingY),
+                            Math.min(0.99, est.bottomPct + paddingY),
                             borderX, borderY,
                             closedData,
                             magnitudesX, magnitudesY,
                             thresholdX, thresholdY,
                             isManualCrop, isCardMode
                         )
-                        if (finalPts != null) break
-                    }
-                } else {
-                    val steps = listOf(
-                        listOf(0.0525, 0.9475, 0.025, 0.975),
-                        listOf(0.098, 0.902, 0.075, 0.925),
-                        listOf(0.125, 0.875, 0.125, 0.875)
-                    )
-                    for (step in steps) {
-                        finalPts = RansacHelper.scanTarget(
-                            sw, sh,
-                            step[0], step[1], step[2], step[3],
-                            borderX, borderY,
-                            closedData,
-                            magnitudesX, magnitudesY,
-                            thresholdX, thresholdY,
-                            isManualCrop, isCardMode
-                        )
-                        if (finalPts != null) break
                     }
                 }
-            }
 
-            if (finalPts == null && isManualCrop) {
-                finalPts = RansacHelper.findRobustForegroundBoundingBox(closedData, sw, sh)
+                if (finalPts == null) {
+                    if (isCardMode) {
+                        val steps = listOf(
+                            listOf(0.025, 0.975, 0.225, 0.775),
+                            listOf(0.075, 0.925, 0.250, 0.750),
+                            listOf(0.125, 0.875, 0.275, 0.725),
+                            listOf(0.175, 0.825, 0.300, 0.700)
+                        )
+                        for (step in steps) {
+                            finalPts = RansacHelper.scanTarget(
+                                sw, sh,
+                                step[0], step[1], step[2], step[3],
+                                borderX, borderY,
+                                closedData,
+                                magnitudesX, magnitudesY,
+                                thresholdX, thresholdY,
+                                isManualCrop, isCardMode
+                            )
+                            if (finalPts != null) break
+                        }
+                    } else {
+                        val steps = listOf(
+                            listOf(0.0525, 0.9475, 0.025, 0.975),
+                            listOf(0.098, 0.902, 0.075, 0.925),
+                            listOf(0.125, 0.875, 0.125, 0.875)
+                        )
+                        for (step in steps) {
+                            finalPts = RansacHelper.scanTarget(
+                                sw, sh,
+                                step[0], step[1], step[2], step[3],
+                                borderX, borderY,
+                                closedData,
+                                magnitudesX, magnitudesY,
+                                thresholdX, thresholdY,
+                                isManualCrop, isCardMode
+                            )
+                            if (finalPts != null) break
+                        }
+                    }
+                }
+
+                if (finalPts == null) {
+                    finalPts = RansacHelper.findRobustForegroundBoundingBox(closedData, sw, sh)
+                }
             }
 
             if (finalPts == null) return null

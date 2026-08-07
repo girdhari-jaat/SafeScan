@@ -210,6 +210,7 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
             return foundCorners
         } finally {
             contours.forEach { it.release() }
+            contours.clear()
             src?.release()
             resized?.release()
             gray?.release()

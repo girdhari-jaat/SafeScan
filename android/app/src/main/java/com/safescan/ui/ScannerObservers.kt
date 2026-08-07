@@ -25,11 +25,13 @@ class ScannerObservers(
                     state.scannedBitmap?.let { bitmap ->
                         binding.resultImageView.visibility = View.VISIBLE
                         binding.resultImageView.setImageBitmap(bitmap)
-                        binding.previewView.visibility = View.INVISIBLE
+                        binding.previewView.visibility = View.GONE
                     } ?: run {
-                        if (fragment.currentViewMode == ScannerFragment.FragmentViewMode.SCANNER) {
-                            binding.resultImageView.visibility = View.GONE
+                        binding.resultImageView.visibility = View.GONE
+                        if (fragment.currentViewMode == ScannerFragment.FragmentViewMode.SCANNER && fragment.cameraController.shouldCameraBeOn()) {
                             binding.previewView.visibility = View.VISIBLE
+                        } else {
+                            binding.previewView.visibility = View.GONE
                         }
                     }
 
