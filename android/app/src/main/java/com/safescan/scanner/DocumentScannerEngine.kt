@@ -104,7 +104,7 @@ open class DocumentScannerEngine(private val mlEngine: MLScannerEngine? = null) 
 
                     dstMat = Mat()
                     Log.d("DocumentScannerEngine", "warpPerspective: srcMat type = ${srcMat.type()}, transformMatrix type = ${transformMatrix.type()}")
-                    Imgproc.warpPerspective(srcMat, dstMat, transformMatrix, Size(maxWidth.toDouble(), maxHeight.toDouble()))
+                    Imgproc.warpPerspective(srcMat, dstMat, transformMatrix, Size(maxWidth.toDouble(), maxHeight.toDouble()), Imgproc.INTER_CUBIC)
 
                     val outBitmap = Bitmap.createBitmap(maxWidth, maxHeight, Bitmap.Config.ARGB_8888)
                     val finalDstMat = if (dstMat.type() == CvType.CV_8UC1) {

@@ -61,7 +61,7 @@ fun ScannerCenterInstructions(
             ScannerMode.CARD -> {
                 targetSlot?.label ?: "All 8 Slots Captured"
             }
-            ScannerMode.DOCUMENT -> "Align Document Inside Frame"
+            ScannerMode.DOCUMENT -> "Document"
         }
     } else {
         null

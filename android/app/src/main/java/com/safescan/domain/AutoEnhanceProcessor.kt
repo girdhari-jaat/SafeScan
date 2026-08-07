@@ -134,7 +134,7 @@ object AutoEnhanceProcessor {
             val varSat = stdSat * stdSat
 
             // B&W / Handwriting Paper check: Low saturation mean and low variance
-            val isMonochromeDoc = (meanSat < 28.0 && varSat < 200.0) || (meanSat < 18.0)
+            val isMonochromeDoc = (meanSat < 14.0 && varSat < 150.0) || (meanSat < 10.0)
 
             // ----------------------------------------------------
             // 4. LAB Conversion
@@ -267,23 +267,22 @@ object AutoEnhanceProcessor {
             )
 
             // ----------------------------------------------------
-            // 7.5. Selective Paper Background Desaturation
+            // 7.5. Selective Paper Background Desaturation (Only for B&W / Monochrome Documents)
             // ----------------------------------------------------
-            // For paper background regions (L >= 210), set A and B channels to neutral 128
-            // so residual color casts, paper texture, and shadow spots become clean white.
-            // Handwriting ink (L < 210) retains vibrant blue/red/black ink colors.
-            val paperMask = Mat()
-            Imgproc.threshold(
-                lChannel,
-                paperMask,
-                210.0,
-                255.0,
-                Imgproc.THRESH_BINARY
-            )
+            if (isMonochromeDoc) {
+                val paperMask = Mat()
+                Imgproc.threshold(
+                    lChannel,
+                    paperMask,
+                    210.0,
+                    255.0,
+                    Imgproc.THRESH_BINARY
+                )
 
-            labChannels[1].setTo(Scalar(128.0), paperMask)
-            labChannels[2].setTo(Scalar(128.0), paperMask)
-            safeRelease(paperMask)
+                labChannels[1].setTo(Scalar(128.0), paperMask)
+                labChannels[2].setTo(Scalar(128.0), paperMask)
+                safeRelease(paperMask)
+            }
 
             Core.merge(
                 labChannels,

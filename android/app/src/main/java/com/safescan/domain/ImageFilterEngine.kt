@@ -491,7 +491,7 @@ object ImageFilterEngine {
             Imgproc.threshold(originalV, brightMask, 70.0, 255.0, Imgproc.THRESH_BINARY)
             val meanSatScalar = Core.mean(channels[1], brightMask)
             val meanSat = meanSatScalar.`val`[0]
-            val isColoredDocument = meanSat > 28.0
+            val isColoredDocument = meanSat > 14.0
             
             smallV = Mat()
             val maxDim = maxOf(originalV.cols(), originalV.rows())
@@ -504,7 +504,7 @@ object ImageFilterEngine {
             Imgproc.GaussianBlur(bgSmall, bgSmall, Size(31.0, 31.0), 0.0)
 
             bgIllum = Mat()
-            Imgproc.resize(bgSmall, bgIllum, originalV.size(), 0.0, 0.0, Imgproc.INTER_LINEAR)
+            Imgproc.resize(bgSmall, bgIllum, originalV.size(), 0.0, 0.0, Imgproc.INTER_CUBIC)
             
             vFloat = Mat()
             originalV.convertTo(vFloat, CvType.CV_32F)

@@ -85,7 +85,7 @@ object ImageProcessor {
             perspectiveTransform = Imgproc.getPerspectiveTransform(ptsSrc, ptsDst)
             outMat = Mat()
             android.util.Log.d("ImageProcessor", "warpPerspective: src type = ${src.type()}, perspectiveTransform type = ${perspectiveTransform.type()}")
-            Imgproc.warpPerspective(src, outMat, perspectiveTransform, Size(maxWidth.toDouble(), maxHeight.toDouble()))
+            Imgproc.warpPerspective(src, outMat, perspectiveTransform, Size(maxWidth.toDouble(), maxHeight.toDouble()), Imgproc.INTER_CUBIC)
 
             ScannerDebugLogger.logWarpMatrix(maxWidth, maxHeight)
 
