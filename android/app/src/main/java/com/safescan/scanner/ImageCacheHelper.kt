@@ -63,6 +63,8 @@ class ImageCacheHelper(
         bitmapSizes.clear()
     }
 
+    fun getKeys(): Set<String> = highResCache.snapshot().keys
+
     fun snapshot(): Map<String, Bitmap> = highResCache.snapshot()
 
     suspend fun getFullResBitmap(
@@ -128,7 +130,7 @@ class ImageCacheHelper(
         val file = File(dir, "${slotId}_${suffix}.jpg")
         return try {
             FileOutputStream(file).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
             }
             val sizeKb = file.length() / 1024
             ScannerDebugLogger.logSaveFullImage(sizeKb)
@@ -178,18 +180,8 @@ class ImageCacheHelper(
     @Synchronized
     fun clearAndRecycle() {
         try {
-            val snap = highResCache.snapshot()
             highResCache.evictAll()
             bitmapSizes.clear()
-            for (bitmap in snap.values) {
-                if (bitmap != null && !bitmap.isRecycled) {
-                    try {
-                        bitmap.recycle()
-                    } catch (e: Exception) {
-                        Log.e("ImageCacheHelper", "Failed to recycle bitmap", e)
-                    }
-                }
-            }
         } catch (e: Exception) {
             Log.e("ImageCacheHelper", "Failed to clear highResCache", e)
         }

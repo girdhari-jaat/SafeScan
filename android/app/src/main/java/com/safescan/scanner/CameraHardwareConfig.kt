@@ -26,52 +26,19 @@ object CameraHardwareConfig {
     private var isCnicSupportedCache: Boolean? = null
 
     /**
-     * Check if the device's back camera supports an aspect ratio close to A4 (1.414).
+     * Check if the device's back camera supports an aspect ratio close to A4.
+     * Always returns true as CameraX ratio is standard 4:3.
      */
-    fun isA4Supported(context: Context?): Boolean {
-        if (context == null) return true // Default true for in-memory crop fallback
-        isA4SupportedCache?.let { return it }
-        val supported = checkRatioSupport(context, 1.4142f, 0.05f)
-        isA4SupportedCache = supported
-        return supported
-    }
+    fun isA4Supported(context: Context?): Boolean = true
 
     /**
-     * Check if the device's back camera supports an aspect ratio close to Pakistani CNIC / ID Card (1.586).
+     * Check if the device's back camera supports an aspect ratio close to ID Card.
+     * Always returns true as CameraX ratio is standard 4:3.
      */
-    fun isCnicSupported(context: Context?): Boolean {
-        if (context == null) return true // Default true for in-memory crop fallback
-        isCnicSupportedCache?.let { return it }
-        val supported = checkRatioSupport(context, 0.6306f, 0.05f)
-        isCnicSupportedCache = supported
-        return supported
-    }
+    fun isCnicSupported(context: Context?): Boolean = true
 
     private fun checkRatioSupport(context: Context, targetRatio: Float, tolerance: Float): Boolean {
-        try {
-            val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-            val cameraId = cameraManager.cameraIdList.firstOrNull { id ->
-                val chars = cameraManager.getCameraCharacteristics(id)
-                chars.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK
-            } ?: return false
-
-            val characteristics = cameraManager.getCameraCharacteristics(cameraId)
-            val map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) ?: return false
-            val sizes = map.getOutputSizes(android.graphics.ImageFormat.JPEG) ?: return false
-
-            // Cameras generally output landscape sizes. We should check against max(w,h) / min(w,h)
-            val checkRatio = if (targetRatio < 1.0f) 1.0f / targetRatio else targetRatio
-
-            for (size in sizes) {
-                val aspect = Math.max(size.width, size.height).toFloat() / Math.min(size.width, size.height).toFloat()
-                if (kotlin.math.abs(aspect - checkRatio) <= tolerance) {
-                    return true
-                }
-            }
-        } catch (e: Exception) {
-            // Safe fallback
-        }
-        return false
+        return true
     }
 
     data class HardwareCaptureSettings(
@@ -84,15 +51,9 @@ object CameraHardwareConfig {
     )
 
     /**
-     * Determine the target ratio in landscape (width / height) based on support and mode.
+     * Determine the target ratio in landscape (width / height) for camera resolution selection (standard 4:3).
      */
-    fun getTargetRatio(context: Context?, mode: ScannerMode): Float {
-        return when (mode) {
-            ScannerMode.DOCUMENT, ScannerMode.CARD -> {
-                if (isA4Supported(context)) 1.4142f else 1.3333f // A4 (1.4142) vs 4:3 (1.3333) fallback
-            }
-        }
-    }
+    fun getTargetRatio(context: Context?, mode: ScannerMode): Float = 1.3333f
 
     private fun getDefaultSize(targetRatio: Float, maxMegapixels: Float): Size {
         return if (kotlin.math.abs(targetRatio - 1.4142f) <= 0.05f) { // A4

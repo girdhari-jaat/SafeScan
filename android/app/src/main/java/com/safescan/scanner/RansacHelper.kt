@@ -301,7 +301,221 @@ object RansacHelper {
         )
     }
 
-    fun findRobustForegroundBoundingBox(closedData: ByteArray, w: Int, h: Int): List<Point> {
+    private var lastGoodQuad: List<Point>? = null
+
+    /**
+     * Update the cached last good quad detected by Attempt 0 (RANSAC) for temporal smoothing.
+     */
+    fun updateLastGoodQuad(quad: List<Point>) {
+        if (quad.size == 4) {
+            lastGoodQuad = quad
+        }
+    }
+
+    /**
+     * Attempt 2 (Smart Inset Fallback): Temporal Smoothing + Target Based Inset.
+     * Uses scaled down lastGoodQuad if available for temporal stability,
+     * otherwise calculates an inset based on foreground target bounds (3.5% inset).
+     */
+    fun getSmartInsetQuad(
+        w: Int,
+        h: Int,
+        targetLeft: Double = w * 0.05,
+        targetRight: Double = w * 0.95,
+        targetTop: Double = h * 0.05,
+        targetBottom: Double = h * 0.95
+    ): List<Point> {
+        val result = if (lastGoodQuad != null && lastGoodQuad?.size == 4) {
+            // Step 3: Scale down lastGoodQuad by 0.98 from center for temporal stability
+            val quad = lastGoodQuad!!
+            val centerX = quad.sumOf { it.x } / 4.0
+            val centerY = quad.sumOf { it.y } / 4.0
+            val scale = 0.98
+
+            quad.map { p ->
+                Point(
+                    centerX + (p.x - centerX) * scale,
+                    centerY + (p.y - centerY) * scale
+                )
+            }
+        } else {
+            // Step 4: Create 3.5% inset based on target bounds
+            val widthRange = targetRight - targetLeft
+            val heightRange = targetBottom - targetTop
+
+            val insetX = widthRange * 0.035
+            val insetY = heightRange * 0.035
+
+            val left = targetLeft + insetX
+            val right = targetRight - insetX
+            val top = targetTop + insetY
+            val bottom = targetBottom - insetY
+
+            listOf(
+                Point(left, top),
+                Point(right, top),
+                Point(right, bottom),
+                Point(left, bottom)
+            )
+        }
+
+        // Step 5: Always clamp points to [0, w] and [0, h]
+        return orderPoints(result.map { p ->
+            Point(
+                p.x.coerceIn(0.0, w.toDouble()),
+                p.y.coerceIn(0.0, h.toDouble())
+            )
+        })
+    }
+
+    /**
+     * Convenience overload for getSmartInsetQuad using closedData to estimate target bounds.
+     */
+    fun getSmartInsetQuad(w: Int, h: Int, closedData: ByteArray?): List<Point> {
+        val est = if (closedData != null) estimateForegroundPercentages(closedData, w, h) else null
+        return if (est != null) {
+            getSmartInsetQuad(w, h, w * est.leftPct, w * est.rightPct, h * est.topPct, h * est.bottomPct)
+        } else {
+            getSmartInsetQuad(w, h)
+        }
+    }
+
+    /**
+     * Cross product of vectors OA and OB.
+     */
+    private fun crossProduct(o: Point, a: Point, b: Point): Double {
+        return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
+    }
+
+    /**
+     * Compute Convex Hull using Andrew's Monotone Chain algorithm.
+     */
+    private fun computeConvexHull(points: List<Point>): List<Point> {
+        if (points.size <= 3) return points
+        val sorted = points.sortedWith(Comparator { p1, p2 ->
+            if (p1.x != p2.x) p1.x.compareTo(p2.x) else p1.y.compareTo(p2.y)
+        })
+        val n = sorted.size
+        var k = 0
+        val lower = Array<Point?>(2 * n) { null }
+
+        for (i in 0 until n) {
+            while (k >= 2 && crossProduct(lower[k - 2]!!, lower[k - 1]!!, sorted[i]) <= 0.0) {
+                k--
+            }
+            lower[k++] = sorted[i]
+        }
+
+        val t = k + 1
+        for (i in n - 2 downTo 0) {
+            while (k >= t && crossProduct(lower[k - 2]!!, lower[k - 1]!!, sorted[i]) <= 0.0) {
+                k--
+            }
+            lower[k++] = sorted[i]
+        }
+
+        val hull = ArrayList<Point>()
+        for (i in 0 until k - 1) {
+            hull.add(lower[i]!!)
+        }
+        return hull
+    }
+
+    /**
+     * Perpendicular distance from point p to line segment ab.
+     */
+    private fun perpendicularDistance(p: Point, a: Point, b: Point): Double {
+        val dx = b.x - a.x
+        val dy = b.y - a.y
+        val len = Math.hypot(dx, dy)
+        if (len < 1e-6) return Math.hypot(p.x - a.x, p.y - a.y)
+        return abs(dy * p.x - dx * p.y + b.x * a.y - b.y * a.x) / len
+    }
+
+    /**
+     * Recursive Ramer-Douglas-Peucker helper.
+     */
+    private fun rdpSimplify(points: List<Point>, start: Int, end: Int, epsilon: Double, outList: MutableList<Point>) {
+        var maxDist = 0.0
+        var index = start
+        val pStart = points[start]
+        val pEnd = points[end]
+
+        for (i in start + 1 until end) {
+            val dist = perpendicularDistance(points[i], pStart, pEnd)
+            if (dist > maxDist) {
+                maxDist = dist
+                index = i
+            }
+        }
+
+        if (maxDist > epsilon) {
+            val leftList = mutableListOf<Point>()
+            val rightList = mutableListOf<Point>()
+            rdpSimplify(points, start, index, epsilon, leftList)
+            rdpSimplify(points, index, end, epsilon, rightList)
+
+            outList.addAll(leftList)
+            if (outList.isNotEmpty() && rightList.isNotEmpty() && outList.last() == rightList.first()) {
+                outList.removeAt(outList.size - 1)
+            }
+            outList.addAll(rightList)
+        } else {
+            outList.add(pStart)
+            outList.add(pEnd)
+        }
+    }
+
+    /**
+     * Simplify closed polygon using Ramer-Douglas-Peucker.
+     */
+    private fun simplifyPolygonRDP(hull: List<Point>, epsilon: Double): List<Point> {
+        if (hull.size <= 4) return hull
+
+        // Find point farthest from hull[0] to split closed polygon into two open chains
+        var maxDist = -1.0
+        var farIdx = 0
+        val p0 = hull[0]
+        for (i in 1 until hull.size) {
+            val d = Math.hypot(hull[i].x - p0.x, hull[i].y - p0.y)
+            if (d > maxDist) {
+                maxDist = d
+                farIdx = i
+            }
+        }
+
+        val chain1 = hull.subList(0, farIdx + 1)
+        val res1 = mutableListOf<Point>()
+        rdpSimplify(chain1, 0, chain1.size - 1, epsilon, res1)
+
+        val chain2 = ArrayList<Point>()
+        for (i in farIdx until hull.size) {
+            chain2.add(hull[i])
+        }
+        chain2.add(hull[0])
+        val res2 = mutableListOf<Point>()
+        rdpSimplify(chain2, 0, chain2.size - 1, epsilon, res2)
+
+        val combined = ArrayList<Point>()
+        combined.addAll(res1)
+        if (combined.isNotEmpty() && res2.isNotEmpty() && combined.last() == res2.first()) {
+            combined.removeAt(combined.size - 1)
+        }
+        combined.addAll(res2)
+        if (combined.isNotEmpty() && combined.last() == combined.first()) {
+            combined.removeAt(combined.size - 1)
+        }
+
+        return combined
+    }
+
+    /**
+     * Attempt 1: Largest Blob + 4 Corner Approximation.
+     * Detects foreground color from 3% borders, finds largest 4-connected component blob (>= 0.5% area),
+     * computes its convex hull, and simplifies it with Ramer-Douglas-Peucker algorithm.
+     */
+    fun findRobustForegroundBoundingBox(closedData: ByteArray, w: Int, h: Int): List<Point>? {
+        // Step 1: Detect foreground color by checking 3% border pixels
         var bgPointsCount = 0
         var bgWhiteSum = 0
         val marginW = Math.max(1, Math.round(w * 0.03f))
@@ -331,53 +545,134 @@ object RansacHelper {
         val isForegroundWhite = bgPointsCount > 0 && (bgWhiteSum.toDouble() / bgPointsCount) < 0.5
         val targetVal = if (isForegroundWhite) 255 else 0
 
-        val xCoords = ArrayList<Int>()
-        val yCoords = ArrayList<Int>()
-        val startX = Math.round(w * 0.04f)
-        val endX = Math.round(w * 0.96f)
-        val startY = Math.round(h * 0.04f)
-        val endY = Math.round(h * 0.96f)
+        // Step 2: Scan closedData and find LARGEST connected component/blob (4-connectivity)
+        val totalPixels = w * h
+        val minBlobSize = (totalPixels * 0.005).toInt()
+        val visited = BooleanArray(totalPixels)
+        val queue = IntArray(totalPixels)
 
-        for (y in startY until endY step 2) {
-            for (x in startX until endX step 2) {
-                if ((closedData[y * w + x].toInt() and 0xFF) == targetVal) {
-                    xCoords.add(x)
-                    yCoords.add(y)
+        var maxBlobSize = 0
+        var bestBlobIndices: IntArray? = null
+
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                val idx = y * w + x
+                if (!visited[idx] && (closedData[idx].toInt() and 0xFF) == targetVal) {
+                    var head = 0
+                    var tail = 0
+
+                    queue[tail++] = idx
+                    visited[idx] = true
+
+                    while (head < tail) {
+                        val curr = queue[head++]
+                        val cx = curr % w
+                        val cy = curr / w
+
+                        if (cx > 0) {
+                            val nIdx = curr - 1
+                            if (!visited[nIdx] && (closedData[nIdx].toInt() and 0xFF) == targetVal) {
+                                visited[nIdx] = true
+                                queue[tail++] = nIdx
+                            }
+                        }
+                        if (cx < w - 1) {
+                            val nIdx = curr + 1
+                            if (!visited[nIdx] && (closedData[nIdx].toInt() and 0xFF) == targetVal) {
+                                visited[nIdx] = true
+                                queue[tail++] = nIdx
+                            }
+                        }
+                        if (cy > 0) {
+                            val nIdx = curr - w
+                            if (!visited[nIdx] && (closedData[nIdx].toInt() and 0xFF) == targetVal) {
+                                visited[nIdx] = true
+                                queue[tail++] = nIdx
+                            }
+                        }
+                        if (cy < h - 1) {
+                            val nIdx = curr + w
+                            if (!visited[nIdx] && (closedData[nIdx].toInt() and 0xFF) == targetVal) {
+                                visited[nIdx] = true
+                                queue[tail++] = nIdx
+                            }
+                        }
+                    }
+
+                    if (tail > maxBlobSize) {
+                        maxBlobSize = tail
+                        bestBlobIndices = queue.copyOfRange(0, tail)
+                    }
                 }
             }
         }
 
-        if (xCoords.size < (w * h * 0.005)) {
-            return listOf(
-                Point(w * 0.04, h * 0.04),
-                Point(w * 0.96, h * 0.04),
-                Point(w * 0.96, h * 0.96),
-                Point(w * 0.04, h * 0.96)
-            )
+        // Step 7: If no blob found or smaller than 0.5% area, return null
+        if (bestBlobIndices == null || maxBlobSize < minBlobSize) {
+            return null
         }
 
-        xCoords.sort()
-        yCoords.sort()
+        // Step 3: Extract boundary points of the largest blob
+        val minYForX = IntArray(w) { h }
+        val maxYForX = IntArray(w) { -1 }
 
-        val pctLow = 0.05
-        val pctHigh = 0.95
+        for (idx in bestBlobIndices) {
+            val px = idx % w
+            val py = idx / w
+            if (py < minYForX[px]) minYForX[px] = py
+            if (py > maxYForX[px]) maxYForX[px] = py
+        }
 
-        val minX = xCoords[(xCoords.size * pctLow).toInt()]
-        val maxX = xCoords[(xCoords.size * pctHigh).toInt()]
-        val minY = yCoords[(yCoords.size * pctLow).toInt()]
-        val maxY = yCoords[(yCoords.size * pctHigh).toInt()]
+        val blobPoints = ArrayList<Point>()
+        for (x in 0 until w) {
+            if (minYForX[x] != h) {
+                blobPoints.add(Point(x.toDouble(), minYForX[x].toDouble()))
+            }
+            if (maxYForX[x] != -1 && maxYForX[x] != minYForX[x]) {
+                blobPoints.add(Point(x.toDouble(), maxYForX[x].toDouble()))
+            }
+        }
 
-        val finalMinX = Math.max(w * 0.03, Math.min(minX.toDouble(), w * 0.35))
-        val finalMaxX = Math.min(w * 0.97, Math.max(maxX.toDouble(), w * 0.65))
-        val finalMinY = Math.max(h * 0.03, Math.min(minY.toDouble(), h * 0.35))
-        val finalMaxY = Math.min(h * 0.97, Math.max(maxY.toDouble(), h * 0.65))
+        if (blobPoints.size < 3) return null
 
-        return listOf(
-            Point(finalMinX, finalMinY),
-            Point(finalMaxX, finalMinY),
-            Point(finalMaxX, finalMaxY),
-            Point(finalMinX, finalMaxY)
-        )
+        // Step 4: Compute convex hull of the points
+        val hull = computeConvexHull(blobPoints)
+        if (hull.size < 3) return null
+
+        // Step 5: Use Ramer-Douglas-Peucker algorithm with epsilon = 0.02 * perimeter
+        var perimeter = 0.0
+        for (i in hull.indices) {
+            val nextP = hull[(i + 1) % hull.size]
+            perimeter += Math.hypot(nextP.x - hull[i].x, nextP.y - hull[i].y)
+        }
+        val epsilon = 0.02 * perimeter
+
+        val approxPoly = simplifyPolygonRDP(hull, epsilon)
+
+        // Step 6: If approximated polygon has 4 points, return them. If not, return boundingRect of hull as 4 points.
+        if (approxPoly.size == 4) {
+            return orderPoints(approxPoly)
+        } else {
+            var minX = Double.MAX_VALUE
+            var maxX = -Double.MAX_VALUE
+            var minY = Double.MAX_VALUE
+            var maxY = -Double.MAX_VALUE
+
+            for (p in hull) {
+                if (p.x < minX) minX = p.x
+                if (p.x > maxX) maxX = p.x
+                if (p.y < minY) minY = p.y
+                if (p.y > maxY) maxY = p.y
+            }
+
+            val boundingBox = listOf(
+                Point(minX, minY),
+                Point(maxX, minY),
+                Point(maxX, maxY),
+                Point(minX, maxY)
+            )
+            return orderPoints(boundingBox)
+        }
     }
 
     fun scanTarget(

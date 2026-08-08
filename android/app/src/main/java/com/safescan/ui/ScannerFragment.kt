@@ -105,6 +105,13 @@ class ScannerFragment : Fragment() {
         _binding?.overlayView?.updateCorners(null)
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (viewModel.viewState.value == com.safescan.scanner.ScannerViewState.SCANNING && currentViewMode == FragmentViewMode.SCANNER) {
+            updateCameraState()
+        }
+    }
+
     private val requestPermissionLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -152,6 +159,9 @@ class ScannerFragment : Fragment() {
                     Toast.makeText(context, "$successCount images imported successfully", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(context, "Failed to import images", Toast.LENGTH_SHORT).show()
+                }
+                if (viewModel.viewState.value == com.safescan.scanner.ScannerViewState.SCANNING && currentViewMode == FragmentViewMode.SCANNER) {
+                    updateCameraState()
                 }
             }
         }

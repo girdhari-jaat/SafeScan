@@ -161,15 +161,8 @@ class EdgeDetectionEngine {
                 // Strategy 2 (2nd click): Robust Foreground Contour Bounding Box with straight edges
                 finalPts = RansacHelper.findRobustForegroundBoundingBox(closedData, sw, sh)
             } else if (cycleAttempt == 2) {
-                // Strategy 3 (3rd click): Adaptive Inset Margin Quad (95% clean frame)
-                val px = sw * 0.035
-                val py = sh * 0.035
-                finalPts = listOf(
-                    Point(px, py),
-                    Point(sw - px, py),
-                    Point(sw - px, sh - py),
-                    Point(px, sh - py)
-                )
+                // Strategy 3 (3rd click): Adaptive Inset Margin Quad with temporal smoothing
+                finalPts = RansacHelper.getSmartInsetQuad(sw, sh, closedData)
             } else {
                 // Strategy 1 (1st click): Precision RANSAC + Outside-In Edge Detection
                 val est = RansacHelper.estimateForegroundPercentages(closedData, sw, sh)
@@ -246,6 +239,10 @@ class EdgeDetectionEngine {
 
                 if (finalPts == null) {
                     finalPts = RansacHelper.findRobustForegroundBoundingBox(closedData, sw, sh)
+                }
+
+                if (finalPts != null) {
+                    RansacHelper.updateLastGoodQuad(finalPts)
                 }
             }
 
