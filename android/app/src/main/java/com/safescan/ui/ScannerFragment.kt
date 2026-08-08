@@ -107,7 +107,7 @@ class ScannerFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        if (viewModel.viewState.value == com.safescan.scanner.ScannerViewState.SCANNING && currentViewMode == FragmentViewMode.SCANNER) {
+        if (currentViewMode == FragmentViewMode.SCANNER) {
             updateCameraState()
         }
     }
@@ -160,7 +160,7 @@ class ScannerFragment : Fragment() {
                 } else {
                     Toast.makeText(context, "Failed to import images", Toast.LENGTH_SHORT).show()
                 }
-                if (viewModel.viewState.value == com.safescan.scanner.ScannerViewState.SCANNING && currentViewMode == FragmentViewMode.SCANNER) {
+                if (currentViewMode == FragmentViewMode.SCANNER) {
                     updateCameraState()
                 }
             }
