@@ -30,16 +30,6 @@ class ImageCacheHelper(
             }
         }
 
-        override fun put(key: String, value: Bitmap): Bitmap? {
-            val sizeKb = try {
-                if (!value.isRecycled) (value.allocationByteCount / 1024).coerceAtLeast(1) else 1
-            } catch (e: Exception) {
-                1
-            }
-            bitmapSizes[System.identityHashCode(value)] = sizeKb
-            return super.put(key, value)
-        }
-
         override fun entryRemoved(evicted: Boolean, key: String?, oldValue: Bitmap?, newValue: Bitmap?) {
             if (oldValue != null) {
                 bitmapSizes.remove(System.identityHashCode(oldValue))
@@ -53,6 +43,12 @@ class ImageCacheHelper(
 
     @Synchronized
     fun put(key: String, bitmap: Bitmap) {
+        val sizeKb = try {
+            if (!bitmap.isRecycled) (bitmap.allocationByteCount / 1024).coerceAtLeast(1) else 1
+        } catch (e: Exception) {
+            1
+        }
+        bitmapSizes[System.identityHashCode(bitmap)] = sizeKb
         highResCache.put(key, bitmap)
     }
 
