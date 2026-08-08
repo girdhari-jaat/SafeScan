@@ -39,7 +39,7 @@
         app:layout_constraintStart_toStartOf="@+id/previewView"
         app:layout_constraintTop_toTopOf="@+id/previewView"
         android:contentDescription="Scanned Document"
-        android:scaleType="fitCenter"
+        android:scaleType="centerCrop"
         android:visibility="gone"
         tools:visibility="visible" />
 
