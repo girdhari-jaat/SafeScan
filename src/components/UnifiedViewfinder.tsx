@@ -214,27 +214,20 @@ export const UnifiedViewfinder = React.memo(
               const mapPoint = (ptPct: { x: number; y: number }) => {
                 const X_v = ptPct.x / 100;
                 const Y_v = ptPct.y / 100;
-
-                let renderW = dtw;
-                let renderH = dth;
-                let offsetX = 0;
-                let offsetY = 0;
+                let X_c_pct = X_v;
+                let Y_c_pct = Y_v;
 
                 if (Rc > Rv) {
-                  // Video is cropped vertically
-                  renderW = dtw;
-                  renderH = dtw / Rv;
-                  offsetY = (dth - renderH) / 2;
+                  const F_y = Rc / Rv;
+                  Y_c_pct = Y_v * F_y - (F_y - 1) / 2;
                 } else {
-                  // Video is cropped horizontally
-                  renderH = dth;
-                  renderW = dth * Rv;
-                  offsetX = (dtw - renderW) / 2;
+                  const F_x = Rv / Rc;
+                  X_c_pct = X_v * F_x - (F_x - 1) / 2;
                 }
 
                 return {
-                  x: offsetX + X_v * renderW,
-                  y: offsetY + Y_v * renderH,
+                  x: X_c_pct * dtw,
+                  y: Y_c_pct * dth,
                 };
               };
 

@@ -18,19 +18,31 @@ class ImageCacheHelper(
     private val saveDocumentUseCase: SaveDocumentUseCase
 ) {
     private val maxCacheMemoryKb = (Runtime.getRuntime().maxMemory() / 1024 / 8).toInt().coerceAtLeast(16 * 1024)
-    private val bitmapSizes = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private val bitmapSizes = java.util.concurrent.ConcurrentHashMap<Int, Int>()
 
     private val highResCache = object : LruCache<String, Bitmap>(maxCacheMemoryKb) {
         override fun sizeOf(key: String, value: Bitmap): Int {
-            return bitmapSizes[key] ?: try {
+            val id = System.identityHashCode(value)
+            return bitmapSizes[id] ?: try {
                 if (!value.isRecycled) (value.allocationByteCount / 1024).coerceAtLeast(1) else 1
             } catch (e: Exception) {
                 1
             }
         }
+
+        override fun put(key: String, value: Bitmap): Bitmap? {
+            val sizeKb = try {
+                if (!value.isRecycled) (value.allocationByteCount / 1024).coerceAtLeast(1) else 1
+            } catch (e: Exception) {
+                1
+            }
+            bitmapSizes[System.identityHashCode(value)] = sizeKb
+            return super.put(key, value)
+        }
+
         override fun entryRemoved(evicted: Boolean, key: String?, oldValue: Bitmap?, newValue: Bitmap?) {
-            if (key != null) {
-                bitmapSizes.remove(key)
+            if (oldValue != null) {
+                bitmapSizes.remove(System.identityHashCode(oldValue))
             }
             Log.d("ImageCacheHelper", "Disk-Backed Hybrid LRU Cache evicted high-res bitmap for key: $key")
         }
@@ -41,18 +53,11 @@ class ImageCacheHelper(
 
     @Synchronized
     fun put(key: String, bitmap: Bitmap) {
-        val sizeKb = try {
-            if (!bitmap.isRecycled) (bitmap.allocationByteCount / 1024).coerceAtLeast(1) else 1
-        } catch (e: Exception) {
-            1
-        }
-        bitmapSizes[key] = sizeKb
         highResCache.put(key, bitmap)
     }
 
     @Synchronized
     fun remove(key: String): Bitmap? {
-        bitmapSizes.remove(key)
         return highResCache.remove(key)
     }
 
